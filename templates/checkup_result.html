@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Checkup Results - ProvoHeal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Checkup Results - PriorityMed</title>    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * {
@@ -15,7 +14,7 @@
 
         body {
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -224,13 +223,13 @@
         }
 
         .btn-primary-action {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+            background: linear-gradient(135deg, #00A86B, #4CAF50);
             color: white;
         }
 
         .btn-primary-action:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102,126,234,0.4);
+            box-shadow: 0 10px 30px rgba(0,168,107,0.4);
         }
 
         .btn-secondary-action {
@@ -243,17 +242,17 @@
         }
 
         .recommendation-box {
-            background: linear-gradient(135deg, #667eea15, #764ba215);
+            background: linear-gradient(135deg, #00A86B15, #4CAF5015);
             padding: 25px;
             border-radius: 15px;
             margin-bottom: 30px;
-            border: 2px solid #667eea30;
+            border: 2px solid #00A86B30;
         }
 
         .recommendation-box h4 {
             font-size: 18px;
             font-weight: 700;
-            color: #667eea;
+            color: #00A86B;
             margin-bottom: 15px;
             display: flex;
             align-items: center;
@@ -275,7 +274,7 @@
         }
 
         .recommendation-list li i {
-            color: #667eea;
+            color: #00A86B;
             margin-top: 3px;
         }
 
@@ -353,7 +352,7 @@
                     <div class="vital-label">Blood Pressure</div>
                 </div>
                 <div class="vital-card">
-                    <div class="vital-icon" style="color: #8b5cf6;">
+                    <div class="vital-icon" style="color: #66BB6A;">
                         <i class="fas fa-heart"></i>
                     </div>
                     <div class="vital-value">{{ result.vitals.hr }}</div>

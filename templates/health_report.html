@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Health Progress - ProvoHeal</title>
+    <title>My Health Progress - PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -15,8 +17,8 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -31,7 +33,7 @@
             padding: 30px;
             border-radius: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -55,7 +57,7 @@
         }
 
         .btn-back {
-            background: #667eea;
+            background: #00A86B;
             color: white;
             padding: 10px 24px;
             border-radius: 10px;
@@ -68,10 +70,10 @@
         }
 
         .btn-back:hover {
-            background: #5568d3;
+            background: #00897B;
             color: white;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102,126,234,0.3);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         }
 
         /* Summary Cards */
@@ -86,7 +88,7 @@
             background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
             transition: transform 0.3s;
         }
 
@@ -112,11 +114,25 @@
             color: white;
         }
 
-        .summary-icon.blue { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
-        .summary-icon.green { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
-        .summary-icon.red { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-        .summary-icon.purple { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
-        .summary-icon.orange { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .summary-icon.blue {
+            background: linear-gradient(135deg, #00897B 0%, #26A69A 100%);
+        }
+
+        .summary-icon.green {
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
+        }
+
+        .summary-icon.red {
+            background: linear-gradient(135deg, #FF6B6B 0%, #EE5A6F 100%);
+        }
+
+        .summary-icon.purple {
+            background: linear-gradient(135deg, #66BB6A 0%, #81C784 100%);
+        }
+
+        .summary-icon.orange {
+            background: linear-gradient(135deg, #FFA726 0%, #FB8C00 100%);
+        }
 
         .summary-label {
             font-size: 13px;
@@ -139,9 +155,17 @@
             font-weight: 600;
         }
 
-        .trend-indicator.positive { color: #10b981; }
-        .trend-indicator.negative { color: #ef4444; }
-        .trend-indicator.neutral { color: #666; }
+        .trend-indicator.positive {
+            color: #10b981;
+        }
+
+        .trend-indicator.negative {
+            color: #ef4444;
+        }
+
+        .trend-indicator.neutral {
+            color: #666;
+        }
 
         /* Charts Section */
         .charts-grid {
@@ -155,7 +179,7 @@
             background: white;
             padding: 25px;
             border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
         }
 
         .chart-card h3 {
@@ -169,7 +193,7 @@
         }
 
         .chart-card h3 i {
-            color: #667eea;
+            color: #00A86B;
         }
 
         /* Timeline Section */
@@ -177,7 +201,7 @@
             background: white;
             padding: 30px;
             border-radius: 15px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
             margin-bottom: 30px;
         }
 
@@ -206,7 +230,7 @@
             top: 0;
             bottom: 0;
             width: 2px;
-            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(180deg, #00A86B 0%, #4CAF50 100%);
         }
 
         .timeline-item {
@@ -215,7 +239,7 @@
             padding: 20px;
             background: #f8f9fa;
             border-radius: 12px;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #00A86B;
         }
 
         .timeline-item::before {
@@ -226,7 +250,7 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: #667eea;
+            background: #00A86B;
             border: 3px solid white;
         }
 
@@ -287,7 +311,7 @@
 
         /* Health Score */
         .health-score-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
             padding: 40px;
             border-radius: 20px;
             color: white;
@@ -321,7 +345,7 @@
             width: 150px;
             height: 150px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -349,7 +373,7 @@
         }
 
         .score-factor {
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             padding: 15px;
             border-radius: 10px;
             backdrop-filter: blur(10px);
@@ -372,7 +396,7 @@
             padding: 80px 20px;
             border-radius: 20px;
             text-align: center;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
         }
 
         .empty-state i {
@@ -411,16 +435,18 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container-fluid">
         {% with messages = get_flashed_messages() %}
         {% if messages %}
-            {% for message in messages %}
-            <div class="alert alert-info alert-dismissible fade show" role="alert" style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
-                <i class="fas fa-info-circle"></i> {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-            {% endfor %}
+        {% for message in messages %}
+        <div class="alert alert-info alert-dismissible fade show" role="alert"
+            style="position: fixed; top: 20px; right: 20px; z-index: 9999; max-width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+            <i class="fas fa-info-circle"></i> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
         {% endif %}
         {% endwith %}
 
@@ -431,9 +457,9 @@
                 <p>Track your health journey and improvements over time</p>
             </div>
             <div class="header-actions">
-                <a href="/patient/dashboard" class="btn-back">
-                    <i class="fas fa-arrow-left"></i>
-                    Back to Dashboard
+                <a href="/logout" class="btn-back" style="background: #ef4444;">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Logout
                 </a>
             </div>
         </div>
@@ -527,7 +553,8 @@
                         <div class="summary-label">Risk Level Trend</div>
                         <div class="summary-value">{{ summary.current_risk }}</div>
                     </div>
-                    <div class="summary-icon {{ 'red' if summary.current_risk == 'HIGH' else 'orange' if summary.current_risk == 'MEDIUM' else 'green' }}">
+                    <div
+                        class="summary-icon {{ 'red' if summary.current_risk == 'HIGH' else 'orange' if summary.current_risk == 'MEDIUM' else 'green' }}">
                         <i class="fas fa-exclamation-triangle"></i>
                     </div>
                 </div>
@@ -595,7 +622,8 @@
                         </div>
                         <div class="timeline-detail">
                             <span class="timeline-label">Risk Level</span>
-                            <span class="risk-badge {{ 'high' if 'HIGH' in record.dual_brain_risk else 'medium' if 'MEDIUM' in record.dual_brain_risk else 'low' }}">
+                            <span
+                                class="risk-badge {{ 'high' if 'HIGH' in record.dual_brain_risk else 'medium' if 'MEDIUM' in record.dual_brain_risk else 'low' }}">
                                 {{ record.dual_brain_risk }}
                             </span>
                         </div>
@@ -620,7 +648,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const healthRecords = {{ health_records|tojson if health_records else '[]'|safe }};
+        const healthRecords = {{ health_records| tojson if health_records else '[]' | safe }};
 
         if (healthRecords.length > 0) {
             // Prepare data
@@ -722,7 +750,7 @@
                 // Consider risk level
                 if (r.dual_brain_risk.includes('HIGH')) score -= 25;
                 else if (r.dual_brain_risk.includes('MEDIUM')) score -= 10;
-                
+
                 return Math.max(score, 0);
             }).reverse();
 
@@ -733,8 +761,8 @@
                     datasets: [{
                         label: 'Health Score',
                         data: healthScores,
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: '#00A86B',
+                        backgroundColor: 'rgba(0, 168, 107, 0.2)',
                         borderWidth: 3,
                         fill: true,
                         tension: 0.4
@@ -749,4 +777,5 @@
         }
     </script>
 </body>
+
 </html>

@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
-app.secret_key = 'provoheal-secret-key-change-in-production-2026'
+app.secret_key = 'prioritymed-secret-key-change-in-production-2026'
 
 # Initialize Flask-Login
 login_manager = LoginManager()

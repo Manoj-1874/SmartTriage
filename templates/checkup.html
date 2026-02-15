@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Health Checkup - ProvoHeal</title>
+    <title>AI Health Checkup - PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -14,8 +16,8 @@
         }
 
         body {
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
             min-height: 100vh;
             padding: 20px;
         }
@@ -30,7 +32,7 @@
             padding: 30px;
             border-radius: 20px;
             margin-bottom: 30px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -49,7 +51,7 @@
         }
 
         .btn-back {
-            background: #667eea;
+            background: #00A86B;
             color: white;
             padding: 10px 24px;
             border-radius: 10px;
@@ -62,21 +64,21 @@
         }
 
         .btn-back:hover {
-            background: #5568d3;
+            background: #00897B;
             color: white;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102,126,234,0.3);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         }
 
         .checkup-container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
             overflow: hidden;
         }
 
         .checkup-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
             padding: 40px;
             color: white;
             text-align: center;
@@ -95,7 +97,7 @@
 
         .ai-badge {
             display: inline-block;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             padding: 8px 20px;
             border-radius: 30px;
             margin-top: 15px;
@@ -123,7 +125,7 @@
         }
 
         .section-title i {
-            color: #667eea;
+            color: #00A86B;
             font-size: 22px;
         }
 
@@ -139,7 +141,8 @@
             display: block;
         }
 
-        .form-control, .form-select {
+        .form-control,
+        .form-select {
             border: 2px solid #e0e0e0;
             border-radius: 10px;
             padding: 12px 18px;
@@ -148,10 +151,11 @@
             width: 100%;
         }
 
-        .form-control:focus, .form-select:focus {
+        .form-control:focus,
+        .form-select:focus {
             outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 4px rgba(102,126,234,0.1);
+            border-color: #00A86B;
+            box-shadow: 0 0 0 4px rgba(0, 168, 107, 0.1);
         }
 
         textarea.form-control {
@@ -180,7 +184,7 @@
         }
 
         .btn-submit {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
             color: white;
             padding: 15px 40px;
             border: none;
@@ -198,7 +202,7 @@
 
         .btn-submit:hover {
             transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102,126,234,0.4);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
         }
 
         .btn-submit:active {
@@ -217,7 +221,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
             z-index: 9999;
             align-items: center;
             justify-content: center;
@@ -244,17 +248,17 @@
         }
 
         .result-header.high {
-            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            background: linear-gradient(135deg, #FF6B6B 0%, #EE5A6F 100%);
             color: white;
         }
 
         .result-header.medium {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            background: linear-gradient(135deg, #FFA726 0%, #FB8C00 100%);
             color: white;
         }
 
         .result-header.low {
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
             color: white;
         }
 
@@ -262,7 +266,7 @@
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -342,14 +346,14 @@
 
         .info-box {
             background: #f0f7ff;
-            border-left: 4px solid #667eea;
+            border-left: 4px solid #00A86B;
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 30px;
         }
 
         .info-box i {
-            color: #667eea;
+            color: #00A86B;
             margin-right: 10px;
         }
 
@@ -374,15 +378,20 @@
             width: 50px;
             height: 50px;
             border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
+            border-top: 4px solid #00A86B;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto 20px;
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         @media (max-width: 768px) {
@@ -400,6 +409,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container-fluid">
         <!-- Page Header -->
@@ -408,10 +418,6 @@
                 <h1><i class="fas fa-heartbeat"></i> AI Health Checkup</h1>
                 <p>Advanced dual-brain AI system for intelligent health assessment</p>
             </div>
-            <a href="/patient/dashboard" class="btn-back">
-                <i class="fas fa-arrow-left"></i>
-                Back to Dashboard
-            </a>
         </div>
 
         <!-- Checkup Container -->
@@ -434,7 +440,8 @@
                     <div class="vitals-grid">
                         <div class="form-group">
                             <label class="form-label">Age <span style="color: red;">*</span></label>
-                            <input type="number" name="age" class="form-control" required min="1" max="120" placeholder="Enter your age">
+                            <input type="number" name="age" class="form-control" required min="1" max="120"
+                                placeholder="Enter your age">
                         </div>
                         <div class="form-group">
                             <label class="form-label">Gender <span style="color: red;">*</span></label>
@@ -456,34 +463,39 @@
                     </div>
                     <div class="info-box">
                         <i class="fas fa-info-circle"></i>
-                        <p>Please measure your vitals accurately. If you don't have measuring devices, estimate to the best of your knowledge.</p>
+                        <p>Please measure your vitals accurately. If you don't have measuring devices, estimate to the
+                            best of your knowledge.</p>
                     </div>
                     <div class="vitals-grid">
                         <div class="form-group">
                             <label class="form-label">Systolic BP <span style="color: red;">*</span></label>
                             <div class="vital-input">
-                                <input type="number" name="sys_bp" class="form-control" required min="70" max="200" placeholder="120">
+                                <input type="number" name="sys_bp" class="form-control" required min="70" max="200"
+                                    placeholder="120">
                                 <span class="unit">mmHg</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Diastolic BP <span style="color: red;">*</span></label>
                             <div class="vital-input">
-                                <input type="number" name="dia_bp" class="form-control" required min="40" max="130" placeholder="80">
+                                <input type="number" name="dia_bp" class="form-control" required min="40" max="130"
+                                    placeholder="80">
                                 <span class="unit">mmHg</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Heart Rate <span style="color: red;">*</span></label>
                             <div class="vital-input">
-                                <input type="number" name="hr" class="form-control" required min="40" max="200" placeholder="72">
+                                <input type="number" name="hr" class="form-control" required min="40" max="200"
+                                    placeholder="72">
                                 <span class="unit">bpm</span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Temperature <span style="color: red;">*</span></label>
                             <div class="vital-input">
-                                <input type="number" step="0.1" name="temp" class="form-control" required min="95" max="108" placeholder="98.6">
+                                <input type="number" step="0.1" name="temp" class="form-control" required min="95"
+                                    max="108" placeholder="98.6">
                                 <span class="unit">°F</span>
                             </div>
                         </div>
@@ -498,7 +510,8 @@
                     </div>
                     <div class="form-group">
                         <label class="form-label">Current Symptoms <span style="color: red;">*</span></label>
-                        <textarea name="symptom" class="form-control" required placeholder="Describe your symptoms in detail (e.g., fever, cough, chest pain, headache, breathing difficulty...)"></textarea>
+                        <textarea name="symptom" class="form-control" required
+                            placeholder="Describe your symptoms in detail (e.g., fever, cough, chest pain, headache, breathing difficulty...)"></textarea>
                     </div>
                     <div class="form-group">
                         <label class="form-label">Pre-existing Conditions <span style="color: red;">*</span></label>
@@ -526,7 +539,7 @@
                 <!-- Loading State -->
                 <div class="loading" id="loadingState">
                     <div class="spinner"></div>
-                    <p style="color: #667eea; font-weight: 600;">AI is analyzing your health data...</p>
+                    <p style="color: #00A86B; font-weight: 600;">AI is analyzing your health data...</p>
                 </div>
             </form>
         </div>
@@ -535,10 +548,11 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Show loading state on form submit
-        document.getElementById('triageForm').addEventListener('submit', function() {
+        document.getElementById('triageForm').addEventListener('submit', function () {
             document.getElementById('loadingState').classList.add('active');
             document.querySelector('.btn-submit').disabled = true;
         });
     </script>
 </body>
+
 </html>

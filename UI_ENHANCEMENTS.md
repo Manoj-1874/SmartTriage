@@ -1,4 +1,4 @@
-# 🌟 ProvoHeal Premium UI Enhancement Package
+# 🌟 PriorityMed Premium UI Enhancement Package
 
 ## ✨ IMPLEMENTED FEATURES
 
