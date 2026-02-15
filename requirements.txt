@@ -8,3 +8,7 @@ joblib
 transformers
 torch
 werkzeug
+openpyxl
+PyPDF2
+Pillow
+pytesseract

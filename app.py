@@ -7,6 +7,7 @@ import numpy as np
 import joblib
 from transformers import pipeline
 import os
+import sys
 import warnings
 from datetime import datetime, timedelta
 warnings.filterwarnings('ignore')
@@ -264,8 +265,9 @@ def get_dashboard_stats():
 # --- 5. AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
+    # Allow users to visit login page even if authenticated (to switch accounts etc)
+    # if current_user.is_authenticated:
+    #     return redirect(url_for('index'))
     
     if request.method == 'POST':
         email = request.form.get('email')
@@ -302,7 +304,7 @@ def login():
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if current_user.is_authenticated:
-        return redirect(url_for('index'))
+       pass # Allow signup even if logged in just in case
     
     if request.method == 'POST':
         email = request.form.get('email')
@@ -365,15 +367,8 @@ def logout():
 # --- 6. DASHBOARD ROUTES ---
 @app.route('/')
 def index():
-    # If not authenticated, redirect to login
-    if not current_user.is_authenticated:
-        return redirect(url_for('login'))
-    
-    # If authenticated, redirect based on role
-    if current_user.role == 'doctor':
-        return redirect(url_for('doctor_dashboard'))
-    else:
-        return redirect(url_for('patient_dashboard'))
+    # Always redirect to login page as the entry point
+    return redirect(url_for('login'))
 
 @app.route('/patient/dashboard')
 @login_required
@@ -1255,6 +1250,630 @@ def send_message():
     conn.close()
     
     return jsonify({'success': True})
+
+# --- 11. CHATBOT API ---
+# PriorityMed AI Chatbot Route - Enhanced Conversational Intelligence
+@app.route('/api/chat', methods=['POST'])
+@login_required
+def chat():
+    """
+    PriorityMed AI - Smart Clinical Triage Assistant
+    Conversational, intelligent, and medically responsible
+    """
+    data = request.get_json()
+    message = data.get('message', '').strip()
+    
+    if not message:
+        return jsonify({'response': "I'm here to help! Could you describe the symptoms or situation you're dealing with?"})
+    
+    message_lower = message.lower()
+    
+    # --- 1. DETECT EMERGENCY SITUATIONS ---
+    emergency_keywords = [
+        'chest pain', 'heart attack', 'stroke', 'can\'t breathe', 'cannot breathe',
+        'difficulty breathing', 'severe bleeding', 'unconscious', 'seizure',
+        'severe head injury', 'suicide', 'overdose', 'choking', 'severe burn'
+    ]
+    
+    is_emergency = any(keyword in message_lower for keyword in emergency_keywords)
+    
+    if is_emergency:
+        return jsonify({'response': generate_emergency_response(message_lower)})
+    
+    # --- 2. INTELLIGENT SYMPTOM ANALYSIS ---
+    analysis = analyze_symptoms(message_lower)
+    
+    # --- 3. GENERATE CONVERSATIONAL RESPONSE ---
+    response = generate_conversational_response(message, analysis)
+    
+    return jsonify({'response': response})
+
+def analyze_symptoms(message):
+    """
+    Intelligent symptom analysis with context awareness
+    Returns: dict with risk_level, department, factors, confidence
+    """
+    analysis = {
+        'risk_level': 'LOW',
+        'department': 'General Medicine',
+        'factors': [],
+        'confidence': 'Moderate',
+        'symptom_count': 0
+    }
+    
+    # Symptom categories with severity weights
+    symptoms = {
+        'cardiovascular': {
+            'keywords': ['chest pain', 'heart', 'palpitation', 'irregular heartbeat', 'chest pressure', 'chest tightness'],
+            'risk': 'HIGH',
+            'department': 'Cardiology',
+            'weight': 3
+        },
+        'neurological': {
+            'keywords': ['headache', 'dizzy', 'dizziness', 'numb', 'numbness', 'slurred speech', 'confusion', 'memory loss', 'seizure', 'tremor'],
+            'risk': 'HIGH',
+            'department': 'Neurology',
+            'weight': 3
+        },
+        'respiratory': {
+            'keywords': ['cough', 'shortness of breath', 'wheezing', 'breathing difficulty', 'chest congestion', 'asthma'],
+            'risk': 'MEDIUM',
+            'department': 'Pulmonology',
+            'weight': 2
+        },
+        'ophthalmology': {
+            'keywords': ['eye', 'vision', 'blur', 'blurry', 'blind', 'eye pain', 'double vision', 'seeing spots'],
+            'risk': 'MEDIUM',
+            'department': 'Ophthalmology',
+            'weight': 2
+        },
+        'orthopedic': {
+            'keywords': ['bone', 'fracture', 'break', 'sprain', 'joint pain', 'back pain', 'leg pain', 'arm pain', 'knee pain'],
+            'risk': 'MEDIUM',
+            'department': 'Orthopedics',
+            'weight': 2
+        },
+        'gastrointestinal': {
+            'keywords': ['stomach', 'abdominal pain', 'nausea', 'vomiting', 'diarrhea', 'constipation', 'bloating'],
+            'risk': 'MEDIUM',
+            'department': 'Gastroenterology',
+            'weight': 2
+        },
+        'infection': {
+            'keywords': ['fever', 'chills', 'infection', 'rash', 'sore throat', 'flu', 'cold', 'runny nose'],
+            'risk': 'LOW',
+            'department': 'General Medicine',
+            'weight': 1
+        },
+        'general': {
+            'keywords': ['fatigue', 'weakness', 'tired', 'malaise', 'body ache', 'pain'],
+            'risk': 'LOW',
+            'department': 'General Medicine',
+            'weight': 1
+        }
+    }
+    
+    # Severity indicators
+    severity_high = ['severe', 'extreme', 'unbearable', 'worst', 'intense', 'acute', 'sudden']
+    severity_moderate = ['moderate', 'persistent', 'constant', 'ongoing', 'chronic']
+    
+    # Analyze message for symptoms
+    detected_categories = []
+    total_weight = 0
+    
+    for category, info in symptoms.items():
+        for keyword in info['keywords']:
+            if keyword in message:
+                detected_categories.append(category)
+                total_weight += info['weight']
+                analysis['factors'].append(keyword.title())
+                analysis['symptom_count'] += 1
+                
+                # Update department and risk
+                if info['weight'] >= 3:
+                    analysis['department'] = info['department']
+                    analysis['risk_level'] = info['risk']
+                elif analysis['risk_level'] == 'LOW':
+                    analysis['department'] = info['department']
+                    analysis['risk_level'] = info['risk']
+                break
+    
+    # Check for severity modifiers
+    has_severe = any(word in message for word in severity_high)
+    has_moderate = any(word in message for word in severity_moderate)
+    
+    if has_severe:
+        if analysis['risk_level'] == 'LOW':
+            analysis['risk_level'] = 'MEDIUM'
+        elif analysis['risk_level'] == 'MEDIUM':
+            analysis['risk_level'] = 'HIGH'
+        analysis['factors'].append('Severe symptoms reported')
+    
+    # Multiple symptoms = escalate risk
+    if analysis['symptom_count'] >= 3:
+        if analysis['risk_level'] == 'LOW':
+            analysis['risk_level'] = 'MEDIUM'
+        analysis['factors'].append('Multiple symptoms present')
+        analysis['confidence'] = 'High'
+    elif analysis['symptom_count'] >= 2:
+        analysis['confidence'] = 'Moderate'
+    else:
+        analysis['confidence'] = 'Moderate'
+    
+    # Vital signs analysis
+    if 'blood pressure' in message or 'bp' in message:
+        # Try to extract BP values
+        import re
+        bp_match = re.search(r'(\d{2,3})\s*/\s*(\d{2,3})', message)
+        if bp_match:
+            systolic = int(bp_match.group(1))
+            diastolic = int(bp_match.group(2))
+            
+            if systolic >= 180 or diastolic >= 120:
+                analysis['risk_level'] = 'HIGH'
+                analysis['department'] = 'Cardiology'
+                analysis['factors'].append('Hypertensive crisis (BP: {}/{})'.format(systolic, diastolic))
+            elif systolic >= 140 or diastolic >= 90:
+                if analysis['risk_level'] == 'LOW':
+                    analysis['risk_level'] = 'MEDIUM'
+                analysis['factors'].append('Elevated blood pressure')
+    
+    if 'temperature' in message or 'temp' in message or 'fever' in message:
+        import re
+        temp_match = re.search(r'(\d{2,3}(?:\.\d)?)', message)
+        if temp_match:
+            temp = float(temp_match.group(1))
+            if temp >= 103:
+                if analysis['risk_level'] == 'LOW':
+                    analysis['risk_level'] = 'MEDIUM'
+                analysis['factors'].append('High fever ({}°F)'.format(temp))
+    
+    return analysis
+
+def generate_emergency_response(message):
+    """Generate urgent response for emergency situations"""
+    acknowledgments = [
+        "I understand this is urgent.",
+        "This sounds serious.",
+        "I'm flagging this as high priority."
+    ]
+    
+    import random
+    ack = random.choice(acknowledgments)
+    
+    response = f"{ack} **Based on what you've described, this requires immediate medical attention.**\n\n"
+    response += "**🚨 EMERGENCY TRIAGE RESULT:**\n\n"
+    response += "- **Risk Level:** HIGH (Emergency)\n"
+    response += "- **Recommended:** Emergency Department\n"
+    response += "- **Action Required:** Immediate evaluation\n\n"
+    response += "**Please proceed to the Emergency Department immediately** or call emergency services if the patient is not already in the hospital.\n\n"
+    response += "*This appears consistent with a potentially life-threatening condition that needs urgent assessment.*"
+    
+    return response
+
+def generate_conversational_response(message, analysis):
+    """
+    Generate natural, conversational response with medical intelligence
+    """
+    # Natural acknowledgments
+    acknowledgments = [
+        "I understand.",
+        "I see.",
+        "Thank you for sharing that.",
+        "Okay, let's look at this.",
+        "Got it.",
+        "Alright, here's what I'm seeing."
+    ]
+    
+    import random
+    ack = random.choice(acknowledgments)
+    
+    # Build conversational response
+    response = f"{ack} "
+    
+    # Risk-based opening
+    if analysis['risk_level'] == 'HIGH':
+        response += "Based on what you've shared, **this situation needs prompt attention**.\n\n"
+    elif analysis['risk_level'] == 'MEDIUM':
+        response += "Based on the symptoms described, **this should be evaluated soon** to prevent potential complications.\n\n"
+    else:
+        response += "From what you've described, this appears to be a **lower-risk situation**, though it still warrants medical attention.\n\n"
+    
+    # Explain reasoning naturally
+    if analysis['factors']:
+        response += "Here's what I'm seeing: "
+        if len(analysis['factors']) == 1:
+            response += f"the patient is experiencing {analysis['factors'][0].lower()}. "
+        elif len(analysis['factors']) == 2:
+            response += f"the patient has {analysis['factors'][0].lower()} and {analysis['factors'][1].lower()}. "
+        else:
+            factors_text = ', '.join(analysis['factors'][:-1])
+            response += f"the patient is presenting with {factors_text.lower()}, and {analysis['factors'][-1].lower()}. "
+        
+        # Add context
+        if analysis['symptom_count'] >= 3:
+            response += "The combination of multiple symptoms suggests this needs medical evaluation. "
+        
+        response += "\n\n"
+    
+    # Department recommendation with reasoning
+    response += f"I recommend consulting with **{analysis['department']}**"
+    
+    # Add reasoning for department choice
+    dept_reasoning = {
+        'Cardiology': ' for cardiovascular assessment',
+        'Neurology': ' for neurological evaluation',
+        'Ophthalmology': ' for eye-related concerns',
+        'Orthopedics': ' for musculoskeletal issues',
+        'Pulmonology': ' for respiratory evaluation',
+        'Gastroenterology': ' for digestive system concerns',
+        'General Medicine': ' for initial evaluation'
+    }
+    
+    response += dept_reasoning.get(analysis['department'], '') + ".\n\n"
+    
+    # Structured triage result
+    response += "**📋 TRIAGE ASSESSMENT:**\n\n"
+    response += f"- **Risk Level:** {analysis['risk_level']}\n"
+    response += f"- **Recommended Department:** {analysis['department']}\n"
+    
+    if analysis['factors']:
+        response += f"- **Key Factors:** {', '.join(analysis['factors'][:3])}\n"
+    
+    response += f"- **Confidence:** {analysis['confidence']}\n\n"
+    
+    # Appropriate closing based on risk
+    if analysis['risk_level'] == 'HIGH':
+        response += "⚠️ **This patient should be seen promptly.** The symptoms suggest a condition that may worsen without timely intervention."
+    elif analysis['risk_level'] == 'MEDIUM':
+        response += "💡 **Recommend evaluation within the next few hours** to ensure proper care and prevent complications."
+    else:
+        response += "✅ **Standard consultation recommended.** While this appears less urgent, medical evaluation is still important."
+    
+    response += "\n\n*I'm here to assist with triage prioritization. This assessment helps guide care decisions but is not a final diagnosis.*"
+    
+    return response
+
+# Medical Document Upload and Parsing Route
+@app.route('/api/upload-medical-doc', methods=['POST'])
+@login_required
+def upload_medical_doc():
+    """
+    Upload medical document (PDF, image, text) and extract patient information
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({'success': False, 'error': 'No file uploaded'}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'No file selected'}), 400
+        
+        # Get file extension
+        filename = file.filename.lower()
+        print(f"--- [DEBUG] Processing file: {filename} ---")
+        
+        # Extract text based on file type
+        extracted_text = ""
+        
+        # Helper to extract standard fields from a row (dict-like)
+        def extract_patient_data(row, keys):
+            print(f"--- [DEBUG] Available columns: {list(keys)} ---")
+            print(f"--- [DEBUG] Row data: {dict(row) if hasattr(row, 'items') else row} ---")
+            
+            def get_val(col_variations):
+                for col in col_variations:
+                    # Case-insensitive column search with stripped whitespace and units
+                    match = None
+                    for key in keys:
+                        # Remove units in parentheses (e.g., "Heart Rate (bpm)" -> "Heart Rate")
+                        clean_key = str(key).split('(')[0].strip().lower().replace(' ', '').replace('_', '')
+                        clean_col = str(col).lower().strip().replace(' ', '').replace('_', '')
+                        
+                        if clean_key == clean_col:
+                            match = key
+                            break
+                    
+                    # Check if key exists and value is not empty/NaN
+                    if match:
+                        val = row[match]
+                        print(f"--- [DEBUG] Matched column '{match}' for '{col}': value = '{val}' (type: {type(val).__name__}) ---")
+                        # Handle pandas NaN or empty strings (but not numeric 0)
+                        if pd.isna(val):
+                            print(f"--- [DEBUG] Value is NaN, skipping ---")
+                            continue
+                        if isinstance(val, str) and not val.strip():
+                            print(f"--- [DEBUG] Value is empty string, skipping ---")
+                            continue
+                        result = str(val).strip()
+                        print(f"--- [DEBUG] Returning value: '{result}' ---")
+                        return result
+                print(f"--- [DEBUG] No match found for variations: {col_variations} ---")
+                return ""
+
+            data = {
+                'age': get_val(['Age', 'Age (Years)', 'Patient Age']),
+                'gender': get_val(['Gender', 'Sex']),
+                'heart_rate': get_val(['Heart Rate', 'HR', 'Pulse', 'Heart_Rate', 'HeartRate', 'heart rate']),
+                'temperature': get_val(['Temperature', 'Temp', 'Body Temp', 'Body Temperature', 'Temperatur', 'temperature']),
+                'symptoms': get_val(['Current Symptoms', 'Symptoms', 'Complaint', 'Chief Complaint', 'Current Sy']),
+                'medical_history': get_val(['Pre-existing Conditions', 'Medical History', 'History', 'Conditions', 'Pre-existing'])
+            }
+            
+            # Specialized handling for BP
+            sys_bp = get_val(['Systolic BP', 'Systolic', 'SBP', 'Systolic_BP', 'systolic bp', 'Systolic Bp'])
+            dia_bp = get_val(['Diastolic BP', 'Diastolic', 'DBP', 'Diastolic_BP', 'diastolic bp', 'Diastolic Bp'])
+            print(f"--- [DEBUG] Systolic BP: '{sys_bp}', Diastolic BP: '{dia_bp}' ---")
+            if sys_bp and dia_bp:
+                data['blood_pressure'] = f"{sys_bp}/{dia_bp}"
+            else:
+                data['blood_pressure'] = get_val(['Blood Pressure', 'BP'])
+            
+            print(f"--- [DEBUG] Final extracted data: {data} ---")
+            return data
+
+        if filename.endswith('.txt'):
+            print("--- [DEBUG] Handling TXT file ---")
+            # Read text file directly
+            extracted_text = file.read().decode('utf-8', errors='ignore')
+        
+        elif filename.endswith('.csv'):
+            print("--- [DEBUG] Handling CSV file ---")
+            import csv
+            import io
+            
+            csv_data = file.read().decode('utf-8', errors='ignore')
+            csv_reader = csv.DictReader(io.StringIO(csv_data))
+            
+            try:
+                row = next(csv_reader)
+                print(f"--- [DEBUG] CSV columns: {list(row.keys())} ---")
+                print(f"--- [DEBUG] CSV first row: {row} ---")
+                extracted_data = extract_patient_data(row, row.keys())
+                print(f"--- [DEBUG] Extracted data: {extracted_data} ---")
+                
+                # Create a text summary
+                extracted_text = "Extracted from CSV:\n"
+                for k, v in extracted_data.items():
+                    if v:
+                        extracted_text += f"{k.replace('_', ' ').title()}: {v}\n"
+                
+                return jsonify({
+                    'success': True,
+                    'extracted_text': extracted_text,
+                    'parsed_data': extracted_data
+                })
+            except StopIteration:
+                 return jsonify({'success': False, 'error': 'CSV file is empty'}), 400
+            except Exception as e:
+                print(f"--- [DEBUG] CSV Error: {e} ---")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': f'CSV parsing failed: {str(e)}'}), 500
+        
+        elif filename.endswith(('.xlsx', '.xls')):
+            print("--- [DEBUG] Handling Excel file ---")
+            try:
+                # Read Excel
+                df = pd.read_excel(file)
+                print(f"--- [DEBUG] Excel columns: {list(df.columns)} ---")
+                print(f"--- [DEBUG] Excel shape: {df.shape} ---")
+                print(f"--- [DEBUG] First row: {df.iloc[0].to_dict() if not df.empty else 'Empty'} ---")
+                
+                # Check if empty
+                if df.empty:
+                    return jsonify({'success': False, 'error': 'Excel file is empty'}), 400
+                
+                # Get first row data
+                row = df.iloc[0]
+                extracted_data = extract_patient_data(row, df.columns)
+                print(f"--- [DEBUG] Extracted data: {extracted_data} ---")
+                
+                # Create a text summary
+                extracted_text = "Extracted from Excel:\n"
+                for k, v in extracted_data.items():
+                    if v:
+                        extracted_text += f"{k.replace('_', ' ').title()}: {v}\n"
+                
+                # Return parsed data directly
+                print(f"--- [DEBUG] Excel parsed successfully ---")
+                return jsonify({
+                    'success': True,
+                    'extracted_text': extracted_text,
+                    'parsed_data': extracted_data
+                })
+
+            except ImportError as ie:
+                print(f"--- [DEBUG] Excel Import Error: {ie} ---")
+                return jsonify({'success': False, 'error': 'pandas or openpyxl library not installed. Please install: pip install pandas openpyxl'}), 500
+            except Exception as e:
+                print(f"--- [DEBUG] Excel Error: {e} ---")
+                import traceback
+                traceback.print_exc()
+                return jsonify({'success': False, 'error': f'Excel parsing failed: {str(e)}'}), 500
+
+        elif filename.endswith('.pdf'):
+            print("--- [DEBUG] Handling PDF file ---")
+            # Extract text from PDF
+            try:
+                import PyPDF2
+                import io
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(file.read()))
+                for page in pdf_reader.pages:
+                    extracted_text += page.extract_text() + "\n"
+                print(f"--- [DEBUG] PDF extracted {len(extracted_text)} chars ---")
+            except Exception as e:
+                print(f"--- [DEBUG] PDF Error: {e} ---")
+                return jsonify({'success': False, 'error': f'PDF extraction failed: {str(e)}'}), 500
+        
+        elif filename.endswith(('.png', '.jpg', '.jpeg')):
+            print("--- [DEBUG] Handling Image file ---")
+            # OCR for images
+            try:
+                import pytesseract
+                from PIL import Image
+                import io
+                image = Image.open(io.BytesIO(file.read()))
+                extracted_text = pytesseract.image_to_string(image)
+                print(f"--- [DEBUG] OCR extracted {len(extracted_text)} chars ---")
+            except Exception as e:
+                print(f"--- [DEBUG] OCR Error: {e} ---")
+                # If OCR libraries not available, provide fallback
+                return jsonify({
+                    'success': False, 
+                    'error': 'OCR not available. Please install pytesseract and Tesseract-OCR.'
+                }), 500
+        
+        else:
+            print("--- [DEBUG] Unsupported file type ---")
+            return jsonify({'success': False, 'error': 'Unsupported file type. Use PDF, PNG, JPG, TXT, CSV, or Excel (.xlsx/.xls)'}), 400
+        
+        # Parse extracted text to find patient information
+        print("--- [DEBUG] Parsing extracted text ---")
+        parsed_data = parse_medical_text(extracted_text)
+        print(f"--- [DEBUG] Parsed data: {parsed_data} ---")
+        
+        return jsonify({
+            'success': True,
+            'extracted_text': extracted_text[:500],  # First 500 chars for preview
+            'parsed_data': parsed_data
+        })
+    
+    except Exception as e:
+        print(f"--- [DEBUG] General Upload Error: {e} ---")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+def parse_medical_text(text):
+    """
+    Parse medical text to extract patient information using regex and keywords
+    """
+    import re
+    
+    parsed = {
+        'age': '',
+        'gender': '',
+        'symptoms': '',
+        'blood_pressure': '',
+        'heart_rate': '',
+        'temperature': '',
+        'medical_history': ''
+    }
+    
+    text_lower = text.lower()
+    
+    # helper to clean extracted values
+    def clean_val(v):
+        return v.strip().strip('.').strip()
+
+    # --- 1. Extract Age ---
+    age_patterns = [
+        r'age[:\s]+(\d{1,3})',
+        r'(\d{1,3})\s*(?:years?|yrs?|y/?o)\s*old',
+        r'(\d{1,3})\s*(?:years?|yrs?)',
+        r'patient\s+is\s+a\s+(\d{1,3})\s*year\s*old',
+    ]
+    for pattern in age_patterns:
+        match = re.search(pattern, text_lower)
+        if match:
+            age = int(match.group(1))
+            if 0 < age < 120:
+                parsed['age'] = str(age)
+                break
+    
+    # --- 2. Extract Gender ---
+    if re.search(r'\b(male|man|boy|m)\b', text_lower) and not re.search(r'\bfemale\b', text_lower):
+        parsed['gender'] = 'Male'
+    elif re.search(r'\b(female|woman|girl|f)\b', text_lower):
+        parsed['gender'] = 'Female'
+    
+    # --- 3. Extract Blood Pressure ---
+    # Matches: BP: 120/80, BP 120/80, 120/80 mmHg, 120/80
+    bp_patterns = [
+        r'(?:bp|blood\s*pressure)[:\s]*(\d{2,3})[\s/-]+(\d{2,3})',
+        r'(\d{2,3})[\s/-]+(\d{2,3})\s*mmhg'
+    ]
+    for pattern in bp_patterns:
+        bp_match = re.search(pattern, text_lower)
+        if bp_match:
+            parsed['blood_pressure'] = f"{bp_match.group(1)}/{bp_match.group(2)}"
+            break
+    
+    # --- 4. Extract Heart Rate ---
+    # Matches: HR: 80, Pulse 80, 80 bpm, Heart Rate: 80
+    hr_patterns = [
+        r'(?:hr|heart\s*rate|pulse)[:\s]*(\d{2,3})',
+        r'(\d{2,3})\s*bpm',
+        r'rate[:\s]*(\d{2,3})'
+    ]
+    for pattern in hr_patterns:
+        hr_match = re.search(pattern, text_lower)
+        if hr_match:
+            hr = int(hr_match.group(1))
+            if 30 < hr < 250:
+                parsed['heart_rate'] = str(hr)
+                break
+    
+    # --- 5. Extract Temperature ---
+    # Matches: Temp: 98.6, T: 98.6, 98.6 F, 37 C
+    temp_patterns = [
+        r'(?:temp|temperature|t)[:\s]*(\d{2,3}(?:\.\d)?)',
+        r'(\d{2,3}(?:\.\d)?)\s*°?[cf]',
+        r'(\d{2,3}(?:\.\d)?)\s*degrees'
+    ]
+    for pattern in temp_patterns:
+        temp_match = re.search(pattern, text_lower)
+        if temp_match:
+            parsed['temperature'] = temp_match.group(1)
+            break
+    
+    # --- 6. Extract Symptoms ---
+    # Expanded keyword list
+    symptom_keywords = [
+        'fever', 'cough', 'headache', 'pain', 'nausea', 'vomiting', 'diarrhea',
+        'fatigue', 'dizziness', 'shortness of breath', 'breathlessness', 'dyspnea',
+        'chest pain', 'palpitations', 'swelling', 'edema', 'rash', 'itching',
+        'sore throat', 'runny nose', 'congestion', 'sneezing', 'chills', 'sweats',
+        'numbness', 'tingling', 'weakness', 'confusion', 'fainting', 'seizure',
+        'bleeding', 'bruising', 'anxiety', 'depression', 'insomnia', 'loss of appetite',
+        'abdominal', 'stomach', 'back', 'joint', 'muscle', 'vision', 'hearing'
+    ]
+    
+    # Try to capture context around keywords (sentence or phrase)
+    found_symptoms = set()
+    sentences = re.split(r'[.!?;]', text_lower)
+    
+    for sentence in sentences:
+        for keyword in symptom_keywords:
+            if keyword in sentence:
+                # Clean up the sentence/phrase for better display
+                clean_sentence = sentence.strip()
+                if len(clean_sentence) < 100: # reasonable length
+                     found_symptoms.add(clean_sentence.capitalize())
+                else: 
+                     # fallback to just keyword if sentence is too long (likely full paragraph)
+                     found_symptoms.add(keyword.title())
+
+    if found_symptoms:
+        parsed['symptoms'] = '; '.join(list(found_symptoms)[:5])
+    
+    # --- 7. Extract Medical History ---
+    history_keywords = [
+        'diabetes', 'hypertension', 'asthma', 'copd', 'heart disease',
+        'kidney disease', 'liver disease', 'cancer', 'stroke', 'arthritis',
+        'allergies', 'epilepsy', 'thyroid', 'cholesterol', 'gerd', 'ulcer',
+        'migraine', 'depression', 'anxiety', 'tuberculosis', 'hepatitis'
+    ]
+    found_history = []
+    for condition in history_keywords:
+        if condition in text_lower:
+             # Basic context check: exclude "no history of X"
+             if f"no history of {condition}" not in text_lower and f"neg for {condition}" not in text_lower:
+                 found_history.append(condition.title())
+    
+    if found_history:
+        parsed['medical_history'] = ', '.join(found_history[:5])
+
+    return parsed
 
 if __name__ == '__main__':
     # Standard local Flask deployment

@@ -14,12 +14,210 @@
 
         body {
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
+            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 50%, #00CED1 100%);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            position: relative;
+            overflow: hidden;
+            animation: gradientShift 15s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0%, 100% {
+                background: linear-gradient(135deg, #00A86B 0%, #4CAF50 50%, #00CED1 100%);
+            }
+            33% {
+                background: linear-gradient(135deg, #00CED1 0%, #00A86B 50%, #4CAF50 100%);
+            }
+            66% {
+                background: linear-gradient(135deg, #4CAF50 0%, #00CED1 50%, #00A86B 100%);
+            }
+        }
+
+        /* Animated Background Elements */
+        .bg-shape {
+            position: fixed;
+            border-radius: 50%;
+            opacity: 0.15;
+            animation: float 20s infinite ease-in-out;
+        }
+
+        .bg-shape:nth-child(1) {
+            width: 300px;
+            height: 300px;
+            background: linear-gradient(135deg, #fff 0%, transparent 100%);
+            top: -100px;
+            left: -100px;
+            animation-duration: 25s;
+            animation-delay: 0s;
+        }
+
+        .bg-shape:nth-child(2) {
+            width: 400px;
+            height: 400px;
+            background: linear-gradient(135deg, transparent 0%, #fff 100%);
+            bottom: -150px;
+            right: -150px;
+            animation-duration: 30s;
+            animation-delay: 5s;
+        }
+
+        .bg-shape:nth-child(3) {
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, #fff 0%, transparent 70%);
+            top: 50%;
+            right: 10%;
+            animation-duration: 20s;
+            animation-delay: 3s;
+        }
+
+        .bg-shape:nth-child(4) {
+            width: 350px;
+            height: 350px;
+            background: radial-gradient(circle, #fff 0%, transparent 70%);
+            bottom: 20%;
+            left: 15%;
+            animation-duration: 28s;
+            animation-delay: 7s;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translate(0, 0) scale(1);
+            }
+            33% {
+                transform: translate(30px, -30px) scale(1.1);
+            }
+            66% {
+                transform: translate(-30px, 30px) scale(0.9);
+            }
+        }
+
+        /* Floating Particles */
+        .particle {
+            position: fixed;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: rise 15s infinite ease-in;
+        }
+
+        .particle:nth-child(5) {
+            width: 10px;
+            height: 10px;
+            left: 10%;
+            bottom: -50px;
+            animation-duration: 12s;
+            animation-delay: 0s;
+        }
+
+        .particle:nth-child(6) {
+            width: 15px;
+            height: 15px;
+            left: 25%;
+            bottom: -50px;
+            animation-duration: 15s;
+            animation-delay: 2s;
+        }
+
+        .particle:nth-child(7) {
+            width: 8px;
+            height: 8px;
+            left: 45%;
+            bottom: -50px;
+            animation-duration: 18s;
+            animation-delay: 4s;
+        }
+
+        .particle:nth-child(8) {
+            width: 12px;
+            height: 12px;
+            left: 65%;
+            bottom: -50px;
+            animation-duration: 14s;
+            animation-delay: 1s;
+        }
+
+        .particle:nth-child(9) {
+            width: 10px;
+            height: 10px;
+            left: 85%;
+            bottom: -50px;
+            animation-duration: 16s;
+            animation-delay: 3s;
+        }
+
+        @keyframes rise {
+            0% {
+                transform: translateY(0) rotate(0deg);
+                opacity: 0.3;
+            }
+            50% {
+                opacity: 0.6;
+            }
+            100% {
+                transform: translateY(-100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+
+        /* Geometric Decorations */
+        .geo-decoration {
+            position: fixed;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            pointer-events: none;
+        }
+
+        .geo-decoration.square {
+            width: 80px;
+            height: 80px;
+            top: 15%;
+            right: 20%;
+            transform: rotate(45deg);
+            animation: rotate 20s linear infinite;
+        }
+
+        .geo-decoration.circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            bottom: 25%;
+            left: 10%;
+            animation: pulse 4s ease-in-out infinite;
+        }
+
+        .geo-decoration.triangle {
+            width: 0;
+            height: 0;
+            border-left: 40px solid transparent;
+            border-right: 40px solid transparent;
+            border-bottom: 70px solid rgba(255, 255, 255, 0.2);
+            border: none;
+            top: 40%;
+            left: 5%;
+            animation: floatSlow 8s ease-in-out infinite;
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(45deg);
+            }
+            to {
+                transform: rotate(405deg);
+            }
+        }
+
+        @keyframes floatSlow {
+            0%, 100% {
+                transform: translateY(0);
+            }
+            50% {
+                transform: translateY(-20px);
+            }
         }
 
         .result-container {
@@ -27,9 +225,11 @@
             border-radius: 30px;
             max-width: 700px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            box-shadow: 0 30px 80px rgba(0,0,0,0.25), 0 10px 30px rgba(0,168,107,0.2);
             overflow: hidden;
             animation: slideUp 0.5s ease-out;
+            position: relative;
+            z-index: 10;
         }
 
         @keyframes slideUp {
@@ -300,8 +500,35 @@
             }
         }
     </style>
+    
+    <!-- Chatling.ai Chatbot Script -->
+    <script>
+        window.chtlConfig = { chatbotId: "6396798553" }
+    </script>
+    <script async data-id="6396798553" id="chtl-script" type="text/javascript" src="https://chatling.ai/js/embed.js"></script>
+    
+    <!-- Custom Green Styling for Chatbot -->
+    <style>
+        /* Green theme for Chatling chatbot */
+        #chatling-embed-container iframe {
+            border-radius: 20px !important;
+        }
+    </style>
 </head>
 <body>
+    <!-- Animated Background Elements -->
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="particle"></div>
+    <div class="geo-decoration square"></div>
+    <div class="geo-decoration circle"></div>
+    
     <div class="result-container">
         {% if result %}
         <!-- Result Header -->
