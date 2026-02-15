@@ -6,6 +6,7 @@ import pandas as pd
 import numpy as np
 import joblib
 from transformers import pipeline
+from huggingface_hub import hf_hub_download
 import os
 import sys
 import warnings
@@ -23,6 +24,12 @@ login_manager.login_view = 'login'
 # --- 1. DATABASE & MODEL PATHS ---
 # Use forward slashes to prevent Python from reading \t as a tab!
 DB_PATH = 'triage.db'
+
+# Hugging Face Repository Configuration
+HF_REPO_ID = "Manoj-palanisamy/smarttriage-models"
+USE_HUGGINGFACE = os.getenv('USE_HUGGINGFACE', 'false').lower() == 'true'
+
+# Local paths (fallback)
 MODEL_DIR = "models/experimental_brain"
 STABLE_MODEL_PATH = "models/triage_assets_mingled.pkl"
 
@@ -222,14 +229,63 @@ print("🏥 Loading SmartTriage Dual-Brain Engine...")
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
 os.environ['OMP_NUM_THREADS'] = '1'
 
+def load_models_from_huggingface():
+    """Load models from Hugging Face Hub"""
+    print("📥 Downloading models from Hugging Face Hub...")
+    try:
+        # Download the pickle file containing XGBoost models
+        local_model_path = hf_hub_download(
+            repo_id=HF_REPO_ID,
+            filename="triage_assets_mingled.pkl",
+            cache_dir="./hf_cache"
+        )
+        
+        # Load the assets
+        assets = joblib.load(local_model_path)
+        encoders = assets['encoders']
+        xgb_risk_model = assets['risk_model']
+        scaler = assets['scaler']
+        feature_names = assets['features']
+        
+        # Load BERT model from Hugging Face
+        exp_brain = pipeline(
+            "text-classification",
+            model=HF_REPO_ID,
+            tokenizer=HF_REPO_ID
+        )
+        
+        print("✅ Models loaded from Hugging Face Hub successfully!")
+        return encoders, xgb_risk_model, scaler, feature_names, exp_brain
+    
+    except Exception as e:
+        print(f"❌ Failed to load from Hugging Face: {e}")
+        raise
+
+def load_models_locally():
+    """Load models from local files"""
+    print("📂 Loading models from local storage...")
+    try:
+        assets = joblib.load(STABLE_MODEL_PATH)
+        encoders = assets['encoders']
+        xgb_risk_model = assets['risk_model']
+        scaler = assets['scaler']
+        feature_names = assets['features']
+        exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
+        print("✅ Models loaded from local storage successfully!")
+        return encoders, xgb_risk_model, scaler, feature_names, exp_brain
+    except Exception as e:
+        print(f"❌ Failed to load from local storage: {e}")
+        raise
+
 try:
-    assets = joblib.load(STABLE_MODEL_PATH)
-    encoders = assets['encoders']
-    xgb_risk_model = assets['risk_model']
-    scaler = assets['scaler']
-    feature_names = assets['features']
-    exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
+    # Try loading from Hugging Face if enabled, otherwise use local files
+    if USE_HUGGINGFACE:
+        encoders, xgb_risk_model, scaler, feature_names, exp_brain = load_models_from_huggingface()
+    else:
+        encoders, xgb_risk_model, scaler, feature_names, exp_brain = load_models_locally()
+    
     print("✅ System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
+    
 except Exception as e:
     print(f"⚠️ Warning: Model load error, running in UI-only mode: {e}")
     # Create dummy models for UI testing if loading fails
