@@ -1,1359 +1,902 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriorityMed - Patient Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>PriorityMed — Patient Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced_dashboard.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Chatling.ai Chatbot Script -->
-    <script>
-        window.chtlConfig = { chatbotId: "6396798553" }
-    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script>window.chtlConfig = { chatbotId: "6396798553" }</script>
     <script async data-id="6396798553" id="chtl-script" type="text/javascript" src="https://chatling.ai/js/embed.js"></script>
+
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            margin: 0;
-            padding: 0;
-            /* Background handled by enhanced_dashboard.css */
-        }
-
-        /* Removed previous pseudo-element patterns to keep design clean with the image */
-
-        /* Medical Icons Pattern Overlay */
-
-
-        .dashboard-container {
-            display: flex;
-            min-height: 100vh;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 280px;
-            background: linear-gradient(180deg, #006B4D 0%, #004D38 100%);
-            padding: 30px 20px;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            overflow-x: hidden;
-            box-shadow: 2px 0 10px rgba(0, 107, 77, 0.1);
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-
-        .sidebar.collapsed {
-            width: 80px;
-            padding: 30px 10px;
-        }
-
-        .sidebar-toggle {
-            position: absolute;
-            top: 25px;
-            right: 15px;
-            width: 35px;
-            height: 35px;
-            background: rgba(0, 168, 107, 0.2);
-            border: none;
-            border-radius: 6px;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
-            gap: 4px;
-            transition: all 0.3s;
-            z-index: 1001;
-        }
-
-        .sidebar.collapsed .sidebar-toggle {
-            right: 15px;
-        }
-
-        .sidebar-toggle:hover {
-            background: rgba(0, 168, 107, 0.3);
-            transform: scale(1.05);
-        }
-
-        .sidebar-toggle span {
-            width: 18px;
-            height: 2px;
-            background: white;
-            border-radius: 2px;
-            transition: all 0.3s;
-        }
-
-        .sidebar.collapsed .sidebar-toggle span:nth-child(1) {
-            transform: rotate(45deg) translate(5px, 5px);
-        }
-
-        .sidebar.collapsed .sidebar-toggle span:nth-child(2) {
-            opacity: 0;
-        }
-
-        .sidebar.collapsed .sidebar-toggle span:nth-child(3) {
-            transform: rotate(-45deg) translate(5px, -5px);
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 40px;
-            margin-top: 10px;
-            padding: 0 10px;
-            transition: all 0.3s;
-        }
-
-        .sidebar.collapsed .logo {
-            justify-content: center;
-            padding: 0;
-            margin-top: 10px;
-        }
-
-        .sidebar.collapsed .logo-text {
-            display: none;
-        }
-
-        .logo-icon-wrapper {
-            width: 40px;
-            height: 40px;
-            background: #00A86B;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            font-size: 20px;
-            box-shadow: 0 2px 8px rgba(0, 168, 107, 0.3);
-            animation: logoPulse 2s ease-in-out infinite;
-            position: relative;
-        }
-
-        .logo-icon-wrapper i {
-            color: #ffffff;
-            font-size: 20px;
-        }
-
-        /* Pulsing Animation for Logo - Subtle */
-        @keyframes logoPulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-                box-shadow: 0 2px 8px rgba(0, 168, 107, 0.3);
-            }
-
-            50% {
-                transform: scale(1.05);
-                box-shadow: 0 3px 12px rgba(0, 168, 107, 0.4), 0 0 15px rgba(0, 168, 107, 0.2);
-            }
-        }
-
-        /* Heartbeat ripple effect for logo */
-        .logo-icon-wrapper::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 100%;
-            height: 100%;
-            border-radius: 10px;
-            background: rgba(0, 168, 107, 0.3);
-            animation: heartbeat 2s ease-in-out infinite;
-            z-index: -1;
-            pointer-events: none;
-        }
-
-        @keyframes heartbeat {
-
-            0%,
-            100% {
-                transform: translate(-50%, -50%) scale(1);
-                opacity: 0.3;
-            }
-
-            50% {
-                transform: translate(-50%, -50%) scale(1.3);
-                opacity: 0;
-            }
-        }
-
-        .logo-text {
-            font-size: 24px;
-            font-weight: 700;
-            color: #ffffff;
-            letter-spacing: -0.5px;
-        }
-
-        .user-profile {
-            background: rgba(0, 168, 107, 0.15);
-            padding: 16px;
-            border-radius: 12px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(0, 168, 107, 0.3);
-            transition: all 0.3s;
-        }
-
-        .sidebar.collapsed .user-profile {
-            padding: 10px;
-            text-align: center;
-        }
-
-        .sidebar.collapsed .user-profile h4,
-        .sidebar.collapsed .user-profile p {
-            display: none;
-        }
-
-        .sidebar.collapsed .user-profile::before {
-            content: '\f007';
-            font-family: 'Font Awesome 6 Free';
-            font-weight: 900;
-            font-size: 24px;
-            color: #ffffff;
-            display: block;
-        }
-
-        .user-profile h4 {
-            color: #ffffff;
-            font-size: 16px;
-            margin-bottom: 5px;
-            font-weight: 600;
-        }
-
-        .user-profile p {
-            color: rgba(255, 255, 255, 0.8);
-            font-size: 13px;
-            margin: 0;
-        }
-
-        .nav-menu {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 14px 18px;
-            color: rgba(255, 255, 255, 0.7);
-            text-decoration: none;
-            border-radius: 10px;
-            transition: all 0.3s;
-            font-size: 15px;
-            font-weight: 500;
-            white-space: nowrap;
-        }
-
-        .sidebar.collapsed .nav-item {
-            justify-content: center;
-            padding: 14px 10px;
-        }
-
-        .sidebar.collapsed .nav-item span {
-            display: none;
-        }
-
-        .sidebar.collapsed .nav-item i {
-            margin: 0;
-        }
-
-        .nav-item:hover {
-            background: rgba(0, 168, 107, 0.2);
-            color: #ffffff;
-        }
-
-        .nav-item.active {
-            background: #00A86B;
-            color: #ffffff;
-            box-shadow: 0 2px 8px rgba(0, 168, 107, 0.3);
-        }
-
-        .nav-item i {
-            font-size: 18px;
-            width: 24px;
-        }
-
-        /* Main Content */
-        .main-content {
-            margin-left: 280px;
-            flex: 1;
-            padding: 40px;
-            background: transparent;
-            position: relative;
-            z-index: 1;
-            transition: margin-left 0.3s ease;
-        }
-
-        .sidebar.collapsed~.main-content {
-            margin-left: 80px;
-        }
-
-        .welcome-section {
-            margin-bottom: 35px;
-        }
-
-        .welcome-section h1 {
-            font-size: 32px;
-            font-weight: 600;
-            color: #1B5E20;
-            margin-bottom: 8px;
-            letter-spacing: -0.5px;
-        }
-
-        .welcome-section p {
-            font-size: 16px;
-            color: #546E7A;
-        }
-
-        .stat-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 25px;
-            margin-bottom: 35px;
-        }
-
-        .stat-card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 28px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            transition: all 0.3s;
-        }
-
-        .stat-card:hover {
-            box-shadow: 0 8px 24px rgba(0, 168, 107, 0.15);
-            transform: translateY(-4px);
-        }
-
-        .stat-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            margin-bottom: 15px;
-        }
-
-        .stat-icon.blue {
-            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0, 168, 107, 0.3);
-        }
-
-        .stat-icon.green {
-            background: linear-gradient(135deg, #00897B 0%, #26A69A 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0, 137, 123, 0.3);
-        }
-
-        .stat-icon.orange {
-            background: linear-gradient(135deg, #66BB6A 0%, #81C784 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(102, 187, 106, 0.3);
-        }
-
-        .stat-icon.purple {
-            background: linear-gradient(135deg, #43A047 0%, #66BB6A 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(67, 160, 71, 0.3);
-        }
-
-        .stat-card h3 {
-            font-size: 13px;
-            color: #546E7A;
-            font-weight: 600;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-        }
-
-        .stat-value {
-            font-size: 34px;
-            font-weight: 600;
-            color: #1B5E20;
-            letter-spacing: -1px;
-            color: #000000;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #00A86B 0%, #4CAF50 100%);
-            border: none;
-            padding: 14px 26px;
-            border-radius: 12px;
-            color: #ffffff;
-            font-weight: 600;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 168, 107, 0.25);
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 168, 107, 0.4);
-            color: #ffffff;
-        }
-
-        /* Charts Section */
-        .charts-section {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-
-        .chart-card {
-            background: #ffffff;
-            padding: 28px;
-            border-radius: 16px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            transition: transform 0.3s, box-shadow 0.3s;
-        }
-
-        .chart-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 24px rgba(0, 168, 107, 0.15);
-        }
-
-        .chart-card h3 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #1B5E20;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .chart-card h3 i {
-            color: #000000;
-        }
-
-        .chart-container canvas {
-            max-height: 300px;
-        }
-
-        /* Appointments Overview */
-        .appointments-overview {
-            background: #ffffff;
-            padding: 32px;
-            border-radius: 16px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            margin-bottom: 30px;
-        }
-
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-        }
-
-        .section-header h2 {
-            font-size: 22px;
-            font-weight: 700;
-            color: #000000;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .view-all-btn {
-            color: #000000;
-            text-decoration: none;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.3s;
-        }
-
-        .view-all-btn:hover {
-            color: #666666;
-            gap: 12px;
-        }
-
-        .appointments-list {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .appointment-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 12px;
-            border-left: 4px solid transparent;
-            transition: all 0.3s;
-        }
-
-        .appointment-item:hover {
-            background: #f5f5f5;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-            transform: translateX(5px);
-        }
-
-        .appointment-item.completed {
-            border-left-color: #10b981;
-        }
-
-        .appointment-item.approved {
-            border-left-color: #8b5cf6;
-        }
-
-        .appointment-item.scheduled {
-            border-left-color: #3b82f6;
-        }
-
-        .appointment-item.pending {
-            border-left-color: #f59e0b;
-        }
-
-        .appointment-item.cancelled,
-        .appointment-item.rejected {
-            border-left-color: #ef4444;
-        }
-
-        .appointment-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .appointment-icon {
-            width: 50px;
-            height: 50px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-            color: white;
-        }
-
-        .appointment-icon.completed {
-            background: #000000;
-        }
-
-        .appointment-icon.approved {
-            background: #000000;
-        }
-
-        .appointment-icon.scheduled {
-            background: #000000;
-        }
-
-        .appointment-icon.pending {
-            background: #000000;
-        }
-
-        .appointment-icon.cancelled,
-        .appointment-icon.rejected {
-            background: #000000;
-        }
-
-        .appointment-details h4 {
-            font-size: 16px;
-            font-weight: 600;
-            color: #000000;
-            margin-bottom: 8px;
-        }
-
-        .appointment-details p {
-            font-size: 13px;
-            color: #666666;
-            margin-bottom: 5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .appointment-details p i {
-            color: #000000;
-        }
-
-        .doctor-info {
-            font-weight: 600;
-            color: #000000;
-        }
-
-        .reason-info {
-            font-style: italic;
-            color: #666666 !important;
-        }
-
-        .specialization {
-            color: #666666;
-            font-size: 12px;
-        }
-
-        .appointment-status .status-badge {
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .status-badge.completed {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .status-badge.approved {
-            background: #ede9fe;
-            color: #5b21b6;
-        }
-
-        .status-badge.scheduled {
-            background: #dbeafe;
-            color: #1e40af;
-        }
-
-        .status-badge.pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .status-badge.cancelled,
-        .status-badge.rejected {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-
-        .empty-state i {
-            font-size: 64px;
-            color: #dfe6e9;
-            margin-bottom: 20px;
-        }
-
-        .empty-state h3 {
-            font-size: 20px;
-            font-weight: 700;
-            color: #000000;
-            margin-bottom: 10px;
-        }
-
-        .empty-state p {
-            color: #666666;
-            margin-bottom: 25px;
-        }
-
-        /* Doctor Stats Section */
-        .doctor-stats-section {
-            background: #ffffff;
-            padding: 32px;
-            border-radius: 16px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            margin-bottom: 30px;
-        }
-
-        .doctor-stats-section h2 {
-            font-size: 22px;
-            font-weight: 700;
-            color: #000000;
-            margin-bottom: 25px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .doctor-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
-        }
-
-        .doctor-card {
-            background: #ffffff;
-            padding: 28px;
-            border-radius: 16px;
-            color: #1B5E20;
-            display: flex;
-            gap: 15px;
-            transition: transform 0.3s, box-shadow 0.3s;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            border: 1px solid rgba(0, 107, 77, 0.1);
-        }
-
-        .doctor-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 24px rgba(0, 168, 107, 0.15);
-        }
-
-        .doctor-avatar {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #00A86B 0%, #00897B 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 28px;
-            flex-shrink: 0;
-            color: #ffffff;
-        }
-
-        .doctor-info-section h4 {
-            font-size: 18px;
-            font-weight: 700;
-            margin-bottom: 5px;
-            color: #1B5E20;
-        }
-
-        .doctor-info-section .specialization {
-            font-size: 13px;
-            opacity: 0.7;
-            color: #546E7A;
-            margin-bottom: 15px;
-        }
-
-        .doctor-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
-        }
-
-        .doctor-stats-grid .stat {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-
-        .stat-label {
-            font-size: 11px;
-            opacity: 0.6;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #546E7A;
-        }
-
-        .stat-number {
-            font-size: 20px;
-            font-weight: 700;
-            color: #1B5E20;
-        }
-
-        .stat-number.green {
-            color: #10b981;
-        }
-
-        .stat-number.orange {
-            color: #f59e0b;
-        }
-
-        /* Floating Medical Elements */
-        .floating-elements {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
-            overflow: hidden;
-        }
-
-        .float-element {
-            position: absolute;
-            font-size: 40px;
-            color: rgba(0, 168, 107, 0.08);
-            animation: floatUpDown 8s ease-in-out infinite;
-            filter: blur(1px);
-        }
-
-        @keyframes floatUpDown {
-
-            0%,
-            100% {
-                transform: translateY(0) rotate(0deg);
-                opacity: 0.3;
-            }
-
-            50% {
-                transform: translateY(-30px) rotate(10deg);
-                opacity: 0.6;
-            }
-        }
-
-        /* Enhanced Card Animations */
-        .stat-card {
-            background: #ffffff;
-            border-radius: 16px;
-            padding: 28px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(0, 168, 107, 0.1), transparent);
-            transition: left 0.5s;
-        }
-
-        .stat-card:hover::before {
-            left: 100%;
-        }
-
-        .stat-card:hover {
-            box-shadow: 0 12px 32px rgba(0, 168, 107, 0.2);
-            transform: translateY(-8px) scale(1.02);
-        }
-
-        /* Enhanced Chart Cards */
-        .chart-card {
-            background: #ffffff;
-            padding: 28px;
-            border-radius: 16px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .chart-card::after {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(0, 168, 107, 0.05) 0%, transparent 70%);
-            opacity: 0;
-            transition: opacity 0.4s;
-        }
-
-        .chart-card:hover::after {
-            opacity: 1;
-        }
-
-        .chart-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 12px 32px rgba(0, 168, 107, 0.18);
-        }
-
-        /* Appointments Overview Enhanced */
-        .appointments-overview {
-            background: #ffffff;
-            padding: 32px;
-            border-radius: 16px;
-            box-shadow: 0 2px 12px rgba(0, 107, 77, 0.08);
-            margin-bottom: 30px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .appointments-overview::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 4px;
-            height: 0;
-            background: linear-gradient(180deg, #00A86B, #4CAF50);
-            transition: height 0.6s ease-out;
-        }
-
-        .appointments-overview:hover::before {
-            height: 100%;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 1024px) {
-            .charts-section {
-                grid-template-columns: 1fr;
-            }
-
-            .doctor-cards {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                margin-left: 0;
-                padding: 20px;
-            }
-
-            .sidebar {
-                transform: translateX(-100%);
-            }
-
-            .stat-cards {
-                grid-template-columns: 1fr;
-            }
-        }
+    :root {
+        --brand:        #0B9B7A;
+        --brand-dark:   #087A60;
+        --brand-light:  #34C9A5;
+        --brand-faint:  #E6F7F3;
+        --brand-pale:   #F0FAF7;
+        --sidebar-w:     272px;
+        --sidebar-col:   72px;
+        --radius-sm:     8px;
+        --radius-md:     12px;
+        --radius-lg:     16px;
+        --radius-xl:     22px;
+        --ease:          cubic-bezier(.4,0,.2,1);
+        --t-fast:        .15s;
+        --t-base:        .28s;
+        --clr-green:    #16A34A;
+        --clr-green-bg: #DCFCE7;
+        --clr-amber:    #D97706;
+        --clr-amber-bg: #FEF3C7;
+        --clr-red:      #DC2626;
+        --clr-red-bg:   #FEE2E2;
+        --clr-blue:     #2563EB;
+        --clr-blue-bg:  #DBEAFE;
+        --clr-purple:   #7C3AED;
+        --clr-purple-bg:#EDE9FE;
+    }
+    [data-theme="light"] {
+        --canvas:       #EEF6F2;
+        --base:         #FFFFFF;
+        --surface:      #F5FBF8;
+        --hover:        #EBF7F2;
+        --border:       #D9EDE5;
+        --border-med:   #B8D9CC;
+        --t-head:       #0A2218;
+        --t-body:       #2C4A3C;
+        --t-muted:      #5E8C7A;
+        --t-faint:      #9DC0B2;
+        --sidebar-bg:   #FFFFFF;
+        --sidebar-line: #D9EDE5;
+        --sh-sm: 0 1px 3px rgba(0,0,0,.06);
+        --sh-md: 0 4px 14px rgba(0,0,0,.08);
+        --sh-lg: 0 12px 36px rgba(0,0,0,.1);
+        --sh-card: 0 1px 4px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
+    }
+    [data-theme="dark"] {
+        --canvas:       #0B1812;
+        --base:         #101F18;
+        --surface:      #152A20;
+        --hover:        #1A3328;
+        --border:       #1D3528;
+        --border-med:   #2A4C38;
+        --t-head:       #E4F2EB;
+        --t-body:       #9ABFAE;
+        --t-muted:      #527A65;
+        --t-faint:      #2D4D3C;
+        --sidebar-bg:   #0D1B14;
+        --sidebar-line: #1D3528;
+        --sh-sm: 0 1px 3px rgba(0,0,0,.4);
+        --sh-md: 0 4px 14px rgba(0,0,0,.5);
+        --sh-lg: 0 12px 36px rgba(0,0,0,.6);
+        --sh-card: 0 1px 4px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.3);
+        --clr-green-bg: rgba(22,163,74,.14);
+        --clr-amber-bg: rgba(217,119,6,.14);
+        --clr-red-bg:   rgba(220,38,38,.14);
+        --clr-blue-bg:  rgba(37,99,235,.14);
+        --clr-purple-bg:rgba(124,58,237,.14);
+        --brand-faint:  rgba(11,155,122,.12);
+        --brand-pale:   rgba(11,155,122,.07);
+    }
+
+    /* ── RESET ── */
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    html,body{overflow-x:hidden;scroll-behavior:smooth}  /* FIX 1: clamp at root */
+    body{
+        font-family:'Outfit',sans-serif;font-size:14.5px;line-height:1.65;
+        background:var(--canvas);color:var(--t-body);-webkit-font-smoothing:antialiased;
+        transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease);
+    }
+    h1,h2,h3,h4{font-family:'Outfit',sans-serif;color:var(--t-head);font-weight:700;line-height:1.2}
+    a{text-decoration:none;color:inherit}
+    button{font-family:'Outfit',sans-serif;cursor:pointer}
+    ::-webkit-scrollbar{width:5px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:var(--border-med);border-radius:99px}
+
+    /* ── LAYOUT ── */
+    .shell{display:flex;min-height:100vh;overflow-x:hidden} /* FIX 2: shell clips */
+
+    /* ── SIDEBAR ── */
+    .sidebar{
+        width:var(--sidebar-w);background:var(--sidebar-bg);
+        border-right:1px solid var(--sidebar-line);
+        position:fixed;top:0;left:0;bottom:0;z-index:300;
+        display:flex;flex-direction:column;overflow:hidden;
+        transition:width var(--t-base) var(--ease),background var(--t-base) var(--ease),border-color var(--t-base) var(--ease);
+    }
+    .sidebar.collapsed{width:var(--sidebar-col)}
+    .s-brand{display:flex;align-items:center;gap:11px;padding:20px 18px 16px;border-bottom:1px solid var(--sidebar-line);flex-shrink:0;transition:border-color var(--t-base);}
+    .s-logo-box{width:36px;height:36px;flex-shrink:0;background:linear-gradient(140deg,var(--brand),var(--brand-light));border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(11,155,122,.3);transition:transform var(--t-fast);}
+    .s-logo-box:hover{transform:scale(1.07)}
+    .s-brand-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
+    .sidebar.collapsed .s-brand-text{opacity:0;width:0}
+    .s-brand-name{font-size:16.5px;font-weight:800;color:var(--t-head);letter-spacing:-.3px;white-space:nowrap}
+    .s-brand-tag{font-size:10.5px;color:var(--brand);font-weight:600;white-space:nowrap;margin-top:1px}
+    .s-toggle{position:absolute;top:22px;right:-13px;width:26px;height:26px;background:var(--base);border:1px solid var(--border-med);border-radius:50%;color:var(--t-muted);font-size:10px;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--sh-sm);transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);}
+    .s-toggle:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .sidebar.collapsed .s-toggle i{transform:rotate(180deg)}
+    .s-user{margin:12px 10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;align-items:center;gap:10px;overflow:hidden;transition:background var(--t-base),border-color var(--t-base);}
+    .s-ava{width:36px;height:36px;flex-shrink:0;background:linear-gradient(135deg,var(--brand),var(--brand-light));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;position:relative;}
+    .s-ava-dot{position:absolute;bottom:0;right:0;width:9px;height:9px;background:#22C55E;border-radius:50%;border:2px solid var(--sidebar-bg);}
+    .s-user-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
+    .sidebar.collapsed .s-user-text{opacity:0;width:0}
+    .s-uname{font-size:13px;font-weight:700;color:var(--t-head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .s-urole{font-size:11px;color:var(--brand);font-weight:500;margin-top:1px}
+    .s-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 8px}
+    .s-group{font-size:9.5px;font-weight:700;color:var(--t-faint);text-transform:uppercase;letter-spacing:1.2px;padding:10px 10px 4px;white-space:nowrap;transition:opacity var(--t-base),height var(--t-base),padding var(--t-base);}
+    .sidebar.collapsed .s-group{opacity:0;height:0;overflow:hidden;padding:0}
+    .s-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--t-muted);font-size:13.5px;font-weight:500;margin-bottom:2px;white-space:nowrap;transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);}
+    .s-link:hover{background:var(--hover);color:var(--t-head);transform:translateX(2px)}
+    .s-link.active{background:var(--brand-faint);color:var(--brand-dark);font-weight:700}
+    [data-theme="dark"] .s-link.active{background:rgba(11,155,122,.15);color:var(--brand-light)}
+    .s-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:background var(--t-fast);}
+    .s-link.active .s-icon{background:rgba(11,155,122,.15);color:var(--brand)}
+    [data-theme="dark"] .s-link.active .s-icon{background:rgba(11,155,122,.2);color:var(--brand-light)}
+    .s-label{transition:opacity var(--t-base),width var(--t-base)}
+    .sidebar.collapsed .s-label{opacity:0;width:0;overflow:hidden}
+    .s-chip{margin-left:auto;background:var(--brand-faint);color:var(--brand);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px;transition:opacity var(--t-base);}
+    [data-theme="dark"] .s-chip{background:rgba(11,155,122,.2);color:var(--brand-light)}
+    .sidebar.collapsed .s-chip{opacity:0;width:0;overflow:hidden}
+    .s-footer{padding:10px 10px 14px;border-top:1px solid var(--sidebar-line);flex-shrink:0;transition:border-color var(--t-base)}
+    .s-status{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--clr-green-bg);border-radius:var(--radius-sm);overflow:hidden;transition:background var(--t-base);}
+    .s-dot{width:7px;height:7px;border-radius:50%;background:var(--clr-green);flex-shrink:0;animation:dotPulse 2s ease-in-out infinite;}
+    @keyframes dotPulse{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.4)}50%{box-shadow:0 0 0 5px rgba(22,163,74,0)}}
+    .s-status-txt{font-size:11px;font-weight:600;color:var(--clr-green);white-space:nowrap;transition:opacity var(--t-base),width var(--t-base)}
+    [data-theme="dark"] .s-status-txt{color:#4ADE80}
+    .sidebar.collapsed .s-status-txt{opacity:0;width:0;overflow:hidden}
+
+    /* ── MAIN — THE CRITICAL FIX ── */
+    .main{
+        margin-left:var(--sidebar-w);
+        width:calc(100% - var(--sidebar-w)); /* FIX 3: explicit width */
+        min-width:0;                          /* FIX 4: allow shrinking */
+        min-height:100vh;
+        display:flex;flex-direction:column;
+        overflow-x:hidden;                    /* FIX 5: clip child overflow */
+        transition:margin-left var(--t-base) var(--ease),width var(--t-base) var(--ease);
+    }
+    /* FIX 6: recalculate width when sidebar collapses */
+    .sidebar.collapsed~.main{
+        margin-left:var(--sidebar-col);
+        width:calc(100% - var(--sidebar-col));
+    }
+
+    /* ── TOPBAR ── */
+    .topbar{
+        position:sticky;top:0;z-index:200;height:60px;padding:0 28px;
+        width:100%;                           /* FIX 7: never exceed parent */
+        background:var(--base);border-bottom:1px solid var(--border);
+        display:flex;align-items:center;justify-content:space-between;
+        box-shadow:var(--sh-sm);
+        transition:background var(--t-base),border-color var(--t-base);
+    }
+    .t-breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t-muted);min-width:0;overflow:hidden;}
+    .t-breadcrumb span{white-space:nowrap;}
+    .t-breadcrumb-active{color:var(--t-head);font-weight:600}
+    .t-sep{color:var(--t-faint);font-size:9px;flex-shrink:0;}
+    .t-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+    .t-clock{font-size:13px;font-weight:600;color:var(--t-muted);padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:99px;font-variant-numeric:tabular-nums;transition:background var(--t-base),border-color var(--t-base);}
+    .theme-pill{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:99px;cursor:pointer;font-size:12px;font-weight:600;color:var(--t-muted);transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast);user-select:none;}
+    .theme-pill:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
+    .t-track{width:32px;height:17px;background:var(--border-med);border-radius:99px;position:relative;transition:background var(--t-base);}
+    [data-theme="dark"] .t-track{background:var(--brand)}
+    .t-thumb{width:11px;height:11px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform var(--t-base) var(--ease);box-shadow:0 1px 3px rgba(0,0,0,.2);}
+    [data-theme="dark"] .t-thumb{transform:translateX(15px)}
+    .t-btn{width:36px;height:36px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t-muted);font-size:14px;display:flex;align-items:center;justify-content:center;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);position:relative;}
+    .t-btn:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
+    .t-badge{position:absolute;top:5px;right:5px;width:7px;height:7px;background:var(--clr-red);border-radius:50%;border:1.5px solid var(--base);}
+
+    /* ── PAGE ── */
+    .page{
+        padding:28px 28px 52px;
+        flex:1;
+        min-width:0;          /* FIX 8: flex child must have min-width:0 */
+        overflow-x:hidden;
+        width:100%;
+    }
+    .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .sec-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--t-faint);display:flex;align-items:center;gap:8px;}
+    .sec-label::after{content:'';display:inline-block;width:20px;height:1px;background:var(--border-med)}
+    .sec-link{font-size:12.5px;font-weight:600;color:var(--brand);display:flex;align-items:center;gap:5px;transition:gap var(--t-fast);}
+    [data-theme="dark"] .sec-link{color:var(--brand-light)}
+    .sec-link:hover{gap:9px}
+
+    /* ── NOTIFICATION ── */
+    .notif{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--brand-pale);border:1px solid rgba(11,155,122,.18);border-radius:var(--radius-md);margin-bottom:18px;animation:fadeUp .4s var(--ease) both;transition:background var(--t-base);}
+    .notif-ico{width:28px;height:28px;border-radius:7px;background:var(--brand-faint);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
+    [data-theme="dark"] .notif-ico{background:rgba(11,155,122,.2);color:var(--brand-light)}
+    .notif-txt{flex:1;font-size:12.5px;color:var(--t-body);min-width:0;}
+    .notif-txt strong{color:var(--brand);font-weight:700}
+    [data-theme="dark"] .notif-txt strong{color:var(--brand-light)}
+    .notif-x{background:none;border:none;color:var(--t-faint);font-size:12px;padding:2px 6px;transition:color var(--t-fast);flex-shrink:0;}
+    .notif-x:hover{color:var(--t-head)}
+
+    /* ── BANNER ── */
+    .banner{background:linear-gradient(135deg,var(--brand-dark) 0%,#0B7A62 55%,#0D9478 100%);border-radius:var(--radius-xl);padding:34px 40px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:28px;position:relative;overflow:hidden;width:100%;box-shadow:0 8px 28px rgba(11,155,122,.22);animation:fadeUp .5s var(--ease) .05s both;}
+    .banner::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 80% 50%,rgba(255,255,255,.08) 0%,transparent 55%);pointer-events:none;}
+    .banner-ring{position:absolute;right:-50px;top:-50px;width:240px;height:240px;border-radius:50%;border:1px solid rgba(255,255,255,.08);pointer-events:none;}
+    .banner-ring::before{content:'';position:absolute;inset:20px;border-radius:50%;border:1px solid rgba(255,255,255,.06);}
+    .banner-left{position:relative;z-index:1;flex:1;min-width:0;}
+    .banner-eyebrow{font-size:11.5px;color:rgba(255,255,255,.65);font-weight:500;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+    .banner-name{font-size:28px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:7px;}
+    .banner-sub{font-size:13.5px;color:rgba(255,255,255,.72);max-width:400px;line-height:1.55;margin-bottom:20px}
+    .banner-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+    .btn-white{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#fff;color:var(--brand-dark);border-radius:var(--radius-sm);font-size:13px;font-weight:700;border:none;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform var(--t-fast),box-shadow var(--t-fast);white-space:nowrap;}
+    .btn-white:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.15);color:var(--brand-dark)}
+    .btn-outline-white{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:rgba(255,255,255,.1);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid rgba(255,255,255,.22);transition:background var(--t-fast);white-space:nowrap;}
+    .btn-outline-white:hover{background:rgba(255,255,255,.18);color:#fff}
+    .banner-vitals{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1}
+    .vital{background:rgba(255,255,255,.1);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.18);border-radius:var(--radius-md);padding:13px 16px;text-align:center;min-width:82px;}
+    .vital-ico{font-size:16px;color:rgba(255,255,255,.65);margin-bottom:5px}
+    .vital-val{font-size:19px;font-weight:800;color:#fff;line-height:1;margin-bottom:2px}
+    .vital-lbl{font-size:10px;color:rgba(255,255,255,.55);font-weight:500;white-space:nowrap}
+
+    /* ── STATS — FIX 9: minmax(0,1fr) prevents grid overflow ── */
+    .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .1s both;}
+    .stat-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;position:relative;overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);box-shadow:var(--sh-card);}
+    .stat-card:hover{transform:translateY(-4px);box-shadow:var(--sh-md);border-color:var(--border-med)}
+    .stat-accent{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:2px 0 0 2px;}
+    .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .stat-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+    .stat-trend{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;}
+    .t-up{background:var(--clr-green-bg);color:var(--clr-green)}
+    .t-warn{background:var(--clr-amber-bg);color:var(--clr-amber)}
+    .t-info{background:var(--clr-blue-bg);color:var(--clr-blue)}
+    .stat-val{font-size:34px;font-weight:800;color:var(--t-head);letter-spacing:-1.5px;line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;}
+    .stat-lbl{font-size:12px;color:var(--t-muted);font-weight:500}
+    .stat-div{height:1px;background:var(--border);margin:12px 0}
+    .stat-sub{font-size:11.5px;color:var(--t-faint)}
+
+    /* ── QUICK ACTIONS ── */
+    .quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .15s both;}
+    .quick-btn{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-md);padding:15px 12px;display:flex;flex-direction:column;align-items:center;gap:9px;box-shadow:var(--sh-card);transition:transform var(--t-fast),box-shadow var(--t-fast),background var(--t-base),border-color var(--t-base);text-align:center;}
+    .quick-btn:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--brand);background:var(--brand-pale)}
+    [data-theme="dark"] .quick-btn:hover{background:rgba(11,155,122,.07)}
+    .q-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
+    .q-lbl{font-size:12px;font-weight:600;color:var(--t-muted);line-height:1.3}
+    .quick-btn:hover .q-lbl{color:var(--brand)}
+    [data-theme="dark"] .quick-btn:hover .q-lbl{color:var(--brand-light)}
+
+    /* ── CHARTS ── */
+    .charts-row{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .2s both;min-width:0;}
+    .card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--sh-card);overflow:hidden;min-width:0;transition:background var(--t-base),border-color var(--t-base);}
+    .card:hover{border-color:var(--border-med)}
+    .card-head{padding:18px 22px 0;display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
+    .card-title{font-size:15px;font-weight:700;color:var(--t-head);margin-bottom:2px}
+    .card-sub{font-size:11.5px;color:var(--t-muted)}
+    .card-pill{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-faint);padding:4px 9px;border-radius:99px;}
+    [data-theme="dark"] .card-pill{background:rgba(11,155,122,.15);color:var(--brand-light)}
+    .card-body{padding:0 22px 20px}
+    .chart-wrap{height:220px;position:relative}
+    .donut-ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
+    .donut-n{font-size:28px;font-weight:800;color:var(--t-head);line-height:1}
+    .donut-l{font-size:10.5px;font-weight:600;color:var(--t-muted);margin-top:2px}
+    .chart-legend{display:flex;flex-wrap:wrap;gap:7px;padding:14px 22px;border-top:1px solid var(--border);transition:border-color var(--t-base);}
+    .leg-item{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;color:var(--t-muted)}
+    .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+    /* ── TIPS ── */
+    .tips-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .25s both;}
+    .tips-head{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:border-color var(--t-base);}
+    .tips-nav-btns{display:flex;gap:5px}
+    .tips-nav-btn{width:28px;height:28px;border-radius:7px;background:var(--surface);border:1px solid var(--border);color:var(--t-muted);font-size:11px;display:flex;align-items:center;justify-content:center;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);}
+    .tips-nav-btn:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .tips-track-outer{overflow:hidden;padding:18px 20px}
+    .tips-track{display:flex;gap:14px;transition:transform .4s var(--ease)}
+    .tip-item{min-width:calc(33.333% - 10px);flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),border-color var(--t-base);}
+    .tip-item:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--brand)}
+    .tip-visual{height:100px;display:flex;align-items:center;justify-content:center;font-size:42px}
+    .tip-body{padding:12px 14px}
+    .tip-cat{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--brand);margin-bottom:3px}
+    [data-theme="dark"] .tip-cat{color:var(--brand-light)}
+    .tip-ttl{font-size:13px;font-weight:700;color:var(--t-head);margin-bottom:4px}
+    .tip-txt{font-size:11.5px;color:var(--t-muted);line-height:1.55}
+
+    /* ── APPOINTMENTS ── */
+    .appt-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .3s both;}
+    .appt-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;transition:border-color var(--t-base);}
+    .btn-primary{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;font-family:'Outfit',sans-serif;box-shadow:0 2px 8px rgba(11,155,122,.28);white-space:nowrap;transition:background var(--t-fast),transform var(--t-fast),box-shadow var(--t-fast);}
+    .btn-primary:hover{background:var(--brand-dark);color:#fff;transform:translateY(-1px);box-shadow:0 5px 14px rgba(11,155,122,.35)}
+    .appt-tabs{display:flex;gap:3px;padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;transition:background var(--t-base),border-color var(--t-base);}
+    .tab{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;font-family:'Outfit',sans-serif;border:none;background:transparent;color:var(--t-muted);transition:background var(--t-fast),color var(--t-fast);}
+    .tab:hover{background:var(--hover);color:var(--t-head)}
+    .tab.active{background:var(--brand);color:#fff}
+    .appt-list{padding:6px 14px 14px}
+    .appt-row{display:flex;align-items:center;gap:14px;padding:13px 10px;border-radius:var(--radius-md);margin-bottom:3px;border:1px solid transparent;min-width:0;transition:background var(--t-fast),border-color var(--t-fast);}
+    .appt-row:hover{background:var(--surface);border-color:var(--border)}
+    .appt-bar{width:3px;height:42px;border-radius:2px;flex-shrink:0}
+    .appt-ava{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex-shrink:0;}
+    .appt-info{flex:1;min-width:0}
+    .appt-doc{font-size:13.5px;font-weight:700;color:var(--t-head);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .appt-meta{display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--t-muted)}
+    .appt-meta-i{display:flex;align-items:center;gap:3px}
+    .appt-meta-i i{color:var(--brand);font-size:10px}
+    [data-theme="dark"] .appt-meta-i i{color:var(--brand-light)}
+    .appt-reason{font-size:11px;color:var(--t-faint);margin-top:2px;display:flex;align-items:center;gap:3px}
+    .badge{padding:4px 11px;border-radius:99px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
+    .b-completed{background:var(--clr-green-bg);color:var(--clr-green)}
+    .b-approved{background:var(--clr-purple-bg);color:var(--clr-purple)}
+    .b-scheduled{background:var(--clr-blue-bg);color:var(--clr-blue)}
+    .b-pending{background:var(--clr-amber-bg);color:var(--clr-amber)}
+    .b-cancelled,.b-rejected{background:var(--clr-red-bg);color:var(--clr-red)}
+
+    /* ── TOOLS ── */
+    .tools-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .35s both;}
+    .tool-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--sh-card);transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);}
+    .tool-card:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--border-med)}
+    .tool-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px}
+    .tool-title{font-size:14px;font-weight:700;color:var(--t-head);margin-bottom:5px}
+    .tool-text{font-size:12.5px;color:var(--t-muted);line-height:1.6}
+    .ecg-line{margin-top:12px;height:34px}
+    .ecg-line svg{width:100%;height:34px;overflow:visible}
+
+    /* ── DOCTORS ── */
+    .doctors-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .4s both;}
+    .doc-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--sh-card);position:relative;overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);}
+    .doc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--brand),var(--brand-light));opacity:0;transition:opacity var(--t-base);}
+    .doc-card:hover{transform:translateY(-5px);box-shadow:var(--sh-md);border-color:var(--brand)}
+    .doc-card:hover::before{opacity:1}
+    .doc-top{display:flex;align-items:center;gap:13px;margin-bottom:16px}
+    .doc-ava{width:50px;height:50px;flex-shrink:0;background:linear-gradient(135deg,var(--brand),var(--brand-light));border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;color:#fff;box-shadow:0 4px 12px rgba(11,155,122,.25);}
+    .doc-name{font-size:14.5px;font-weight:700;color:var(--t-head);margin-bottom:2px}
+    .doc-spec{font-size:11.5px;color:var(--brand);font-weight:600}
+    [data-theme="dark"] .doc-spec{color:var(--brand-light)}
+    .doc-stars{display:flex;gap:2px;align-items:center;margin-top:4px;font-size:10.5px;color:#F59E0B}
+    .doc-stars span{color:var(--t-muted);font-size:11px;margin-left:3px}
+    .doc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:14px;border-top:1px solid var(--border);transition:border-color var(--t-base)}
+    .doc-stat{text-align:center}
+    .doc-stat-v{font-size:19px;font-weight:800;color:var(--brand);line-height:1}
+    [data-theme="dark"] .doc-stat-v{color:var(--brand-light)}
+    .doc-stat-l{font-size:10px;color:var(--t-faint);font-weight:500;margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+
+    /* ── TIMELINE ── */
+    .tl-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .45s both;}
+    .tl-list{margin-top:18px}
+    .tl-item{display:flex;gap:14px;margin-bottom:16px;position:relative}
+    .tl-item:not(:last-child)::before{content:'';position:absolute;left:16px;top:32px;width:1px;height:calc(100% + 2px);background:var(--border);}
+    .tl-dot{width:32px;height:32px;flex-shrink:0;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:12px;position:relative;z-index:1;}
+    .tl-body{flex:1;padding-top:5px;min-width:0;}
+    .tl-ev{font-size:13px;font-weight:600;color:var(--t-head)}
+    .tl-tm{font-size:11px;color:var(--t-faint);margin-top:1px}
+
+    /* ── EMPTY ── */
+    .empty{text-align:center;padding:52px 24px}
+    .empty-ico{width:68px;height:68px;margin:0 auto 16px;background:var(--surface);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--t-faint);animation:floatIco 3s ease-in-out infinite;}
+    @keyframes floatIco{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+    .empty-title{font-size:17px;font-weight:700;color:var(--t-head);margin-bottom:7px}
+    .empty-sub{font-size:13px;color:var(--t-muted);max-width:300px;margin:0 auto 20px}
+
+    /* ── FOOTER ── */
+    .page-footer{text-align:center;padding:18px 0 4px;border-top:1px solid var(--border);font-size:11.5px;color:var(--t-faint);transition:border-color var(--t-base);}
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── RESPONSIVE ── */
+    @media(max-width:1400px){
+        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    }
+    @media(max-width:1200px){
+        .charts-row{grid-template-columns:1fr}
+        .doctors-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .tools-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .banner-vitals{display:none}
+    }
+    @media(max-width:1024px){
+        .page{padding:22px 22px 44px}
+        .topbar{padding:0 20px}
+        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .banner{padding:28px 30px}
+    }
+    @media(max-width:768px){
+        .main{margin-left:0!important;width:100%!important}
+        .sidebar{transform:translateX(-100%)}
+        .sidebar.mobile-open{transform:translateX(0)}
+        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .doctors-grid{grid-template-columns:1fr}
+        .tools-grid{grid-template-columns:1fr}
+        .banner{padding:24px 26px}
+        .banner-name{font-size:22px}
+        .charts-row{grid-template-columns:1fr}
+    }
     </style>
 </head>
 
 <body>
-    <!-- Medical Pattern Overlay -->
-    <div class="medical-pattern"></div>
+<div class="shell">
 
-    <!-- Floating Medical Elements -->
-    <div class="floating-elements">
-        <div class="float-element" style="top: 10%; left: 5%; animation-delay: 0s;">
-            <i class="fas fa-heartbeat"></i>
-        </div>
-        <div class="float-element" style="top: 60%; left: 90%; animation-delay: 2s;">
-            <i class="fas fa-stethoscope"></i>
-        </div>
-        <div class="float-element" style="top: 80%; left: 10%; animation-delay: 4s;">
-            <i class="fas fa-user-md"></i>
-        </div>
-        <div class="float-element" style="top: 30%; left: 85%; animation-delay: 1s;">
-            <i class="fas fa-notes-medical"></i>
-        </div>
-        <div class="float-element" style="top: 50%; left: 8%; animation-delay: 3s;">
-            <i class="fas fa-hospital"></i>
+<!-- ══════════ SIDEBAR ══════════ -->
+<aside class="sidebar" id="sidebar">
+    <div class="s-brand">
+        <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
+        <div class="s-brand-text">
+            <div class="s-brand-name">PriorityMed</div>
+            <div class="s-brand-tag">Patient Portal</div>
         </div>
     </div>
+    <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
+    <div class="s-user">
+        <div class="s-ava">
+            <i class="fas fa-user"></i>
+            <div class="s-ava-dot"></div>
+        </div>
+        <div class="s-user-text">
+            <div class="s-uname">{{ user.fullname }}</div>
+            <div class="s-urole">Patient Account</div>
+        </div>
+    </div>
+    <nav class="s-nav">
+        <div class="s-group">Overview</div>
+        <a href="/patient/dashboard" class="s-link active">
+            <div class="s-icon"><i class="fas fa-th-large"></i></div>
+            <span class="s-label">Dashboard</span>
+        </a>
+        <a href="/health-report" class="s-link">
+            <div class="s-icon"><i class="fas fa-chart-line"></i></div>
+            <span class="s-label">Health Progress</span>
+        </a>
+        <div class="s-group">My Care</div>
+        <a href="/checkup" class="s-link">
+            <div class="s-icon"><i class="fas fa-robot"></i></div>
+            <span class="s-label">AI Checkup</span>
+            <span class="s-chip">NEW</span>
+        </a>
+        <a href="/appointments" class="s-link">
+            <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+            <span class="s-label">Appointments</span>
+            <span class="s-chip" id="pendingChip" style="display:none;">0</span>
+        </a>
+        <a href="/doctors" class="s-link">
+            <div class="s-icon"><i class="fas fa-user-md"></i></div>
+            <span class="s-label">Find Doctors</span>
+        </a>
+        <div class="s-group">Support</div>
+        <a href="/messages" class="s-link">
+            <div class="s-icon"><i class="fas fa-comments"></i></div>
+            <span class="s-label">Messages</span>
+        </a>
+        <a href="/logout" class="s-link">
+            <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
+            <span class="s-label">Sign Out</span>
+        </a>
+    </nav>
+    <div class="s-footer">
+        <div class="s-status">
+            <div class="s-dot"></div>
+            <span class="s-status-txt">All Systems Operational</span>
+        </div>
+    </div>
+</aside>
 
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <div class="sidebar" id="sidebar">
-            <button class="sidebar-toggle" id="sidebarToggle">
-                <span></span>
-                <span></span>
-                <span></span>
+<!-- ══════════ MAIN ══════════ -->
+<div class="main" id="mainContent">
+
+    <header class="topbar">
+        <div class="t-breadcrumb">
+            <span>PriorityMed</span>
+            <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
+            <span class="t-breadcrumb-active">Dashboard</span>
+        </div>
+        <div class="t-right">
+            <div class="t-clock" id="liveClock">--:-- --</div>
+            <div class="theme-pill" id="themeToggle">
+                <i class="fas fa-moon" id="themeIco" style="font-size:11px;"></i>
+                <div class="t-track"><div class="t-thumb"></div></div>
+            </div>
+            <button class="t-btn" title="Notifications">
+                <i class="fas fa-bell"></i>
+                <div class="t-badge"></div>
             </button>
-            <div class="logo">
-                <div class="logo-icon-wrapper">
-                    <i class="fas fa-heartbeat"></i>
-                </div>
-                <span class="logo-text">PriorityMed</span>
-            </div>
+            <button class="t-btn" title="Settings">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+    </header>
 
-            <div class="user-profile">
-                <h4><i class="fas fa-user-circle"></i> {{ user.fullname }}</h4>
-                <p>Patient Account</p>
-            </div>
+    <div class="page">
 
-            <nav class="nav-menu">
-                <a href="/patient/dashboard" class="nav-item active">
-                    <i class="fas fa-th-large"></i>
-                    <span>Dashboard</span>
-                </a>
-                <a href="/checkup" class="nav-item">
-                    <i class="fas fa-heartbeat"></i>
-                    <span>AI Checkup</span>
-                </a>
-                <a href="/appointments" class="nav-item">
-                    <i class="far fa-calendar-alt"></i>
-                    <span>My Appointments</span>
-                </a>
-                <a href="/health-report" class="nav-item">
-                    <i class="fas fa-chart-line"></i>
-                    <span>Health Progress</span>
-                </a>
-                <a href="/doctors" class="nav-item">
-                    <i class="fas fa-user-md"></i>
-                    <span>Find Doctors</span>
-                </a>
-                <a href="/messages" class="nav-item">
-                    <i class="fas fa-comments"></i>
-                    <span>Messages</span>
-                </a>
-                <a href="/logout" class="nav-item">
-                    <i class="fas fa-sign-out-alt"></i>
-                    <span>Logout</span>
-                </a>
-            </nav>
+        <div class="notif" id="notifStrip">
+            <div class="notif-ico"><i class="fas fa-bell"></i></div>
+            <div class="notif-txt">
+                <strong>Health Reminder:</strong> Stay hydrated — drink at least 8 glasses of water today. Your wellbeing is our priority.
+            </div>
+            <button class="notif-x" onclick="document.getElementById('notifStrip').style.display='none'">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-            <div class="welcome-section">
-                <h1>Welcome back, {{ user.fullname.split()[0] }}</h1>
-                <p>Here's your health overview and appointments</p>
-            </div>
-
-            <div class="stat-cards">
-                <div class="stat-card">
-                    <div class="stat-icon blue">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <h3>Total Appointments</h3>
-                    <div class="stat-value">{{ patient_stats.total }}</div>
+        <div class="banner">
+            <div class="banner-ring"></div>
+            <div class="banner-left">
+                <div class="banner-eyebrow">
+                    <i class="fas fa-circle-dot" style="font-size:9px;"></i>
+                    <span id="bannerDate">—</span>
                 </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon green">
-                        <i class="fas fa-calendar-check"></i>
-                    </div>
-                    <h3>Completed</h3>
-                    <div class="stat-value">{{ patient_stats.completed }}</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon orange">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <h3>Pending Requests</h3>
-                    <div class="stat-value">{{ patient_stats.pending }}</div>
-                </div>
-
-                <div class="stat-card">
-                    <div class="stat-icon purple">
-                        <i class="fas fa-heartbeat"></i>
-                    </div>
-                    <h3>Quick Actions</h3>
-                    <a href="/appointments" class="btn-primary" style="margin-top: 10px;">
-                        <i class="fas fa-plus"></i>
-                        Book Appointment
-                    </a>
+                <div class="banner-name" id="bannerGreet">Welcome back, {{ user.fullname.split()[0] }} 👋</div>
+                <p class="banner-sub">
+                    Your health overview is up to date. You have
+                    <strong style="color:#fff;">{{ patient_stats.pending }}</strong>
+                    pending appointment{% if patient_stats.pending != 1 %}s{% endif %} awaiting confirmation.
+                </p>
+                <div class="banner-actions">
+                    <a href="/appointments" class="btn-white"><i class="fas fa-plus"></i> Book Appointment</a>
+                    <a href="/checkup" class="btn-outline-white"><i class="fas fa-stethoscope"></i> AI Checkup</a>
                 </div>
             </div>
+            <div class="banner-vitals">
+                <div class="vital">
+                    <div class="vital-ico"><i class="fas fa-heart"></i></div>
+                    <div class="vital-val">72</div>
+                    <div class="vital-lbl">Heart Rate</div>
+                </div>
+                <div class="vital">
+                    <div class="vital-ico"><i class="fas fa-lungs"></i></div>
+                    <div class="vital-val">98%</div>
+                    <div class="vital-lbl">SpO₂ Level</div>
+                </div>
+                <div class="vital">
+                    <div class="vital-ico"><i class="fas fa-thermometer-half"></i></div>
+                    <div class="vital-val">98.6°</div>
+                    <div class="vital-lbl">Body Temp</div>
+                </div>
+            </div>
+        </div>
 
-            <!-- Visualizations Section -->
-            <div class="charts-section">
-                <div class="chart-container">
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-pie"></i> Appointment Status Distribution</h3>
+        <div class="sec-head"><div class="sec-label">Key Metrics</div></div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-accent" style="background:var(--brand);"></div>
+                <div class="stat-top">
+                    <div class="stat-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-calendar-check"></i></div>
+                    <span class="stat-trend t-up"><i class="fas fa-arrow-up"></i> 12%</span>
+                </div>
+                <div class="stat-val" id="svTotal">{{ patient_stats.total }}</div>
+                <div class="stat-lbl">Total Appointments</div>
+                <div class="stat-div"></div>
+                <div class="stat-sub">All-time visits recorded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-accent" style="background:var(--clr-green);"></div>
+                <div class="stat-top">
+                    <div class="stat-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-circle-check"></i></div>
+                    <span class="stat-trend t-up">98% rate</span>
+                </div>
+                <div class="stat-val" id="svDone">{{ patient_stats.completed }}</div>
+                <div class="stat-lbl">Completed</div>
+                <div class="stat-div"></div>
+                <div class="stat-sub">Successfully attended</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-accent" style="background:var(--clr-amber);"></div>
+                <div class="stat-top">
+                    <div class="stat-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-hourglass-half"></i></div>
+                    <span class="stat-trend t-warn">Awaiting</span>
+                </div>
+                <div class="stat-val" id="svPend">{{ patient_stats.pending }}</div>
+                <div class="stat-lbl">Pending Requests</div>
+                <div class="stat-div"></div>
+                <div class="stat-sub">Please respond within 24 hrs</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-accent" style="background:var(--clr-blue);"></div>
+                <div class="stat-top">
+                    <div class="stat-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-shield-heart"></i></div>
+                    <span class="stat-trend t-info">Active</span>
+                </div>
+                <div class="stat-val" style="font-size:24px;">Good</div>
+                <div class="stat-lbl">Health Status</div>
+                <div class="stat-div"></div>
+                <div class="stat-sub">Based on recent visits</div>
+            </div>
+        </div>
+
+        <div class="sec-head"><div class="sec-label">Quick Actions</div></div>
+        <div class="quick-grid">
+            <a href="/appointments" class="quick-btn">
+                <div class="q-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-calendar-plus"></i></div>
+                <span class="q-lbl">Book Appointment</span>
+            </a>
+            <a href="/checkup" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-stethoscope"></i></div>
+                <span class="q-lbl">AI Health Scan</span>
+            </a>
+            <a href="/doctors" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-purple-bg);color:var(--clr-purple);"><i class="fas fa-user-md"></i></div>
+                <span class="q-lbl">Find a Doctor</span>
+            </a>
+            <a href="/messages" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-comment-medical"></i></div>
+                <span class="q-lbl">Message Doctor</span>
+            </a>
+        </div>
+
+        <div class="sec-head"><div class="sec-label">Analytics</div></div>
+        <div class="charts-row">
+            <div class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="card-title">Appointment Timeline</div>
+                        <div class="card-sub">Monthly history at a glance</div>
+                    </div>
+                    <div class="card-pill"><i class="fas fa-chart-line"></i> Live</div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="card-title">Status Breakdown</div>
+                        <div class="card-sub">Appointment distribution</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrap" style="position:relative;">
                         <canvas id="statusChart"></canvas>
+                        <div class="donut-ctr">
+                            <div class="donut-n" id="donutN">—</div>
+                            <div class="donut-l">Total</div>
+                        </div>
                     </div>
                 </div>
+                <div class="chart-legend" id="chartLegend"></div>
+            </div>
+        </div>
 
-                <div class="chart-container">
-                    <div class="chart-card">
-                        <h3><i class="fas fa-chart-line"></i> Appointment Timeline</h3>
-                        <canvas id="timelineChart"></canvas>
-                    </div>
+        <div class="sec-head"><div class="sec-label">Wellness Hub</div></div>
+        <div class="tips-card">
+            <div class="tips-head">
+                <div>
+                    <div class="card-title">Health Tips</div>
+                    <div class="card-sub">Personalised wellness guidance</div>
+                </div>
+                <div class="tips-nav-btns">
+                    <button class="tips-nav-btn" id="tipsPrev"><i class="fas fa-chevron-left"></i></button>
+                    <button class="tips-nav-btn" id="tipsNext"><i class="fas fa-chevron-right"></i></button>
                 </div>
             </div>
+            <div class="tips-track-outer">
+                <div class="tips-track" id="tipsTrack"></div>
+            </div>
+        </div>
 
-            <!-- Recent Appointments -->
-            <div class="appointments-overview">
-                <div class="section-header">
-                    <h2><i class="fas fa-history"></i> Recent Appointments</h2>
-                    <a href="/appointments" class="view-all-btn">View All <i class="fas fa-arrow-right"></i></a>
+        <div class="sec-head">
+            <div class="sec-label">Appointments</div>
+            <a href="/appointments" class="sec-link">View All <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div class="appt-card">
+            <div class="appt-head">
+                <div>
+                    <div class="card-title">Recent Appointments</div>
+                    <div class="card-sub">Your latest medical consultations</div>
                 </div>
-                <div class="appointments-list">
-                    {% if appointments %}
-                    {% for apt in appointments[:5] %}
-                    <div class="appointment-item">
-                        <div class="appointment-info">
-                            <div class="appointment-icon {{ apt.status.lower() }}">
-                                <i class="fas fa-calendar-check"></i>
+                <a href="/appointments" class="btn-primary"><i class="fas fa-plus"></i> New Appointment</a>
+            </div>
+            <div class="appt-tabs">
+                <button class="tab active" onclick="filterTab('all',this)">All</button>
+                <button class="tab" onclick="filterTab('completed',this)">Completed</button>
+                <button class="tab" onclick="filterTab('pending',this)">Pending</button>
+                <button class="tab" onclick="filterTab('scheduled',this)">Scheduled</button>
+                <button class="tab" onclick="filterTab('approved',this)">Approved</button>
+            </div>
+            <div class="appt-list" id="apptList">
+                {% if appointments %}
+                    {% for apt in appointments[:7] %}
+                    <div class="appt-row" data-status="{{ apt.status.lower() }}">
+                        <div class="appt-bar" style="{% if apt.status.lower()=='completed' %}background:var(--clr-green){% elif apt.status.lower()=='approved' %}background:var(--clr-purple){% elif apt.status.lower()=='scheduled' %}background:var(--clr-blue){% elif apt.status.lower()=='pending' %}background:var(--clr-amber){% else %}background:var(--clr-red){% endif %};"></div>
+                        <div class="appt-ava" style="{% if apt.status.lower()=='completed' %}background:linear-gradient(135deg,#16A34A,#22C55E){% elif apt.status.lower()=='approved' %}background:linear-gradient(135deg,#7C3AED,#A855F7){% elif apt.status.lower()=='scheduled' %}background:linear-gradient(135deg,#2563EB,#60A5FA){% elif apt.status.lower()=='pending' %}background:linear-gradient(135deg,#D97706,#FBBF24){% else %}background:linear-gradient(135deg,#DC2626,#F87171){% endif %};"><i class="fas fa-user-md"></i></div>
+                        <div class="appt-info">
+                            <div class="appt-doc">{% if apt.doctor_name %}Dr. {{ apt.doctor_name }}{% else %}Scheduled Appointment{% endif %}</div>
+                            <div class="appt-meta">
+                                <span class="appt-meta-i"><i class="far fa-calendar"></i> {{ apt.appointment_date }}</span>
+                                <span class="appt-meta-i"><i class="far fa-clock"></i> {{ apt.appointment_time }}</span>
+                                {% if apt.specialization %}<span class="appt-meta-i"><i class="fas fa-briefcase-medical"></i> {{ apt.specialization }}</span>{% endif %}
                             </div>
-                            <div class="appointment-details">
-                                <h4>{% if apt.doctor_name %}Appointment with Dr. {{ apt.doctor_name }}{% else
-                                    %}Appointment Scheduled{% endif %}</h4>
-                                <p>
-                                    <i class="far fa-calendar"></i> {{ apt.appointment_date }}
-                                    <i class="far fa-clock" style="margin-left: 15px;"></i> {{ apt.appointment_time }}
-                                </p>
-                                {% if apt.specialization %}
-                                <p class="doctor-info">
-                                    <i class="fas fa-stethoscope"></i> {{ apt.specialization }}
-                                </p>
-                                {% endif %}
-                                {% if apt.reason %}
-                                <p class="reason-info">
-                                    <i class="fas fa-notes-medical"></i> {{ apt.reason[:50] }}{% if apt.reason|length >
-                                    50 %}...{% endif %}
-                                </p>
-                                {% endif %}
-                            </div>
+                            {% if apt.reason %}<div class="appt-reason"><i class="fas fa-notes-medical"></i> {{ apt.reason[:65] }}{% if apt.reason|length > 65 %}…{% endif %}</div>{% endif %}
                         </div>
-                        <div class="appointment-status">
-                            <span class="status-badge {{ apt.status.lower() }}">{{ apt.status }}</span>
-                        </div>
+                        <span class="badge b-{{ apt.status.lower() }}">{{ apt.status }}</span>
                     </div>
                     {% endfor %}
-                    {% else %}
-                    <div class="empty-state">
-                        <i class="fas fa-calendar-times"></i>
-                        <h3>No Appointments Yet</h3>
-                        <p>Book your first appointment to get started</p>
-                        <a href="/appointments" class="btn-primary">
-                            <i class="fas fa-plus"></i> Book Appointment
-                        </a>
-                    </div>
-                    {% endif %}
+                {% else %}
+                <div class="empty">
+                    <div class="empty-ico"><i class="far fa-calendar-times"></i></div>
+                    <div class="empty-title">No Appointments Yet</div>
+                    <p class="empty-sub">Start your healthcare journey by booking a consultation with one of our specialists.</p>
+                    <a href="/appointments" class="btn-primary"><i class="fas fa-plus"></i> Book First Appointment</a>
                 </div>
+                {% endif %}
             </div>
-
-            <!-- Doctor-wise Stats -->
-            {% if appointments %}
-            <div class="doctor-stats-section">
-                <h2><i class="fas fa-user-md"></i> Your Doctors</h2>
-                <div class="doctor-cards" id="doctorStats">
-                    <!-- Will be populated by JavaScript -->
-                </div>
-            </div>
-            {% endif %}
         </div>
+
+        <div class="sec-head"><div class="sec-label">Health Tools</div></div>
+        <div class="tools-grid">
+            <div class="tool-card">
+                <div class="tool-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-brain"></i></div>
+                <div class="tool-title">AI Health Analysis</div>
+                <p class="tool-text">Our AI monitors your appointment patterns and health data to provide personalised care recommendations.</p>
+                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,17 30,17 44,6 58,28 72,5 86,30 100,17 135,17 149,10 163,24 177,17 240,17" stroke="var(--brand)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.2s" repeatCount="indefinite"/></polyline></svg></div>
+            </div>
+            <div class="tool-card">
+                <div class="tool-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-chart-area"></i></div>
+                <div class="tool-title">Progress Tracking</div>
+                <p class="tool-text">Detailed health reports that track your treatment outcomes and wellness improvements over time.</p>
+                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,24 36,24 52,10 76,24 96,14 116,24 156,24 178,8 198,24 240,24" stroke="var(--clr-blue)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.6s" begin=".5s" repeatCount="indefinite"/></polyline></svg></div>
+            </div>
+            <div class="tool-card">
+                <div class="tool-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-pills"></i></div>
+                <div class="tool-title">Medication Reminders</div>
+                <p class="tool-text">Smart medication tracking with automated reminders synced with your personalised care plan.</p>
+                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,17 18,17 32,8 46,26 60,17 90,17 104,5 118,29 132,17 166,17 182,11 198,23 240,17" stroke="var(--clr-amber)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.4s" begin="1s" repeatCount="indefinite"/></polyline></svg></div>
+            </div>
+        </div>
+
+        {% if appointments %}
+        <div class="sec-head">
+            <div class="sec-label">Your Care Team</div>
+            <a href="/doctors" class="sec-link">All Doctors <i class="fas fa-arrow-right"></i></a>
+        </div>
+        <div class="doctors-grid" id="doctorsGrid"></div>
+        {% endif %}
+
+        <div class="sec-head"><div class="sec-label">Recent Activity</div></div>
+        <div class="tl-card">
+            <div class="card-title">Activity Log</div>
+            <div class="card-sub" style="margin-top:2px;">Your latest interactions and updates</div>
+            <div class="tl-list" id="tlList"></div>
+        </div>
+
+        <div class="page-footer">© 2024 PriorityMed &nbsp;·&nbsp; Secure Patient Portal &nbsp;·&nbsp; All rights reserved</div>
+
     </div>
+</div>
+</div>
 
-    <script>
-        const appointments = {{ appointments| tojson if appointments else '[]' | safe }};
+<script>
+const appointments = {{ appointments | tojson if appointments else '[]' | safe }};
+const patientStats = {
+    total:     {{ patient_stats.total }},
+    completed: {{ patient_stats.completed }},
+    pending:   {{ patient_stats.pending }}
+};
 
-        // Prepare data for charts
-        function prepareChartData() {
-            const statusCount = {
-                'Completed': 0,
-                'Approved': 0,
-                'Scheduled': 0,
-                'Pending': 0,
-                'Cancelled': 0,
-                'Rejected': 0
-            };
+/* THEME */
+const html = document.documentElement;
+const themeToggle = document.getElementById('themeToggle');
+const themeIco = document.getElementById('themeIco');
+window._activeCharts = [];
 
-            const monthlyData = {};
-            const doctorData = {};
+function setTheme(t) {
+    html.setAttribute('data-theme', t);
+    localStorage.setItem('pmTheme', t);
+    themeIco.className = (t === 'dark' ? 'fas fa-sun' : 'fas fa-moon');
+    themeIco.style.fontSize = '11px';
+    setTimeout(renderCharts, 50);
+}
+(function(){ setTheme(localStorage.getItem('pmTheme') || 'light'); })();
+themeToggle.addEventListener('click', () => { setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
+function isDark(){ return html.getAttribute('data-theme') === 'dark'; }
 
-            appointments.forEach(apt => {
-                // Status distribution
-                if (statusCount.hasOwnProperty(apt.status)) {
-                    statusCount[apt.status]++;
-                }
+/* SIDEBAR */
+const sidebar = document.getElementById('sidebar');
+document.getElementById('sidebarToggle').addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('pmSide', sidebar.classList.contains('collapsed'));
+});
+if(localStorage.getItem('pmSide') === 'true') sidebar.classList.add('collapsed');
 
-                // Monthly timeline
-                const date = new Date(apt.appointment_date);
-                const monthYear = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                monthlyData[monthYear] = (monthlyData[monthYear] || 0) + 1;
+/* CLOCK */
+function tick(){ const el=document.getElementById('liveClock'); if(el) el.textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
+setInterval(tick,1000); tick();
 
-                // Doctor-wise distribution
-                if (apt.doctor_name) {
-                    if (!doctorData[apt.doctor_name]) {
-                        doctorData[apt.doctor_name] = {
-                            count: 0,
-                            specialization: apt.specialization || 'General',
-                            completed: 0,
-                            pending: 0
-                        };
-                    }
-                    doctorData[apt.doctor_name].count++;
-                    if (apt.status === 'Completed') doctorData[apt.doctor_name].completed++;
-                    if (apt.status === 'Pending') doctorData[apt.doctor_name].pending++;
-                }
-            });
+/* BANNER */
+(function(){
+    const h=new Date().getHours();
+    const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+    const el=document.getElementById('bannerGreet');
+    if(el) el.textContent=`${g}, {{ user.fullname.split()[0] }} 👋`;
+    const de=document.getElementById('bannerDate');
+    if(de) de.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+})();
 
-            return { statusCount, monthlyData, doctorData };
+if(patientStats.pending>0){ const c=document.getElementById('pendingChip'); if(c){c.style.display='inline-flex';c.textContent=patientStats.pending;} }
+
+/* PARSE */
+function parseData(){
+    const sc={Completed:0,Approved:0,Scheduled:0,Pending:0,Cancelled:0,Rejected:0};
+    const mo={},dr={};
+    appointments.forEach(a=>{
+        if(sc.hasOwnProperty(a.status)) sc[a.status]++;
+        const d=new Date(a.appointment_date);
+        if(!isNaN(d)){const k=d.toLocaleDateString('en-US',{month:'short',year:'2-digit'});mo[k]=(mo[k]||0)+1;}
+        if(a.doctor_name){
+            if(!dr[a.doctor_name]) dr[a.doctor_name]={count:0,spec:a.specialization||'General Practice',done:0,pend:0};
+            dr[a.doctor_name].count++;
+            if(a.status==='Completed') dr[a.doctor_name].done++;
+            if(a.status==='Pending') dr[a.doctor_name].pend++;
         }
+    });
+    return {sc,mo,dr};
+}
 
-        // Initialize Charts
-        function initCharts() {
-            const data = prepareChartData();
+/* CHARTS */
+function renderCharts(){
+    window._activeCharts.forEach(c=>c.destroy()); window._activeCharts=[];
+    const d=parseData(),dark=isDark();
+    const gridC=dark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
+    const tickC=dark?'#527A65':'#9DC0B2';
+    const tt={backgroundColor:dark?'#152A20':'#fff',borderColor:dark?'rgba(11,155,122,.25)':'rgba(11,155,122,.2)',borderWidth:1,titleColor:dark?'#E4F2EB':'#0A2218',bodyColor:dark?'#9ABFAE':'#4A6B60',padding:12,cornerRadius:8,titleFont:{family:'Outfit',weight:'700',size:13},bodyFont:{family:'Outfit',size:12}};
 
-            // Status Distribution Chart (Doughnut)
-            const statusCtx = document.getElementById('statusChart').getContext('2d');
-            new Chart(statusCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: Object.keys(data.statusCount).filter(k => data.statusCount[k] > 0),
-                    datasets: [{
-                        data: Object.values(data.statusCount).filter(v => v > 0),
-                        backgroundColor: [
-                            '#10b981', // Completed - Emerald Green
-                            '#a855f7', // Approved - Purple
-                            '#3b82f6', // Scheduled - Blue
-                            '#f59e0b', // Pending - Amber
-                            '#ef4444', // Cancelled - Red
-                            '#ec4899'  // Rejected - Pink
-                        ],
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 15,
-                                font: {
-                                    size: 12,
-                                    family: "'Inter', sans-serif"
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function (context) {
-                                    const label = context.label || '';
-                                    const value = context.parsed || 0;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((value / total) * 100).toFixed(1);
-                                    return `${label}: ${value} (${percentage}%)`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+    const mlabels=Object.keys(d.mo).sort((a,b)=>new Date('01 '+a)-new Date('01 '+b));
+    const mvals=mlabels.map(k=>d.mo[k]);
+    const tl=document.getElementById('timelineChart');
+    if(tl){
+        const c=new Chart(tl.getContext('2d'),{type:'line',data:{labels:mlabels.length?mlabels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Appointments',data:mvals.length?mvals:[0,1,0,2,1,3],borderColor:'#0B9B7A',backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,220);g.addColorStop(0,dark?'rgba(11,155,122,.18)':'rgba(11,155,122,.1)');g.addColorStop(1,'rgba(11,155,122,0)');return g;},borderWidth:2.5,fill:true,tension:.4,pointBackgroundColor:'#0B9B7A',pointBorderColor:dark?'#152A20':'#fff',pointBorderWidth:2.5,pointRadius:4,pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt},scales:{y:{beginAtZero:true,ticks:{stepSize:1,color:tickC,font:{size:11,family:'Outfit'}},grid:{color:gridC,drawBorder:false},border:{display:false}},x:{ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{display:false},border:{display:false}}}}});
+        window._activeCharts.push(c);
+    }
 
-            // Timeline Chart (Line)
-            const timelineCtx = document.getElementById('timelineChart').getContext('2d');
-            const monthlyLabels = Object.keys(data.monthlyData).sort((a, b) => {
-                return new Date(a) - new Date(b);
-            });
-            const monthlyValues = monthlyLabels.map(label => data.monthlyData[label]);
+    const statusColors={Completed:'#16A34A',Approved:'#7C3AED',Scheduled:'#2563EB',Pending:'#D97706',Cancelled:'#DC2626',Rejected:'#E11D48'};
+    const slabels=Object.keys(d.sc).filter(k=>d.sc[k]>0);
+    const svals=slabels.map(k=>d.sc[k]),scolors=slabels.map(k=>statusColors[k]);
+    const tot=svals.reduce((a,b)=>a+b,0);
+    const dn=document.getElementById('donutN'); if(dn) dn.textContent=tot||patientStats.total;
+    const st=document.getElementById('statusChart');
+    if(st){
+        const c=new Chart(st.getContext('2d'),{type:'doughnut',data:{labels:slabels.length?slabels:['No Data'],datasets:[{data:svals.length?svals:[1],backgroundColor:scolors.length?scolors:[dark?'#1A3328':'#D9EDE5'],borderColor:dark?'#152A20':'#fff',borderWidth:3,borderRadius:3,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:tt}}});
+        window._activeCharts.push(c);
+    }
+    const leg=document.getElementById('chartLegend');
+    if(leg){leg.innerHTML='';(slabels.length?slabels:['No Data']).forEach((l,i)=>{const el=document.createElement('div');el.className='leg-item';el.innerHTML=`<div class="leg-dot" style="background:${scolors[i]||'#ccc'}"></div>${l} (${svals[i]||0})`;leg.appendChild(el);});}
 
-            new Chart(timelineCtx, {
-                type: 'line',
-                data: {
-                    labels: monthlyLabels,
-                    datasets: [{
-                        label: 'Appointments',
-                        data: monthlyValues,
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: '#667eea',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2,
-                        pointRadius: 5,
-                        pointHoverRadius: 7
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: 12,
-                            titleFont: {
-                                size: 14
-                            },
-                            bodyFont: {
-                                size: 13
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                stepSize: 1,
-                                font: {
-                                    size: 11
-                                }
-                            },
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                font: {
-                                    size: 11
-                                }
-                            },
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
-                }
-            });
+    const dg=document.getElementById('doctorsGrid');
+    if(dg){dg.innerHTML='';Object.entries(d.dr).forEach(([name,s])=>{const card=document.createElement('div');card.className='doc-card';card.innerHTML=`<div class="doc-top"><div class="doc-ava"><i class="fas fa-user-md"></i></div><div><div class="doc-name">Dr. ${name}</div><div class="doc-spec">${s.spec}</div><div class="doc-stars">${'<i class="fas fa-star"></i>'.repeat(4)}<i class="far fa-star"></i><span>4.8</span></div></div></div><div class="doc-stats"><div class="doc-stat"><div class="doc-stat-v">${s.count}</div><div class="doc-stat-l">Visits</div></div><div class="doc-stat"><div class="doc-stat-v" style="color:var(--clr-green)">${s.done}</div><div class="doc-stat-l">Done</div></div><div class="doc-stat"><div class="doc-stat-v" style="color:var(--clr-amber)">${s.pend}</div><div class="doc-stat-l">Pending</div></div></div>`;dg.appendChild(card);});}
+}
+renderCharts();
 
-            // Populate Doctor Stats
-            const doctorStatsDiv = document.getElementById('doctorStats');
-            if (doctorStatsDiv) {
-                Object.entries(data.doctorData).forEach(([name, stats]) => {
-                    const card = document.createElement('div');
-                    card.className = 'doctor-card';
-                    card.innerHTML = `
-                        <div class="doctor-avatar">
-                            <i class="fas fa-user-md"></i>
-                        </div>
-                        <div class="doctor-info-section">
-                            <h4>Dr. ${name}</h4>
-                            <p class="specialization">${stats.specialization}</p>
-                            <div class="doctor-stats-grid">
-                                <div class="stat">
-                                    <span class="stat-label">Total</span>
-                                    <span class="stat-number">${stats.count}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">Completed</span>
-                                    <span class="stat-number green">${stats.completed}</span>
-                                </div>
-                                <div class="stat">
-                                    <span class="stat-label">Pending</span>
-                                    <span class="stat-number orange">${stats.pending}</span>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    doctorStatsDiv.appendChild(card);
-                });
-            }
-        }
+/* TABS */
+function filterTab(status,btn){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.appt-row').forEach(row=>{row.style.display=(status==='all'||row.dataset.status===status)?'flex':'none';});
+}
 
-        // Initialize when page loads
-        if (appointments.length > 0) {
-            initCharts();
-        }
+/* TIPS */
+const tips=[
+    {e:'💧',bg:'#EFF6FF',cat:'Hydration',title:'Stay Hydrated Daily',txt:'Drink 8+ glasses of water daily to maintain optimal organ function and steady energy.'},
+    {e:'🏃',bg:'#F0FAF7',cat:'Fitness',title:'Regular Exercise',txt:'30 minutes of moderate exercise daily reduces cardiovascular disease risk by up to 35%.'},
+    {e:'😴',bg:'#F9FAFB',cat:'Sleep',title:'Quality Sleep',txt:'Adults need 7–9 hours of quality sleep for immune resilience and cognitive performance.'},
+    {e:'🥗',bg:'#FFF7ED',cat:'Nutrition',title:'Balanced Diet',txt:'A diet rich in vegetables, whole grains, and omega-3s significantly reduces chronic disease risk.'},
+    {e:'🧘',bg:'#F5F3FF',cat:'Mental Health',title:'Mindfulness',txt:'Just 10 minutes of daily meditation reduces cortisol and improves emotional wellbeing.'},
+    {e:'🩺',bg:'#FFF1F2',cat:'Prevention',title:'Annual Checkups',txt:'Regular screenings detect conditions early when treatment is most effective.'},
+];
+(function(){
+    const track=document.getElementById('tipsTrack'); if(!track) return;
+    tips.forEach(t=>{const el=document.createElement('div');el.className='tip-item';el.innerHTML=`<div class="tip-visual" style="background:${t.bg};">${t.e}</div><div class="tip-body"><div class="tip-cat">${t.cat}</div><div class="tip-ttl">${t.title}</div><p class="tip-txt">${t.txt}</p></div>`;track.appendChild(el);});
+})();
+let tOff=0;
+document.getElementById('tipsNext')?.addEventListener('click',()=>{if(tOff<tips.length-3){tOff++;document.getElementById('tipsTrack').style.transform=`translateX(calc(-${tOff} * (33.333% + 14px)))`;} });
+document.getElementById('tipsPrev')?.addEventListener('click',()=>{if(tOff>0){tOff--;document.getElementById('tipsTrack').style.transform=`translateX(calc(-${tOff} * (33.333% + 14px)))`;} });
 
-        // Sidebar Toggle Functionality
-        const sidebar = document.getElementById('sidebar');
-        const sidebarToggle = document.getElementById('sidebarToggle');
+/* TIMELINE */
+(function(){
+    const events=[
+        {ico:'fas fa-calendar-plus',bg:'var(--brand-faint)',bc:'rgba(11,155,122,.25)',clr:'var(--brand)',ev:'Appointment Booked',tm:'2 hours ago'},
+        {ico:'fas fa-robot',bg:'var(--clr-blue-bg)',bc:'rgba(37,99,235,.25)',clr:'var(--clr-blue)',ev:'AI Checkup Completed',tm:'Yesterday, 2:30 PM'},
+        {ico:'fas fa-circle-check',bg:'var(--clr-green-bg)',bc:'rgba(22,163,74,.25)',clr:'var(--clr-green)',ev:'Consultation Completed',tm:'3 days ago'},
+        {ico:'fas fa-file-medical-alt',bg:'var(--clr-purple-bg)',bc:'rgba(124,58,237,.25)',clr:'var(--clr-purple)',ev:'Lab Results Updated',tm:'1 week ago'},
+        {ico:'fas fa-user-check',bg:'var(--clr-amber-bg)',bc:'rgba(217,119,6,.25)',clr:'var(--clr-amber)',ev:'Account Verified',tm:'2 weeks ago'},
+    ];
+    const list=document.getElementById('tlList'); if(!list) return;
+    events.forEach(ev=>{const item=document.createElement('div');item.className='tl-item';item.innerHTML=`<div class="tl-dot" style="background:${ev.bg};border-color:${ev.bc};color:${ev.clr};"><i class="${ev.ico}"></i></div><div class="tl-body"><div class="tl-ev">${ev.ev}</div><div class="tl-tm">${ev.tm}</div></div>`;list.appendChild(item);});
+})();
 
-        // Check if sidebar was previously collapsed
-        if (localStorage.getItem('sidebarCollapsed') === 'true') {
-            sidebar.classList.add('collapsed');
-        }
-
-        sidebarToggle.addEventListener('click', function () {
-            sidebar.classList.toggle('collapsed');
-            // Save state to localStorage
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        });
-    </script>
-
-    <!-- Chatling.ai Chatbot will automatically load from the script in head -->
-
+/* COUNTERS */
+function animCount(el,target,dur=1000){const start=performance.now();const run=now=>{const p=Math.min((now-start)/dur,1);const ease=1-Math.pow(1-p,3);el.textContent=Math.round(ease*target);if(p<1)requestAnimationFrame(run);else el.textContent=target;};requestAnimationFrame(run);}
+setTimeout(()=>{[['svTotal',patientStats.total],['svDone',patientStats.completed],['svPend',patientStats.pending]].forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!isNaN(val))animCount(el,val);});},300);
+</script>
 </body>
-
 </html>
