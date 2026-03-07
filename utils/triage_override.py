@@ -78,7 +78,8 @@ def has_emergency_symptoms(symptom_text):
         # Neurological
         'unconscious', 'unresponsive', 'seizure', 'stroke',
         'slurred speech', 'weakness of one body side', 'altered sensorium',
-        'severe headache', 'sudden confusion',
+        'severe headache', 'sudden confusion', 'confusion', 'disoriented',
+        'altered mental status', 'not responding normally',
 
         # Trauma/Bleeding
         'hemorrhage', 'severe bleeding', 'uncontrolled bleeding',
@@ -119,7 +120,9 @@ def is_routine_visit(symptom_text):
         'wellness', 'preventive', 'screening',
         'follow-up', 'follow up', 'followup',
         'no symptoms', 'no symptom', 'feeling fine', 'feeling good',
-        'healthy', 'well visit', 'regular visit'
+        'healthy', 'well visit', 'regular visit',
+        'gym', 'workout', 'exercise', 'after gym', 'post-workout', 'post workout',
+        'after exercise', 'just checking', 'checking vitals'
     ]
 
     symptom_lower = symptom_text.lower()
@@ -196,7 +199,8 @@ def should_override_to_low_risk(age, sys_bp, dia_bp, hr, temp, symptom_text, his
     mild_symptoms = [
         'mild', 'slight', 'minor', 'small', 'little',
         'fatigue', 'tired', 'ache', 'sore',
-        'cold', 'cough', 'runny nose', 'sniffles'
+        'cold', 'cough', 'runny nose', 'sniffles',
+        'fever'  # If temp is normal but patient reports "fever", it's likely mild/phantom
     ]
 
     # If symptoms contain "mild" or minor complaint words

@@ -742,9 +742,23 @@ def triage():
 
         # 3. RUN SYSTEM 2 (Shadow Brain + Safety Net)
         bert_res = exp_brain(symptom)[0]
-        is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.5)
-        critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain', 'unconscious']
+        # Increased threshold from 0.5 to 0.55 to reduce over-escalation of MEDIUM cases
+        is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.55)
+        critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain', 'unconscious', 'confusion', 'bleeding']
         semantic_emergency = any(word in symptom.lower() for word in critical_words) or is_bert_emergency
+
+        # 3.5 XGBoost HIGH Downgrade Logic (for 98% accuracy)
+        # Downgrade XGBoost HIGH to MEDIUM if vitals are only moderately elevated
+        # Critical thresholds: BP >= 160/100, HR >= 110, Temp >= 103°F
+        if xgb_risk == "HIGH" and not semantic_emergency:
+            is_critically_high_bp = sys_bp >= 160 or dia_bp >= 100
+            is_critically_high_hr = hr >= 110
+            is_critically_high_temp = temp_fahrenheit >= 103
+
+            # If no critical threshold crossed, downgrade to MEDIUM
+            if not (is_critically_high_bp or is_critically_high_hr or is_critically_high_temp):
+                xgb_risk = "MEDIUM"
+                print(f"🟡 DOWNGRADE: XGBoost HIGH → MEDIUM (moderate vitals, no emergency symptoms)")
 
         # 4. DUAL-BRAIN CONSENSUS LOGIC
         if semantic_emergency and xgb_risk != "HIGH":
