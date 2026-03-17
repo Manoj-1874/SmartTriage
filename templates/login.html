@@ -977,6 +977,12 @@
             <div class="pm-alert pm-alert-error">
                 <i class="fas fa-exclamation-circle"></i>
                 <span>{{ error }}</span>
+                {% if show_reset and email %}
+                <form action="/forgot-password" method="POST" style="margin-left:auto;display:inline;">
+                    <input type="hidden" name="email" value="{{ email }}">
+                    <button type="submit" class="resend-btn">Reset Password</button>
+                </form>
+                {% endif %}
                 {% if show_resend and email %}
                 <form action="/resend_verification" method="POST" style="margin-left:auto;display:inline;">
                     <input type="hidden" name="email" value="{{ email }}">
@@ -1013,6 +1019,27 @@
                                 <span>Doctor</span>
                             </label>
                         </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="roleDdhsAdmin" value="ddhs_admin">
+                            <label for="roleDdhsAdmin">
+                                <i class="fas fa-user-shield"></i>
+                                <span>DDHS Admin</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="rolePhcDoctor" value="phc_doctor">
+                            <label for="rolePhcDoctor">
+                                <i class="fas fa-stethoscope"></i>
+                                <span>PHC Doctor</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="rolePhcNurse" value="phc_nurse">
+                            <label for="rolePhcNurse">
+                                <i class="fas fa-user-nurse"></i>
+                                <span>PHC Nurse</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1020,8 +1047,8 @@
                 <div class="field">
                     <label class="form-label" for="email">Email Address</label>
                     <div class="input-wrap">
-                        <input type="email" id="email" name="email"
-                               class="pm-input" placeholder="Enter your email address" required>
+                           <input type="email" id="email" name="email"
+                               class="pm-input" placeholder="Enter your email address" required value="{{ email or '' }}">
                         <i class="fas fa-envelope field-ico"></i>
                     </div>
                 </div>
@@ -1043,7 +1070,7 @@
                         <input type="checkbox" id="remember" name="remember">
                         <span class="check-label">Remember me</span>
                     </label>
-                    <a href="#" class="forgot-link">Forgot Password?</a>
+                    <a href="/forgot-password" class="forgot-link">Forgot Password?</a>
                 </div>
 
                 <!-- Submit -->
@@ -1161,15 +1188,18 @@ function updateRole(role) {
     const title = document.getElementById('formTitle');
     const sub   = document.getElementById('formSubtitle');
 
-    if(role === 'doctor') {
-        ico.className   = 'fas fa-user-md';
-        title.textContent = 'Doctor Portal';
-        sub.textContent   = 'Sign in to access your doctor dashboard';
-    } else {
-        ico.className   = 'fas fa-user-injured';
-        title.textContent = 'Patient Portal';
-        sub.textContent   = 'Sign in to access your healthcare dashboard';
-    }
+    const roleMeta = {
+        patient:    { icon: 'fas fa-user-injured', title: 'Patient Portal', sub: 'Sign in to access your healthcare dashboard' },
+        doctor:     { icon: 'fas fa-user-md', title: 'Doctor Portal', sub: 'Sign in to access your doctor dashboard' },
+        ddhs_admin: { icon: 'fas fa-user-shield', title: 'DDHS Command Portal', sub: 'Monitor PHC workforce and live escalations' },
+        phc_doctor: { icon: 'fas fa-stethoscope', title: 'PHC Doctor Portal', sub: 'Access PHC triage and specialist workflow' },
+        phc_nurse:  { icon: 'fas fa-user-nurse', title: 'PHC Nurse Portal', sub: 'Track PHC workflow and patient queue' }
+    };
+
+    const selected = roleMeta[role] || roleMeta.patient;
+    ico.className = selected.icon;
+    title.textContent = selected.title;
+    sub.textContent = selected.sub;
 
     wrap.classList.add('role-bounce');
     setTimeout(() => wrap.classList.remove('role-bounce'), 700);
@@ -1178,6 +1208,13 @@ function updateRole(role) {
 document.querySelectorAll('input[name="role"]').forEach(r => {
     r.addEventListener('change', e => updateRole(e.target.value));
 });
+
+const initialRole = "{{ selected_role or 'patient' }}";
+const initialRoleInput = document.querySelector(`input[name="role"][value="${initialRole}"]`);
+if (initialRoleInput) {
+    initialRoleInput.checked = true;
+}
+updateRole(initialRole);
 
 /* ─── PASSWORD TOGGLE ─── */
 function togglePw() {

@@ -1382,6 +1382,34 @@
       color: var(--brand);
       font-size: 16px;
       margin-top: 1px;
+
+    .triage-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 14px 16px;
+      margin-bottom: 18px;
+      border-radius: 14px;
+      border: 1px solid rgba(239, 68, 68, .18);
+      background: rgba(239, 68, 68, .08);
+      color: #b91c1c;
+      box-shadow: var(--sh-sm);
+    }
+
+    [data-theme="dark"] .triage-alert {
+      background: rgba(239, 68, 68, .12);
+      border-color: rgba(248, 113, 113, .22);
+      color: #fca5a5;
+    }
+
+    .triage-alert i {
+      margin-top: 2px;
+    }
+
+    .triage-alert-text {
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
       flex-shrink: 0;
     }
 
@@ -2244,6 +2272,17 @@
           <!-- FORM CARD -->
           <div class="form-card">
 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="triage-alert">
+              <i class="fas fa-exclamation-circle"></i>
+              <div class="triage-alert-text">{{ message }}</div>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
             <!-- SECTION 1: Personal Info -->
             <div class="form-section" style="animation-delay:.1s">
               <div class="fs-header">
@@ -2407,6 +2446,30 @@
                     <span class="vital-unit">°F</span>
                   </div>
                 </div>
+                <div class="vital-card vc-hr" style="--accent:#8B5CF6">
+                  <div class="vital-top">
+                    <div class="vital-ico-box" style="background:rgba(139,92,246,.1);"><i class="fas fa-wind"
+                        style="color:#8B5CF6;font-size:16px;"></i></div>
+                    <span class="vital-range">Normal: 12-20</span>
+                  </div>
+                  <div class="vital-name">Respiration Rate</div>
+                  <div class="vital-input-area">
+                    <input type="number" name="respiration_rate" placeholder="16" min="8" max="40" required>
+                    <span class="vital-unit">/min</span>
+                  </div>
+                </div>
+                <div class="vital-card vc-bp" style="--accent:#06B6D4">
+                  <div class="vital-top">
+                    <div class="vital-ico-box" style="background:rgba(6,182,212,.1);"><i class="fas fa-lungs"
+                        style="color:#06B6D4;font-size:16px;"></i></div>
+                    <span class="vital-range">Normal: 95-100%</span>
+                  </div>
+                  <div class="vital-name">Oxygen Saturation (SpO2)</div>
+                  <div class="vital-input-area">
+                    <input type="number" name="spo2" placeholder="98" min="70" max="100" required>
+                    <span class="vital-unit">%</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -2488,9 +2551,6 @@
                   <option value="Asthma">Asthma / COPD</option>
                   <option value="Cancer">Cancer (any type)</option>
                   <option value="Kidney Disease">Chronic Kidney Disease</option>
-                  <option value="Thyroid">Thyroid Disorder</option>
-                  <option value="Autoimmune">Autoimmune Condition</option>
-                  <option value="Multiple">Multiple Conditions</option>
                   <option value="Other">Other</option>
                 </select>
               </div>
@@ -2853,6 +2913,8 @@
           'Blood Pressure': '122/78',
           'Heart Rate': '74 bpm',
           'Temperature': '98.4°F',
+          'Respiration Rate': '16/min',
+          'SpO2': '98%',
           'Blood Type': 'O+',
         };
         grid.innerHTML = '';
@@ -2869,6 +2931,8 @@
           document.querySelector('[name="dia_bp"]').value = '78';
           document.querySelector('[name="hr"]').value = '74';
           document.querySelector('[name="temp"]').value = '98.4';
+          document.querySelector('[name="respiration_rate"]').value = '16';
+          document.querySelector('[name="spo2"]').value = '98';
           banner.style.display = 'none';
         };
       });

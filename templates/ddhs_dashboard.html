@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DDHS Dashboard - PriorityMed</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <style>
+    :root {
+      --bg: #f3f8f6;
+      --card: #ffffff;
+      --text: #15372c;
+      --muted: #5f7e73;
+      --brand: #0b9b7a;
+      --danger: #c62828;
+      --warn: #ef6c00;
+      --line: #d7e8e1;
+      --radius: 14px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at 10% 5%, #dff3ec 0%, var(--bg) 48%, #eef4f2 100%);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .title {
+      margin: 0;
+      font-size: 1.7rem;
+      letter-spacing: .2px;
+    }
+    .subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: .95rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 6px 16px rgba(11, 80, 63, .08);
+      overflow: hidden;
+    }
+    .head {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .head h2 {
+      margin: 0;
+      font-size: 1.06rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chip {
+      background: #e8f7f2;
+      color: #097d62;
+      border: 1px solid #cdebe2;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .92rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 11px 12px;
+      border-bottom: 1px solid #ebf3ef;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 600;
+      background: #fbfdfc;
+    }
+    .status-bad {
+      color: var(--danger);
+      font-weight: 700;
+    }
+    .status-warn {
+      color: var(--warn);
+      font-weight: 700;
+    }
+    .risk-high {
+      color: var(--danger);
+      font-weight: 700;
+    }
+    .btn {
+      border: 1px solid #e9c5c5;
+      background: #fff5f5;
+      color: #b72626;
+      padding: 7px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: .82rem;
+    }
+    .btn:hover { background: #ffecec; }
+    .empty {
+      padding: 16px;
+      color: var(--muted);
+    }
+    @media (max-width: 900px) {
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid #e8f0ec; padding: 8px 0; }
+      td { border: 0; padding: 6px 12px; }
+      td::before {
+        content: attr(data-label) ": ";
+        font-weight: 700;
+        color: var(--text);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <h1 class="title">PriorityMed DDHS Command Center</h1>
+        <p class="subtitle">Administrative workforce tracking and specialist escalation routing across PHCs.</p>
+      </div>
+      <span class="chip">Problem Statement #37</span>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="head">
+          <h2><i class="fa-solid fa-users-viewfinder"></i> Workforce Monitor</h2>
+          <span class="chip">Understaffed PHCs Today</span>
+        </div>
+        {% if understaffed_phcs %}
+        <table>
+          <thead>
+            <tr>
+              <th>PHC</th>
+              <th>Location</th>
+              <th>Total Staff</th>
+              <th>Present</th>
+              <th>Absent</th>
+              <th>Alert</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for phc in understaffed_phcs %}
+            <tr>
+              <td data-label="PHC">{{ phc.name }}</td>
+              <td data-label="Location">{{ phc.location }}</td>
+              <td data-label="Total Staff">{{ phc.total_staff }}</td>
+              <td data-label="Present">{{ phc.present_staff }}</td>
+              <td data-label="Absent">{{ phc.absent_staff }}</td>
+              <td data-label="Alert" class="status-bad">Absenteeism Alert</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No understaffing alerts today. All tracked PHCs are adequately staffed.</div>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <div class="head">
+          <h2><i class="fa-solid fa-triangle-exclamation"></i> Live Escalations</h2>
+          <span class="chip">HIGH Risk Patients</span>
+        </div>
+        {% if live_escalations %}
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Patient</th>
+              <th>PHC</th>
+              <th>Risk</th>
+              <th>Specialist</th>
+              <th>Symptoms</th>
+              <th>Dispatch</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for case in live_escalations %}
+            <tr>
+              <td data-label="Time">{{ case.timestamp }}</td>
+              <td data-label="Patient">{{ case.patient_name or ('Patient #' ~ case.user_id) }}</td>
+              <td data-label="PHC">{{ case.phc_name or 'Unassigned PHC' }}</td>
+              <td data-label="Risk" class="risk-high">{{ case.dual_brain_risk }}</td>
+              <td data-label="Specialist">{{ case.recommended_specialist or 'Emergency Medicine' }}</td>
+              <td data-label="Symptoms">{{ case.symptoms }}</td>
+              <td data-label="Dispatch">
+                <button
+                  class="btn"
+                  onclick="dispatchAmbulance('{{ case.phc_name or 'Nearest PHC' }}', '{{ case.id }}')"
+                >
+                  <i class="fa-solid fa-truck-medical"></i>
+                  Dispatch Ambulance
+                </button>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No high-risk escalations at the moment.</div>
+        {% endif %}
+      </section>
+
+      <section class="card">
+        <div class="head">
+          <h2><i class="fa-solid fa-ambulance"></i> Ambulance Dispatch</h2>
+          <span class="chip">Simulation Mode</span>
+        </div>
+        <div class="empty">
+          Dispatch is currently configured as a mock action for hackathon workflow demonstration.
+          Each dispatch button logs an alert and confirms the PHC destination.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    function dispatchAmbulance(phcName, caseId) {
+      alert('Ambulance dispatched to ' + phcName + ' for escalation #' + caseId + '.');
+      console.log('Dispatch action:', { phcName: phcName, escalationId: caseId, time: new Date().toISOString() });
+    }
+  </script>
+</body>
+</html>

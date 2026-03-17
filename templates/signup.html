@@ -746,6 +746,35 @@
                                 <span>Doctor</span>
                             </label>
                         </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="roleDdhsAdmin" value="ddhs_admin" onchange="handleRoleChange()">
+                            <label for="roleDdhsAdmin">
+                                <i class="fas fa-user-shield"></i>
+                                <span>DDHS Admin</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="rolePhcDoctor" value="phc_doctor" onchange="handleRoleChange()">
+                            <label for="rolePhcDoctor">
+                                <i class="fas fa-stethoscope"></i>
+                                <span>PHC Doctor</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="rolePhcNurse" value="phc_nurse" onchange="handleRoleChange()">
+                            <label for="rolePhcNurse">
+                                <i class="fas fa-user-nurse"></i>
+                                <span>PHC Nurse</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field">
+                    <label class="form-label" for="phc_id">PHC Facility ID (for PHC/DDHS roles)</label>
+                    <div class="input-wrap">
+                        <input type="number" id="phc_id" name="phc_id" class="pm-input" placeholder="Enter PHC ID (e.g., 1)" min="1">
+                        <i class="fas fa-hospital field-ico"></i>
                     </div>
                 </div>
 
@@ -933,7 +962,9 @@ document.addEventListener('mousemove', e => {
 
 /* ─── ROLE TOGGLE ─── */
 function handleRoleChange() {
-    const isDr = document.getElementById('roleDoctor').checked;
+    const selected = document.querySelector('input[name="role"]:checked')?.value || 'patient';
+    const isDr = ['doctor', 'phc_doctor', 'phc_nurse'].includes(selected);
+    const isDdhs = selected === 'ddhs_admin';
     const section = document.getElementById('doctorSection');
     const ico     = document.getElementById('formIcoIcon');
     const wrap    = document.getElementById('formIco');
@@ -942,14 +973,24 @@ function handleRoleChange() {
     const spec    = document.getElementById('specialization');
     const lic     = document.getElementById('license');
     const exp     = document.getElementById('experience');
+    const phcId   = document.getElementById('phc_id');
 
     section.classList.toggle('active', isDr);
     spec.required = lic.required = exp.required = isDr;
+    phcId.required = isDr || isDdhs;
 
-    if(isDr) {
+    if(selected === 'doctor' || selected === 'phc_doctor') {
         ico.className   = 'fas fa-user-md';
-        title.textContent = 'Doctor Registration';
+        title.textContent = selected === 'doctor' ? 'Doctor Registration' : 'PHC Doctor Registration';
         sub.textContent   = 'Join PriorityMed as a Healthcare Provider';
+    } else if(selected === 'phc_nurse') {
+        ico.className   = 'fas fa-user-nurse';
+        title.textContent = 'PHC Nurse Registration';
+        sub.textContent   = 'Join PriorityMed as a PHC Nursing Staff';
+    } else if(selected === 'ddhs_admin') {
+        ico.className   = 'fas fa-user-shield';
+        title.textContent = 'DDHS Admin Registration';
+        sub.textContent   = 'Create access for workforce command center';
     } else {
         ico.className   = 'fas fa-user-plus';
         title.textContent = 'Create Account';
@@ -992,7 +1033,11 @@ function validateForm() {
     const pw  = document.getElementById('password').value;
     const cpw = document.getElementById('confirm_password').value;
     if(pw !== cpw) { alert('Passwords do not match!'); return false; }
-    if(pw.length < 6) { alert('Password must be at least 6 characters!'); return false; }
+    if(pw.length < 8) { alert('Password must be at least 8 characters.'); return false; }
+    if(!/[A-Z]/.test(pw)) { alert('Password must include at least one uppercase letter.'); return false; }
+    if(!/[a-z]/.test(pw)) { alert('Password must include at least one lowercase letter.'); return false; }
+    if(!/\d/.test(pw)) { alert('Password must include at least one number.'); return false; }
+    if(!/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?]/.test(pw)) { alert('Password must include at least one special character.'); return false; }
     return true;
 }
 

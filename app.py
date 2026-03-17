@@ -1,7 +1,8 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, g
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import pandas as pd
@@ -16,27 +17,141 @@ from datetime import datetime, timedelta
 import secrets
 import smtplib
 from email.message import EmailMessage
+import logging
+from logging.handlers import RotatingFileHandler
+import atexit
+from functools import wraps
+from contextlib import contextmanager
+import time
 
 # Import configuration and utilities
 from config import get_config
 from utils.validation import VitalSignsValidator, UserValidator, ValidationError
 from utils.database import DatabaseManager, get_db_connection
+from spell_corrector import symptom_corrector
+from utils.security import (
+    SecurityHeaders, RequestTracking, AuditLogger, InputSanitizer,
+    require_role, audit_action, PasswordPolicy, generate_secure_token
+)
+from utils.monitoring import health_bp
 
 warnings.filterwarnings('ignore')
 
+# ===================================
+# LOGGING CONFIGURATION
+# ===================================
+def setup_logging(app_config):
+    """Configure comprehensive logging for the application"""
+    log_level = logging.DEBUG if app_config.DEBUG else logging.INFO
+    log_format = logging.Formatter(
+        '[%(asctime)s] %(levelname)s in %(module)s.%(funcName)s: %(message)s'
+    )
+
+    # Console handler with UTF-8 encoding support
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(log_format)
+    # Force UTF-8 encoding on Windows to handle emojis
+    if sys.platform == 'win32':
+        import codecs
+        sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+
+    # File handler with rotation and UTF-8 encoding
+    os.makedirs('logs', exist_ok=True)
+    file_handler = RotatingFileHandler(
+        'logs/smarttriage.log',
+        maxBytes=10485760,  # 10MB
+        backupCount=10,
+        encoding='utf-8'
+    )
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(log_format)
+
+    # Error file handler with UTF-8 encoding
+    error_handler = RotatingFileHandler(
+        'logs/errors.log',
+        maxBytes=10485760,  # 10MB
+        backupCount=10,
+        encoding='utf-8'
+    )
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(log_format)
+
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(log_level)
+    root_logger.addHandler(console_handler)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(error_handler)
+
+    # Configure Flask app logger
+    app.logger.setLevel(log_level)
+    app.logger.addHandler(console_handler)
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(error_handler)
+
+    # Suppress verbose third-party logs
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    logging.getLogger('transformers').setLevel(logging.WARNING)
+
+    app.logger.info(f"Logging configured - Level: {logging.getLevelName(log_level)}")
+
+# ===================================
+# FLASK APP INITIALIZATION
+# ===================================
 # Initialize Flask app with configuration
 app = Flask(__name__)
 config = get_config()
 app.config.from_object(config)
 app.secret_key = config.SECRET_KEY
 
-# Initialize rate limiter
+# Store application start time for uptime tracking
+app.config['START_TIME'] = time.time()
+app.config['VERSION'] = config.VERSION
+
+# Setup logging
+setup_logging(config)
+app.logger.info(f"Starting SmartTriage Dashboard v{config.VERSION} - Environment: {config.ENV}")
+
+# Initialize CORS if enabled
+if config.CORS_ENABLED:
+    CORS(app, origins=config.CORS_ORIGINS)
+    app.logger.info(f"CORS enabled for origins: {config.CORS_ORIGINS}")
+
+# Initialize rate limiter with proper configuration
+# Disable rate limiting in testing mode
 limiter = Limiter(
     app=app,
     key_func=get_remote_address,
-    storage_uri=config.RATELIMIT_STORAGE_URL if config.RATELIMIT_ENABLED else None,
-    default_limits=[config.RATELIMIT_DEFAULT] if config.RATELIMIT_ENABLED else []
+    storage_uri=config.RATELIMIT_STORAGE_URL if (config.RATELIMIT_ENABLED and not app.config.get('TESTING', False)) else None,
+    default_limits=[config.RATELIMIT_DEFAULT] if (config.RATELIMIT_ENABLED and not app.config.get('TESTING', False)) else [],
+    strategy="fixed-window",  # Use fixed-window strategy
+    headers_enabled=True  # Send rate limit headers
 )
+app.logger.info(f"Rate limiting configured - Enabled: {config.RATELIMIT_ENABLED}")
+
+# Store limiter reference for dynamic disable in tests
+app.limiter_instance = limiter
+
+# Initialize security middleware
+if config.SECURITY_HEADERS_ENABLED:
+    security_headers = SecurityHeaders(app)
+    app.logger.info("Security headers middleware enabled")
+
+# Initialize request tracking
+if config.REQUEST_ID_ENABLED:
+    request_tracking = RequestTracking(app)
+    app.logger.info("Request ID tracking enabled")
+
+# Initialize audit logging
+if config.AUDIT_LOGGING_ENABLED:
+    audit_logger = AuditLogger(app)
+    app.extensions['audit_logger'] = audit_logger
+    app.logger.info("Audit logging enabled")
+
+# Register health check blueprint
+app.register_blueprint(health_bp)
+app.logger.info("Health check endpoints registered at /health/*")
 
 # Initialize Flask-Login
 login_manager = LoginManager()
@@ -55,12 +170,128 @@ USE_HUGGINGFACE = config.USE_HUGGINGFACE
 MODEL_DIR = config.MODEL_DIR
 STABLE_MODEL_PATH = config.STABLE_MODEL_PATH
 
-# Initialize database manager
+# Initialize database manager with thread-safe connection pooling
 db_manager = DatabaseManager(config)
+app.logger.info("Database manager initialized with connection pooling")
+
+# Register cleanup on shutdown
+@atexit.register
+def cleanup_on_exit():
+    """Cleanup resources on application shutdown"""
+    try:
+        app.logger.info("Shutting down SmartTriage Dashboard...")
+    except (ValueError, OSError):
+        # Logger handlers may be closed; skip logging
+        pass
+    db_manager.cleanup()
+    try:
+        app.logger.info("Cleanup completed")
+    except (ValueError, OSError):
+        # Logger handlers may be closed; skip logging
+        pass
+
+# ===================================
+# ERROR HANDLERS
+# ===================================
+@app.errorhandler(404)
+def not_found_error(error):
+    """Handle 404 errors"""
+    app.logger.warning(f"404 error: {request.url}")
+    return render_template('error.html',
+                         error_code=404,
+                         error_message="Page not found"), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    app.logger.error(f"500 error: {str(error)}", exc_info=True)
+    return render_template('error.html',
+                         error_code=500,
+                         error_message="Internal server error"), 500
+
+@app.errorhandler(429)
+def ratelimit_error(error):
+    """Handle rate limit exceeded errors"""
+    app.logger.warning(f"Rate limit exceeded: {request.remote_addr} - {request.endpoint}")
+
+    if request.endpoint == 'signup':
+        return render_template(
+            'signup.html',
+            error='Too many signup attempts. Please wait and try again later.'
+        ), 429
+
+    if request.endpoint == 'login':
+        return render_template(
+            'login.html',
+            error='Too many login attempts. Please wait and try again later.'
+        ), 429
+
+    if request.endpoint == 'forgot_password':
+        return render_template(
+            'forgot_password.html',
+            error='Too many reset requests. Please wait and try again later.'
+        ), 429
+
+    if request.endpoint == 'reset_password':
+        token = request.args.get('token') or request.form.get('token')
+        return render_template(
+            'reset_password.html',
+            token=token,
+            error='Too many reset attempts. Please wait and try again later.'
+        ), 429
+
+    if request.endpoint == 'verify_reset_code':
+        email = request.form.get('email')
+        return render_template(
+            'verify_reset_code.html',
+            email=email,
+            error='Too many code verification attempts. Please wait and try again later.'
+        ), 429
+
+    if request.endpoint == 'resend_reset_code':
+        email = request.form.get('email')
+        return render_template(
+            'verify_reset_code.html',
+            email=email,
+            error='Too many resend requests. Please wait and try again later.'
+        ), 429
+
+    return render_template('error.html',
+                         error_code=429,
+                         error_message="Too many requests. Please try again later."), 429
+
+@app.errorhandler(Exception)
+def handle_exception(error):
+    """Handle unexpected exceptions"""
+    app.logger.error(f"Unexpected error: {str(error)}", exc_info=True)
+    if config.DEBUG:
+        raise error
+    return render_template('error.html',
+                         error_code=500,
+                         error_message="An unexpected error occurred"), 500
+
+# ===================================
+# UTILITY DECORATORS
+# ===================================
+def handle_db_errors(f):
+    """Decorator to handle database errors gracefully"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        try:
+            return f(*args, **kwargs)
+        except sqlite3.Error as e:
+            app.logger.error(f"Database error in {f.__name__}: {str(e)}", exc_info=True)
+            flash("Database error occurred. Please try again later.", "error")
+            return redirect(url_for('index'))
+        except Exception as e:
+            app.logger.error(f"Error in {f.__name__}: {str(e)}", exc_info=True)
+            flash("An error occurred. Please try again.", "error")
+            return redirect(url_for('index'))
+    return decorated_function
 
 # --- 2. USER CLASS FOR FLASK-LOGIN ---
 class User(UserMixin):
-    def __init__(self, id, email, fullname, role, phone, specialization=None, license=None, experience=None):
+    def __init__(self, id, email, fullname, role, phone, specialization=None, license=None, experience=None, phc_id=None):
         self.id = id
         self.email = email
         self.fullname = fullname
@@ -69,32 +300,39 @@ class User(UserMixin):
         self.specialization = specialization
         self.license = license
         self.experience = experience
+        self.phc_id = phc_id
 
 @login_manager.user_loader
 def load_user(user_id):
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
-    c.execute('SELECT * FROM users WHERE id = ?', (user_id,))
-    user_data = c.fetchone()
-    conn.close()
-    if user_data:
-        return User(
-            id=user_data[0],
-            email=user_data[1],
-            fullname=user_data[3],
-            role=user_data[4],
-            phone=user_data[5],
-            specialization=user_data[6],
-            license=user_data[7],
-            experience=user_data[8]
-        )
+    """Load user from database (thread-safe)"""
+    try:
+        with db_manager.get_connection() as conn:
+            c = conn.cursor()
+            c.execute('SELECT * FROM users WHERE id = ?', (user_id,))
+            user_data = c.fetchone()
+
+            if user_data:
+                return User(
+                    id=user_data['id'],
+                    email=user_data['email'],
+                    fullname=user_data['fullname'],
+                    role=user_data['role'],
+                    phone=user_data['phone'],
+                    specialization=user_data['specialization'],
+                    license=user_data['license'],
+                    experience=user_data['experience'],
+                    phc_id=user_data['phc_id'] if 'phc_id' in user_data.keys() else None
+                )
+    except Exception as e:
+        app.logger.error(f"Error loading user {user_id}: {str(e)}", exc_info=True)
     return None
 
 # --- 3. INITIALIZE DATABASE ---
-# --- 3. INITIALIZE DATABASE ---
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    c = conn.cursor()
+    """Initialize database with thread-safe connection"""
+    app.logger.info("Initializing database...")
+    with db_manager.get_connection() as conn:
+        c = conn.cursor()
 
     # Users table
     c.execute('''
@@ -104,6 +342,7 @@ def init_db():
             password_hash TEXT NOT NULL,
             fullname TEXT NOT NULL,
             role TEXT NOT NULL,
+            phc_id INTEGER,
             phone TEXT,
             specialization TEXT,
             license TEXT,
@@ -111,6 +350,9 @@ def init_db():
             email_verified INTEGER DEFAULT 0,
             verification_token TEXT,
             verification_expires DATETIME,
+            reset_code TEXT,
+            reset_token TEXT,
+            reset_expires DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -127,40 +369,92 @@ def init_db():
         if 'verification_expires' not in existing_user_cols:
             c.execute("ALTER TABLE users ADD COLUMN verification_expires DATETIME")
             print("🔧 Added 'verification_expires' column to users table")
+        if 'reset_token' not in existing_user_cols:
+            c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+            print("🔧 Added 'reset_token' column to users table")
+        if 'reset_code' not in existing_user_cols:
+            c.execute("ALTER TABLE users ADD COLUMN reset_code TEXT")
+            print("🔧 Added 'reset_code' column to users table")
+        if 'reset_expires' not in existing_user_cols:
+            c.execute("ALTER TABLE users ADD COLUMN reset_expires DATETIME")
+            print("🔧 Added 'reset_expires' column to users table")
+        if 'phc_id' not in existing_user_cols:
+            c.execute("ALTER TABLE users ADD COLUMN phc_id INTEGER")
+            print("🔧 Added 'phc_id' column to users table")
     except Exception as e:
         print(f"⚠️ Could not alter users table: {e}")
+
+    # PHC facilities table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS phc_facilities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            location TEXT NOT NULL,
+            contact TEXT
+        )
+    ''')
+
+    # Staff attendance table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS staff_attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            phc_id INTEGER NOT NULL,
+            check_in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL DEFAULT 'Present' CHECK(status IN ('Present', 'Absent')),
+            geo_location TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
+        )
+    ''')
 
     # Patient logs table
     c.execute('''
         CREATE TABLE IF NOT EXISTS patient_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
+            phc_id INTEGER,
             age INTEGER, gender TEXT, symptoms TEXT,
             sys_bp INTEGER, dia_bp INTEGER, hr INTEGER,
-            temp REAL, history TEXT,
-            xgb_risk TEXT, dual_brain_risk TEXT, routing TEXT,
+            temp REAL, respiration_rate INTEGER, spo2 INTEGER, history TEXT,
+            xgb_risk TEXT, dual_brain_risk TEXT, routing TEXT, recommended_specialist TEXT,
+            risk_score INTEGER, news2_score INTEGER,
+            actual_outcome TEXT,
+            outcome_confirmed_by INTEGER,
+            outcome_confirmed_at DATETIME,
+            outcome_notes TEXT,
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id)
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (phc_id) REFERENCES phc_facilities(id),
+            FOREIGN KEY (outcome_confirmed_by) REFERENCES users(id)
         )
     ''')
 
-    # Check if appointments table needs migration
-    c.execute("PRAGMA table_info(appointments)")
-    columns = [column[1] for column in c.fetchall()]
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS model_monitoring_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_log_id INTEGER,
+            xgb_risk TEXT,
+            final_risk TEXT,
+            xgb_low_prob REAL,
+            xgb_medium_prob REAL,
+            xgb_high_prob REAL,
+            bert_label TEXT,
+            bert_score REAL,
+            news2_score INTEGER,
+            override_reason TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (patient_log_id) REFERENCES patient_logs(id)
+        )
+    ''')
 
-    if 'doctor_id' not in columns:
-        # Need to migrate old appointments table
-        print("🔄 Migrating appointments table to new schema...")
+    # Check if appointments table exists
+    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='appointments'")
+    appointments_exists = c.fetchone() is not None
 
-        # Get the old table columns
-        c.execute("PRAGMA table_info(appointments)")
-        old_columns = [column[1] for column in c.fetchall()]
-        print(f"   Old columns: {old_columns}")
-
-        # Rename old table
-        c.execute("ALTER TABLE appointments RENAME TO appointments_old")
-
-        # Create new table with correct schema
+    if not appointments_exists:
+        # Create appointments table with correct schema for fresh database
+        print("[TABLE] Creating appointments table...")
         c.execute('''
             CREATE TABLE appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -180,71 +474,166 @@ def init_db():
                 FOREIGN KEY (doctor_id) REFERENCES users(id)
             )
         ''')
-
-        # Copy data from old table (only columns that exist)
-        # Use 0 as default patient_id for old records
-        if 'patient_id' in old_columns:
-            # Old table has patient_id
-            c.execute('''
-                INSERT INTO appointments
-                (id, patient_id, patient_name, doctor_name, department, appointment_date,
-                 appointment_time, status, symptoms, notes, created_at)
-                SELECT
-                    id, COALESCE(patient_id, 0), patient_name, doctor_name, department, appointment_date,
-                    appointment_time, status, symptoms, notes, created_at
-                FROM appointments_old
-            ''')
-        else:
-            # Old table doesn't have patient_id, use default value 0
-            c.execute('''
-                INSERT INTO appointments
-                (patient_id, patient_name, doctor_name, department, appointment_date,
-                 appointment_time, status, symptoms, notes, created_at)
-                SELECT
-                    0, patient_name, doctor_name, department, appointment_date,
-                    appointment_time, status, symptoms, notes, created_at
-                FROM appointments_old
-            ''')
-
-        # Drop old table
-        c.execute("DROP TABLE appointments_old")
-
-        print("✅ Migration completed!")
+        print("[OK] Appointments table created!")
     else:
-        # Create appointments table with correct schema if it doesn't exist
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS appointments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id INTEGER NOT NULL,
-                patient_name TEXT NOT NULL,
-                doctor_id INTEGER,
-                doctor_name TEXT NOT NULL,
-                department TEXT NOT NULL,
-                appointment_date DATE NOT NULL,
-                appointment_time TEXT NOT NULL,
-                status TEXT DEFAULT 'Pending',
-                symptoms TEXT,
-                notes TEXT,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (patient_id) REFERENCES users(id),
-                FOREIGN KEY (doctor_id) REFERENCES users(id)
-            )
-        ''')
+        # Check if appointments table needs migration
+        c.execute("PRAGMA table_info(appointments)")
+        columns = [column[1] for column in c.fetchall()]
+
+        if 'doctor_id' not in columns:
+            # Need to migrate old appointments table
+            print("[MIGRATE] Migrating appointments table to new schema...")
+
+            # Get the old table columns
+            c.execute("PRAGMA table_info(appointments)")
+            old_columns = [column[1] for column in c.fetchall()]
+            print(f"   Old columns: {old_columns}")
+
+            # Rename old table
+            c.execute("ALTER TABLE appointments RENAME TO appointments_old")
+
+            # Create new table with correct schema
+            c.execute('''
+                CREATE TABLE appointments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id INTEGER NOT NULL,
+                    patient_name TEXT NOT NULL,
+                    doctor_id INTEGER,
+                    doctor_name TEXT NOT NULL,
+                    department TEXT NOT NULL,
+                    appointment_date DATE NOT NULL,
+                    appointment_time TEXT NOT NULL,
+                    status TEXT DEFAULT 'Pending',
+                    symptoms TEXT,
+                    notes TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (patient_id) REFERENCES users(id),
+                    FOREIGN KEY (doctor_id) REFERENCES users(id)
+                )
+            ''')
+
+            # Copy data from old table (only columns that exist)
+            # Use 0 as default patient_id for old records
+            if 'patient_id' in old_columns:
+                # Old table has patient_id
+                c.execute('''
+                    INSERT INTO appointments
+                    (id, patient_id, patient_name, doctor_name, department, appointment_date,
+                     appointment_time, status, symptoms, notes, created_at)
+                    SELECT
+                        id, COALESCE(patient_id, 0), patient_name, doctor_name, department, appointment_date,
+                        appointment_time, status, symptoms, notes, created_at
+                    FROM appointments_old
+                ''')
+            else:
+                # Old table doesn't have patient_id, use default value 0
+                c.execute('''
+                    INSERT INTO appointments
+                    (patient_id, patient_name, doctor_name, department, appointment_date,
+                     appointment_time, status, symptoms, notes, created_at)
+                    SELECT
+                        0, patient_name, doctor_name, department, appointment_date,
+                        appointment_time, status, symptoms, notes, created_at
+                    FROM appointments_old
+                ''')
+
+            # Drop old table
+            c.execute("DROP TABLE appointments_old")
+
+            print("[OK] Migration completed!")
+        else:
+            # Table already has correct schema, no migration needed
+            print("[OK] Appointments table already up-to-date")
 
     # Check if patient_logs table needs migration for user_id column
     c.execute("PRAGMA table_info(patient_logs)")
     pl_columns = [column[1] for column in c.fetchall()]
 
     if 'user_id' not in pl_columns:
-        print("🔄 Migrating patient_logs table to add user_id column...")
+        print("[MIGRATE] Migrating patient_logs table to add user_id column...")
 
         # First, add the user_id column
         try:
             c.execute("ALTER TABLE patient_logs ADD COLUMN user_id INTEGER")
-            print("✅ Added user_id column to patient_logs table")
+            print("[OK] Added user_id column to patient_logs table")
         except sqlite3.OperationalError as e:
             print(f"⚠️ Column might already exist: {e}")
+    if 'phc_id' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN phc_id INTEGER")
+            print("✅ Added phc_id column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add phc_id: {e}")
+    if 'recommended_specialist' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN recommended_specialist TEXT")
+            print("✅ Added recommended_specialist column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add recommended_specialist: {e}")
+    if 'risk_score' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN risk_score INTEGER")
+            print("✅ Added risk_score column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add risk_score: {e}")
+    if 'respiration_rate' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN respiration_rate INTEGER")
+            print("✅ Added respiration_rate column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add respiration_rate: {e}")
+    if 'spo2' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN spo2 INTEGER")
+            print("✅ Added spo2 column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add spo2: {e}")
+    if 'news2_score' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN news2_score INTEGER")
+            print("✅ Added news2_score column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add news2_score: {e}")
+    if 'actual_outcome' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN actual_outcome TEXT")
+            print("✅ Added actual_outcome column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add actual_outcome: {e}")
+    if 'outcome_confirmed_by' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_by INTEGER")
+            print("✅ Added outcome_confirmed_by column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add outcome_confirmed_by: {e}")
+    if 'outcome_confirmed_at' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_at DATETIME")
+            print("✅ Added outcome_confirmed_at column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add outcome_confirmed_at: {e}")
+    if 'outcome_notes' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_notes TEXT")
+            print("✅ Added outcome_notes column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add outcome_notes: {e}")
+
+    # NEW: Add pain_intensity and symptom_duration columns
+    if 'pain_intensity' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN pain_intensity INTEGER")
+            print("✅ Added pain_intensity column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add pain_intensity: {e}")
+
+    if 'symptom_duration' not in pl_columns:
+        try:
+            c.execute("ALTER TABLE patient_logs ADD COLUMN symptom_duration TEXT")
+            print("✅ Added symptom_duration column to patient_logs table")
+        except sqlite3.OperationalError as e:
+            print(f"⚠️ Could not add symptom_duration: {e}")
 
     # Create messages table for doctor-patient communication
     c.execute('''
@@ -261,12 +650,18 @@ def init_db():
     ''')
 
     conn.commit()
-    conn.close()
+    app.logger.info("[OK] Database initialization complete")
 
-init_db()
+
+# Ensure database is initialized on startup
+try:
+    init_db()
+except Exception as e:
+    app.logger.error(f"Failed to initialize database: {str(e)}", exc_info=True)
+    sys.exit(1)
 
 # --- 3. LOAD DUAL-BRAIN MODELS ---
-print("🏥 Loading SmartTriage Dual-Brain Engine...")
+app.logger.info("[STARTUP] Loading SmartTriage Dual-Brain Engine...")
 
 # Set environment variable to reduce OpenBLAS memory usage
 os.environ['OPENBLAS_NUM_THREADS'] = '1'
@@ -274,7 +669,7 @@ os.environ['OMP_NUM_THREADS'] = '1'
 
 def load_models_from_huggingface():
     """Load models from Hugging Face Hub"""
-    print("📥 Downloading models from Hugging Face Hub...")
+    print("[DOWNLOAD] Loading models from Hugging Face Hub...")
     try:
         # Download the pickle file containing XGBoost models
         local_model_path = hf_hub_download(
@@ -286,9 +681,9 @@ def load_models_from_huggingface():
         # Load the assets
         assets = joblib.load(local_model_path)
         encoders = assets['encoders']
-        xgb_risk_model = assets['risk_model']
+        xgb_risk_model = assets.get('risk_model') or assets.get('xgb_model')  # Handle both key names
         scaler = assets['scaler']
-        feature_names = assets['features']
+        feature_names = assets.get('features') or assets.get('feature_names')  # Handle both key names
 
         # Load BERT model from Hugging Face
         exp_brain = pipeline(
@@ -306,18 +701,28 @@ def load_models_from_huggingface():
 
 def load_models_locally():
     """Load models from local files"""
-    print("📂 Loading models from local storage...")
+    print("[LOAD] Loading models from local storage...")
     try:
+        # Load XGBoost and preprocessing models
         assets = joblib.load(STABLE_MODEL_PATH)
         encoders = assets['encoders']
-        xgb_risk_model = assets['risk_model']
+        xgb_risk_model = assets.get('risk_model') or assets.get('xgb_model')  # Handle both key names
         scaler = assets['scaler']
-        feature_names = assets['features']
-        exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
-        print("✅ Models loaded from local storage successfully!")
+        feature_names = assets.get('features') or assets.get('feature_names')  # Handle both key names
+        print("[OK] XGBoost models loaded successfully")
+
+        # Try to load BERT model
+        try:
+            exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
+            print("[OK] BERT model loaded successfully")
+        except Exception as bert_error:
+            print(f"[WARNING] Failed to load BERT model: {bert_error}")
+            print("[INFO] Running with XGBoost only (text analysis disabled)")
+            exp_brain = None
+
         return encoders, xgb_risk_model, scaler, feature_names, exp_brain
     except Exception as e:
-        print(f"❌ Failed to load from local storage: {e}")
+        print(f"[ERROR] Failed to load models: {e}")
         raise
 
 try:
@@ -327,10 +732,10 @@ try:
     else:
         encoders, xgb_risk_model, scaler, feature_names, exp_brain = load_models_locally()
 
-    print("✅ System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
+    print("[OK] System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
 
 except Exception as e:
-    print(f"⚠️ Warning: Model load error, running in UI-only mode: {e}")
+    print(f"[WARNING] Model load error, running in UI-only mode: {e}")
     # Create dummy models for UI testing if loading fails
     xgb_risk_model = None
     exp_brain = None
@@ -338,11 +743,37 @@ except Exception as e:
     scaler = None
     feature_names = []
 
-# --- 4. HELPER FUNCTIONS ---
+# --- 4. HELPER FUNCTIONS (Thread-Safe) ---
+class ManagedDBConnection:
+    """Backward-compatible wrapper over DatabaseManager context-managed connections."""
+
+    def __init__(self, connection_cm):
+        self._cm = connection_cm
+        self._conn = connection_cm.__enter__()
+        self._closed = False
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def close(self):
+        if not self._closed:
+            self._cm.__exit__(None, None, None)
+            self._closed = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if not self._closed:
+            self._cm.__exit__(exc_type, exc, tb)
+            self._closed = True
+
+
 def get_db_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """
+    Return a connection-like object compatible with legacy conn.execute() usage.
+    """
+    return ManagedDBConnection(db_manager.get_connection())
 
 
 def send_verification_email(recipient_email, token):
@@ -384,6 +815,49 @@ def send_verification_email(recipient_email, token):
     print("-------------------------------")
     return False
 
+
+def send_password_reset_code_email(recipient_email, code):
+    """Send OTP code for password reset; falls back to console output in development."""
+
+    smtp_host = os.getenv('SMTP_HOST')
+    smtp_port = int(os.getenv('SMTP_PORT', '587'))
+    smtp_user = os.getenv('SMTP_USER')
+    smtp_pass = os.getenv('SMTP_PASS')
+    from_addr = os.getenv('FROM_EMAIL', 'no-reply@prioritymed.local')
+
+    subject = 'PriorityMed Password Reset Code'
+    body = (
+        "Hello,\n\n"
+        "We received a request to reset your password. Use this verification code:\n\n"
+        f"{code}\n\n"
+        "This code expires in 10 minutes. If you did not request this, ignore this email.\n\n"
+        "- PriorityMed Team"
+    )
+
+    if smtp_host and smtp_user and smtp_pass:
+        try:
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = from_addr
+            msg['To'] = recipient_email
+            msg.set_content(body)
+
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.send_message(msg)
+            print(f"✅ Password reset code sent to {recipient_email}")
+            return True
+        except Exception as e:
+            print(f"⚠️ Failed to send password reset code: {e}")
+            return False
+
+    print("--- PASSWORD RESET CODE (dev) ---")
+    print(f"Send to: {recipient_email}")
+    print(body)
+    print("---------------------------------")
+    return False
+
 def get_dashboard_stats():
     conn = get_db_connection()
     c = conn.cursor()
@@ -401,6 +875,9 @@ def get_dashboard_stats():
     conn.close()
     return {'total': total, 'high': high, 'overrides': overrides, 'appointments': upcoming_appointments}
 
+
+ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_doctor', 'phc_nurse'}
+
 # --- 5. AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
 @limiter.limit(config.RATELIMIT_LOGIN if config.RATELIMIT_ENABLED else "1000 per minute")
@@ -414,6 +891,9 @@ def login():
         password = request.form.get('password')
         role = request.form.get('role')
 
+        if role not in ALLOWED_ROLES:
+            return render_template('login.html', error='Invalid role selected')
+
         # Basic validation
         try:
             email = UserValidator.validate_email(email)
@@ -422,10 +902,24 @@ def login():
 
         conn = get_db_connection()
         user_data = conn.execute('SELECT * FROM users WHERE email = ? AND role = ?', (email, role)).fetchone()
-        conn.close()
 
         if user_data is None:
-            return render_template('login.html', error='Invalid email, password, or role')
+            existing_email = conn.execute('SELECT role FROM users WHERE email = ?', (email,)).fetchone()
+            conn.close()
+
+            if existing_email:
+                correct_role = existing_email['role']
+                friendly_role = correct_role.replace('_', ' ').title()
+                return render_template(
+                    'login.html',
+                    error=f'Account found for this email. Please sign in as {friendly_role}.',
+                    email=email,
+                    selected_role=correct_role
+                )
+
+            return render_template('login.html', error='No account found for this email.', email=email, selected_role=role)
+
+        conn.close()
 
         if user_data and check_password_hash(user_data['password_hash'], password):
             user = User(
@@ -441,12 +935,14 @@ def login():
             login_user(user, remember=request.form.get('remember'))
 
             # Redirect based on role
-            if user.role == 'doctor':
+            if user.role == 'ddhs_admin':
+                return redirect(url_for('ddhs_dashboard'))
+            if user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
                 return redirect(url_for('doctor_dashboard'))
             else:
                 return redirect(url_for('patient_dashboard'))
         else:
-            return render_template('login.html', error='Invalid email, password, or role')
+            return render_template('login.html', error='Invalid password. Please try again.', email=email, selected_role=role)
 
     return render_template('login.html')
 
@@ -457,19 +953,35 @@ def signup():
        pass # Allow signup even if logged in just in case
 
     if request.method == 'POST':
-        email = request.form.get('email')
+        # Sanitize inputs
+        email = InputSanitizer.sanitize_email(request.form.get('email'))
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-        fullname = request.form.get('fullname')
-        phone = request.form.get('phone')
-        role = request.form.get('role')
+        fullname = InputSanitizer.sanitize_string(request.form.get('fullname'), max_length=100)
+        phone = InputSanitizer.sanitize_phone(request.form.get('phone'))
+        role = InputSanitizer.sanitize_string(request.form.get('role'), max_length=50)
+        phc_id = request.form.get('phc_id')
 
-        # Validation
+        # Validate inputs
+        if not email:
+            return render_template('signup.html', error='Invalid email address.')
+
+        if role not in ALLOWED_ROLES:
+            app.logger.warning(f"Signup attempt with invalid role: {role} from {request.remote_addr}")
+            return render_template('signup.html', error='Invalid role selected.')
+
+        if phc_id == '':
+            phc_id = None
+
+        # Password validation
         if password != confirm_password:
-            return render_template('signup.html', error='Passwords do not match')
+            return render_template('signup.html', error='Passwords do not match.')
 
-        if len(password) < 6:
-            return render_template('signup.html', error='Password must be at least 6 characters')
+        # Enforce password policy
+        is_valid, policy_message = PasswordPolicy.validate(password)
+        if not is_valid:
+            app.logger.warning(f"Signup with weak password from {request.remote_addr}")
+            return render_template('signup.html', error=f'Password Policy: {policy_message}')
 
         conn = get_db_connection()
 
@@ -477,7 +989,14 @@ def signup():
         existing_user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
         if existing_user:
             conn.close()
-            return render_template('signup.html', error='Email already registered')
+            app.logger.warning(f"Signup attempt with existing email: {email} from {request.remote_addr}")
+            return render_template(
+                'login.html',
+                error='Email already registered. If you forgot your password, use Forgot Password.',
+                email=email,
+                selected_role=existing_user['role'],
+                show_reset=True
+            )
 
         # Hash password
         password_hash = generate_password_hash(password)
@@ -487,27 +1006,43 @@ def signup():
         expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
 
         try:
-            if role == 'doctor':
-                specialization = request.form.get('specialization')
-                license = request.form.get('license')
-                experience = request.form.get('experience')
+            if role in ('doctor', 'phc_doctor', 'phc_nurse'):
+                specialization = InputSanitizer.sanitize_string(request.form.get('specialization'), max_length=100)
+                license = InputSanitizer.sanitize_string(request.form.get('license'), max_length=50)
+                experience = InputSanitizer.sanitize_string(request.form.get('experience'), max_length=50)
 
                 conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phone, specialization, license, experience, email_verified, verification_token, verification_expires)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phone, specialization, license, experience, 1, token, expires))
+                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, email_verified, verification_token, verification_expires)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, 1, token, expires))
             else:
                 conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phone, email_verified, verification_token, verification_expires)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phone, 1, token, expires))
+                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, email_verified, verification_token, verification_expires)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (email, password_hash, fullname, role, phc_id, phone, 1, token, expires))
 
             conn.commit()
             conn.close()
 
-            return render_template('login.html', success='Account created successfully! You can now login.')
+            # Audit log successful signup
+            if audit_logger := app.extensions.get('audit_logger'):
+                audit_logger.log_event(
+                    action='USER_SIGNUP',
+                    details=f"Role: {role} | Name: {fullname}",
+                    user=email
+                )
+
+            app.logger.info(f"New user registered - Email: {email} | Role: {role}")
+            return render_template(
+                'login.html',
+                success='Account created successfully! You can now login.',
+                email=email,
+                selected_role=role
+            )
+
         except Exception as e:
             conn.close()
+            app.logger.error(f"Signup error for {email}: {str(e)}")
             return render_template('signup.html', error=f'Registration failed: {str(e)}')
 
     return render_template('signup.html')
@@ -515,7 +1050,17 @@ def signup():
 @app.route('/logout')
 @login_required
 def logout():
+    # Audit log logout
+    if audit_logger := app.extensions.get('audit_logger'):
+        audit_logger.log_event(
+            action='USER_LOGOUT',
+            details=f"Role: {current_user.role}",
+            user=current_user.email
+        )
+
+    app.logger.info(f"User logged out - Email: {current_user.email} | Role: {current_user.role}")
     logout_user()
+    flash("You have been logged out successfully.", "info")
     return redirect(url_for('login'))
 
 
@@ -574,6 +1119,159 @@ def resend_verification():
     else:
         verify_url = url_for('verify_email', token=token, _external=True)
         return render_template('login.html', success=f'Verification link (dev): {verify_url}')
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit(config.RATELIMIT_FORGOT_PASSWORD if config.RATELIMIT_ENABLED else "1000 per hour")
+def forgot_password():
+    if request.method == 'GET':
+        return render_template('forgot_password.html')
+
+    email = InputSanitizer.sanitize_email(request.form.get('email'))
+    if not email:
+        return render_template('forgot_password.html', error='Please enter a valid email address.')
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+
+    if user:
+        reset_code = f"{secrets.randbelow(1000000):06d}"
+        expires = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        conn.execute(
+            'UPDATE users SET reset_code = ?, reset_token = NULL, reset_expires = ? WHERE id = ?',
+            (reset_code, expires, user['id'])
+        )
+        conn.commit()
+        send_password_reset_code_email(email, reset_code)
+
+    conn.close()
+
+    # Always return the same response shape to avoid account enumeration.
+    return render_template(
+        'verify_reset_code.html',
+        email=email,
+        success='If an account exists for that email, a verification code has been sent.'
+    )
+
+
+@app.route('/forgot-password/resend', methods=['POST'])
+@limiter.limit(config.RATELIMIT_RESEND_RESET_CODE if config.RATELIMIT_ENABLED else "1000 per hour")
+def resend_reset_code():
+    email = InputSanitizer.sanitize_email(request.form.get('email'))
+    if not email:
+        return render_template('verify_reset_code.html', error='Please enter a valid email address.')
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT id FROM users WHERE email = ?', (email,)).fetchone()
+    if user:
+        reset_code = f"{secrets.randbelow(1000000):06d}"
+        expires = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        conn.execute(
+            'UPDATE users SET reset_code = ?, reset_token = NULL, reset_expires = ? WHERE id = ?',
+            (reset_code, expires, user['id'])
+        )
+        conn.commit()
+        send_password_reset_code_email(email, reset_code)
+    conn.close()
+
+    return render_template(
+        'verify_reset_code.html',
+        email=email,
+        success='If an account exists for that email, a new code has been sent.'
+    )
+
+
+@app.route('/verify-reset-code', methods=['POST'])
+@limiter.limit(config.RATELIMIT_VERIFY_RESET_CODE if config.RATELIMIT_ENABLED else "1000 per hour")
+def verify_reset_code():
+    email = InputSanitizer.sanitize_email(request.form.get('email'))
+    entered_code = (request.form.get('code') or '').strip()
+
+    if not email or not entered_code:
+        return render_template('verify_reset_code.html', email=email, error='Email and code are required.')
+
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT id, reset_code, reset_expires FROM users WHERE email = ?',
+        (email,)
+    ).fetchone()
+
+    if not user or not user['reset_code']:
+        conn.close()
+        return render_template('verify_reset_code.html', email=email, error='Invalid code. Please request a new code.')
+
+    try:
+        expires = datetime.fromisoformat(user['reset_expires']) if user['reset_expires'] else None
+    except Exception:
+        expires = None
+
+    if expires and expires < datetime.utcnow():
+        conn.close()
+        return render_template('verify_reset_code.html', email=email, error='Code expired. Please resend code.')
+
+    if user['reset_code'] != entered_code:
+        conn.close()
+        return render_template('verify_reset_code.html', email=email, error='Incorrect code. Please try again.')
+
+    token = secrets.token_urlsafe(24)
+    reset_expires = (datetime.utcnow() + timedelta(minutes=30)).isoformat()
+    conn.execute(
+        'UPDATE users SET reset_token = ?, reset_code = NULL, reset_expires = ? WHERE id = ?',
+        (token, reset_expires, user['id'])
+    )
+    conn.commit()
+    conn.close()
+
+    return render_template('reset_password.html', token=token)
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+@limiter.limit(config.RATELIMIT_RESET_PASSWORD if config.RATELIMIT_ENABLED else "1000 per hour")
+def reset_password():
+    token = request.args.get('token') or request.form.get('token')
+    if not token:
+        return render_template('login.html', error='Invalid or missing reset token.')
+
+    conn = get_db_connection()
+    user = conn.execute('SELECT id, reset_expires FROM users WHERE reset_token = ?', (token,)).fetchone()
+    if not user:
+        conn.close()
+        return render_template('login.html', error='This reset link is invalid or has expired.')
+
+    try:
+        expires = datetime.fromisoformat(user['reset_expires']) if user['reset_expires'] else None
+    except Exception:
+        expires = None
+
+    if expires and expires < datetime.utcnow():
+        conn.close()
+        return render_template('login.html', error='This reset link has expired. Please request a new one.')
+
+    if request.method == 'GET':
+        conn.close()
+        return render_template('reset_password.html', token=token)
+
+    new_password = request.form.get('password')
+    confirm_password = request.form.get('confirm_password')
+
+    if new_password != confirm_password:
+        conn.close()
+        return render_template('reset_password.html', token=token, error='Passwords do not match.')
+
+    is_valid, policy_message = PasswordPolicy.validate(new_password)
+    if not is_valid:
+        conn.close()
+        return render_template('reset_password.html', token=token, error=f'Password Policy: {policy_message}')
+
+    password_hash = generate_password_hash(new_password)
+    conn.execute(
+        'UPDATE users SET password_hash = ?, reset_token = NULL, reset_expires = NULL WHERE id = ?',
+        (password_hash, user['id'])
+    )
+    conn.commit()
+    conn.close()
+
+    return render_template('login.html', success='Password reset successful. Please login with your new password.')
 
 # --- 6. DASHBOARD ROUTES ---
 @app.route('/')
@@ -640,7 +1338,7 @@ def patient_dashboard():
 @app.route('/doctor/dashboard')
 @login_required
 def doctor_dashboard():
-    if current_user.role != 'doctor':
+    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
         flash('Access denied')
         return redirect(url_for('index'))
 
@@ -655,6 +1353,255 @@ def doctor_dashboard():
                          stats=stats,
                          latest_patient=latest_patient,
                          user=current_user)
+
+
+def normalize_risk_bucket(value):
+    """Normalize risk labels into LOW/MEDIUM/HIGH buckets."""
+    if not value:
+        return None
+    text = str(value).upper()
+    if 'HIGH' in text:
+        return 'HIGH'
+    if 'MEDIUM' in text:
+        return 'MEDIUM'
+    if 'LOW' in text:
+        return 'LOW'
+    return None
+
+
+def calculate_realtime_performance_metrics(conn):
+    """Compute live performance metrics from doctor-confirmed outcomes."""
+    rows = conn.execute('''
+        SELECT dual_brain_risk, actual_outcome
+        FROM patient_logs
+        WHERE actual_outcome IS NOT NULL
+    ''').fetchall()
+
+    total_confirmed = len(rows)
+    if total_confirmed == 0:
+        return {
+            'total_confirmed_cases': 0,
+            'overall_accuracy': None,
+            'high_risk_sensitivity': None,
+            'high_risk_specificity': None,
+            'high_risk_ppv': None,
+            'high_risk_npv': None,
+            'confusion_matrix_high_risk': {'tp': 0, 'fp': 0, 'tn': 0, 'fn': 0}
+        }
+
+    exact_matches = 0
+    tp = fp = tn = fn = 0
+
+    for row in rows:
+        predicted = normalize_risk_bucket(row['dual_brain_risk'])
+        actual = normalize_risk_bucket(row['actual_outcome'])
+
+        if predicted == actual:
+            exact_matches += 1
+
+        pred_high = predicted == 'HIGH'
+        actual_high = actual == 'HIGH'
+
+        if pred_high and actual_high:
+            tp += 1
+        elif pred_high and not actual_high:
+            fp += 1
+        elif not pred_high and not actual_high:
+            tn += 1
+        else:
+            fn += 1
+
+    accuracy = exact_matches / total_confirmed
+    sensitivity = tp / (tp + fn) if (tp + fn) else None
+    specificity = tn / (tn + fp) if (tn + fp) else None
+    ppv = tp / (tp + fp) if (tp + fp) else None
+    npv = tn / (tn + fn) if (tn + fn) else None
+
+    return {
+        'total_confirmed_cases': total_confirmed,
+        'overall_accuracy': accuracy,
+        'high_risk_sensitivity': sensitivity,
+        'high_risk_specificity': specificity,
+        'high_risk_ppv': ppv,
+        'high_risk_npv': npv,
+        'confusion_matrix_high_risk': {'tp': tp, 'fp': fp, 'tn': tn, 'fn': fn}
+    }
+
+
+@app.route('/triage/outcome/<int:log_id>', methods=['POST'])
+@login_required
+@require_role('doctor', 'phc_doctor', 'phc_nurse', 'ddhs_admin')
+def submit_triage_outcome(log_id):
+    """Store doctor-confirmed ground truth outcome for a triage log."""
+    payload = request.get_json(silent=True) if request.is_json else request.form
+    actual_outcome = (payload.get('actual_outcome') or '').strip().upper()
+    notes = (payload.get('notes') or '').strip()
+
+    if actual_outcome not in {'LOW', 'MEDIUM', 'HIGH'}:
+        message = 'actual_outcome must be one of: LOW, MEDIUM, HIGH'
+        if request.is_json:
+            return jsonify({'success': False, 'error': message}), 400
+        flash(message, 'error')
+        return redirect(url_for('doctor_dashboard'))
+
+    conn = get_db_connection()
+    log_row = conn.execute('SELECT id FROM patient_logs WHERE id = ?', (log_id,)).fetchone()
+    if not log_row:
+        conn.close()
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'log_id not found'}), 404
+        flash('Triage log not found.', 'error')
+        return redirect(url_for('doctor_dashboard'))
+
+    conn.execute('''
+        UPDATE patient_logs
+        SET actual_outcome = ?,
+            outcome_confirmed_by = ?,
+            outcome_confirmed_at = CURRENT_TIMESTAMP,
+            outcome_notes = ?
+        WHERE id = ?
+    ''', (actual_outcome, current_user.id, notes, log_id))
+    conn.commit()
+
+    metrics = calculate_realtime_performance_metrics(conn)
+    conn.close()
+
+    if request.is_json:
+        return jsonify({
+            'success': True,
+            'message': 'Outcome stored successfully',
+            'log_id': log_id,
+            'metrics': metrics
+        }), 200
+
+    flash(f'Outcome saved for triage log #{log_id}.', 'success')
+    return redirect(url_for('doctor_dashboard'))
+
+
+@app.route('/triage/model-performance', methods=['GET'])
+@login_required
+@require_role('doctor', 'phc_doctor', 'phc_nurse', 'ddhs_admin')
+def triage_model_performance():
+    """Return live model accuracy metrics from confirmed clinical outcomes."""
+    conn = get_db_connection()
+    metrics = calculate_realtime_performance_metrics(conn)
+    conn.close()
+
+    return jsonify({
+        'generated_at': datetime.utcnow().isoformat() + 'Z',
+        'metrics': metrics
+    }), 200
+
+
+@app.route('/triage/outcomes/pending', methods=['GET'])
+@login_required
+@require_role('doctor', 'phc_doctor', 'phc_nurse', 'ddhs_admin')
+def triage_outcomes_pending():
+    """Return recent triage logs that still need doctor-confirmed outcomes."""
+    limit_raw = request.args.get('limit', '50')
+    try:
+        limit = max(1, min(int(limit_raw), 200))
+    except ValueError:
+        limit = 50
+
+    conn = get_db_connection()
+    rows = conn.execute('''
+        SELECT id, user_id, phc_id, symptoms, dual_brain_risk, routing, recommended_specialist,
+               news2_score, timestamp
+        FROM patient_logs
+        WHERE actual_outcome IS NULL
+        ORDER BY timestamp DESC
+        LIMIT ?
+    ''', (limit,)).fetchall()
+    conn.close()
+
+    return jsonify({
+        'count': len(rows),
+        'items': [dict(row) for row in rows]
+    }), 200
+
+
+@app.route('/ddhs_dashboard')
+@login_required
+def ddhs_dashboard():
+    if current_user.role != 'ddhs_admin':
+        flash('Access denied. DDHS admin role required.')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    understaffed_rows = conn.execute('''
+        SELECT
+            p.id,
+            p.name,
+            p.location,
+            (
+                SELECT COUNT(*) FROM users u
+                WHERE u.phc_id = p.id AND u.role IN ('phc_doctor', 'phc_nurse')
+            ) AS total_staff,
+            (
+                SELECT COUNT(DISTINCT sa.user_id)
+                FROM staff_attendance sa
+                JOIN users u ON u.id = sa.user_id
+                WHERE u.phc_id = p.id
+                  AND u.role IN ('phc_doctor', 'phc_nurse')
+                  AND sa.status = 'Present'
+                  AND date(sa.check_in_time) = date('now')
+            ) AS present_staff,
+            (
+                SELECT COUNT(DISTINCT sa.user_id)
+                FROM staff_attendance sa
+                JOIN users u ON u.id = sa.user_id
+                WHERE u.phc_id = p.id
+                  AND u.role IN ('phc_doctor', 'phc_nurse')
+                  AND sa.status = 'Absent'
+                  AND date(sa.check_in_time) = date('now')
+            ) AS absent_staff
+        FROM phc_facilities p
+        ORDER BY p.name ASC
+    ''').fetchall()
+
+    understaffed_phcs = []
+    for row in understaffed_rows:
+        total_staff = row['total_staff'] or 0
+        present_staff = row['present_staff'] or 0
+        absent_staff = row['absent_staff'] or 0
+        if total_staff > 0 and present_staff < total_staff:
+            understaffed_phcs.append({
+                'id': row['id'],
+                'name': row['name'],
+                'location': row['location'],
+                'total_staff': total_staff,
+                'present_staff': present_staff,
+                'absent_staff': absent_staff
+            })
+
+    live_escalations = conn.execute('''
+        SELECT
+            pl.id,
+            pl.user_id,
+            pl.dual_brain_risk,
+            pl.recommended_specialist,
+            pl.routing,
+            pl.symptoms,
+            pl.timestamp,
+            p.name AS phc_name,
+            p.location AS phc_location,
+            u.fullname AS patient_name
+        FROM patient_logs pl
+        LEFT JOIN phc_facilities p ON p.id = pl.phc_id
+        LEFT JOIN users u ON u.id = pl.user_id
+        WHERE pl.dual_brain_risk LIKE 'HIGH%'
+        ORDER BY pl.timestamp DESC
+        LIMIT 25
+    ''').fetchall()
+    conn.close()
+
+    return render_template(
+        'ddhs_dashboard.html',
+        understaffed_phcs=understaffed_phcs,
+        live_escalations=live_escalations,
+        user=current_user
+    )
 
 # --- 7. LEGACY ROUTE (kept for compatibility) ---
     stats = get_dashboard_stats()
@@ -675,8 +1622,8 @@ def triage():
     if request.method == 'GET':
         return redirect(url_for('checkup'))
 
-    if not xgb_risk_model or not exp_brain:
-        return "⚠️ Models not loaded. Check server logs."
+    if not xgb_risk_model:
+        return "[ERROR] XGBoost model not loaded. Check server logs."
 
     try:
         # 1. Grab and VALIDATE data from form
@@ -688,8 +1635,12 @@ def triage():
             'hr': request.form.get('hr'),
             'temp': request.form.get('temp'),
             'temp_unit': request.form.get('temp_unit', 'F'),
+            'respiration_rate': request.form.get('respiration_rate'),
+            'spo2': request.form.get('spo2'),
             'history': request.form.get('history', 'None'),
-            'symptoms': request.form.get('symptom')  # Note: form uses 'symptom' not 'symptoms'
+            'symptoms': request.form.get('symptom'),  # Note: form uses 'symptom' not 'symptoms'
+            'pain_level': request.form.get('pain_level'),  # NEW: Pain intensity (1-10)
+            'duration': request.form.get('duration')  # NEW: Symptom duration
         }
 
         # Validate all inputs
@@ -703,8 +1654,32 @@ def triage():
         hr = validated_data['hr']
         temp_fahrenheit = validated_data['temp']  # Validation returns Fahrenheit
         temp = (temp_fahrenheit - 32) * 5/9  # Convert to Celsius for model (model trained on Celsius)
+        respiration_rate = validated_data['respiration_rate']
+        spo2 = validated_data['spo2']
         history = validated_data['history']
         symptom = validated_data['symptoms']
+
+        # NEW: Extract pain & duration (with safe defaults if not provided)
+        pain_level = validated_data.get('pain_level')
+        duration = validated_data.get('duration')
+
+        # Parse pain level to integer (1-10)
+        try:
+            pain_intensity = int(pain_level) if pain_level else 0
+            pain_intensity = max(0, min(10, pain_intensity))  # Clamp to 0-10 range
+        except (ValueError, TypeError):
+            pain_intensity = 0
+
+        # Validate duration format
+        valid_durations = ['Today', '2-3 days', '1 week', '2+ weeks']
+        duration = duration if duration in valid_durations else 'Unknown'
+
+        # AUTO-SPELL-CORRECT SYMPTOMS (for hospital rush scenarios)
+        original_symptom = symptom
+        symptom, was_corrected, correction_confidence = symptom_corrector.correct_symptom(symptom)
+        if was_corrected:
+            print(f"[SPELL-CORRECT] Patient entered: '{original_symptom}' → Corrected to: '{symptom}' (confidence: {correction_confidence:.1%})")
+            app.logger.info(f"Symptom auto-corrected: '{original_symptom}' → '{symptom}'")
 
     except ValidationError as e:
         flash(f'Validation Error: {e.message}', 'error')
@@ -714,10 +1689,15 @@ def triage():
         return redirect(url_for('checkup'))
     # 2.5. EMERGENCY PATCH: Rule-based override for healthy patients
     # Note: Model expects Celsius, but override function expects Fahrenheit for display
-    from utils.triage_override import should_override_to_low_risk, calculate_healthy_score
+    from utils.triage_override import (
+        should_override_to_low_risk,
+        calculate_healthy_score,
+        apply_contextual_risk_adjustments,
+        calibrate_medium_high_risk,
+    )
 
     should_override, override_reason, health_score = should_override_to_low_risk(
-        age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history
+        age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history, respiration_rate, spo2
     )
 
     if should_override:
@@ -738,27 +1718,49 @@ def triage():
         patient_scaled = scaler.transform(patient_df)
 
         xgb_probs = xgb_risk_model.predict_proba(patient_scaled)[0]
-        xgb_risk = encoders['Risk_Level'].inverse_transform([np.argmax(xgb_probs)])[0].upper()
+
+        # ===== NEW: ENHANCED CALIBRATION (Fixes MEDIUM/HIGH overfitting) =====
+        from utils.model_calibration import (
+            classify_xgb_risk_with_calibration,
+            refine_medium_high_boundary,
+            calibrate_based_on_vitals
+        )
+
+        # Step 1: Intelligent XGBoost classification using probability thresholds
+        xgb_risk, xgb_confidence = classify_xgb_risk_with_calibration(
+            xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
+        )
+        print(f"  1️⃣  XGBoost Result: {xgb_risk} (confidence: {xgb_confidence:.2f})")
+
+        # Step 2: Secondary refinement of MEDIUM/HIGH boundary
+        xgb_risk = refine_medium_high_boundary(
+            xgb_risk, xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
+        )
+        print(f"  2️⃣  After Boundary Refinement: {xgb_risk}")
+
+        # Step 3: Vital signs calibration
+        xgb_risk = calibrate_based_on_vitals(
+            xgb_risk, sys_bp, dia_bp, hr, temp_fahrenheit, spo2, respiration_rate, symptom, history
+        )
+        print(f"  3️⃣  After Vital Signs Calibration: {xgb_risk}")
+        # ===== END: ENHANCED CALIBRATION =====
 
         # 3. RUN SYSTEM 2 (Shadow Brain + Safety Net)
-        bert_res = exp_brain(symptom)[0]
-        # Increased threshold from 0.5 to 0.55 to reduce over-escalation of MEDIUM cases
-        is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.55)
-        critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain', 'unconscious', 'confusion', 'bleeding']
-        semantic_emergency = any(word in symptom.lower() for word in critical_words) or is_bert_emergency
-
-        # 3.5 XGBoost HIGH Downgrade Logic (for 98% accuracy)
-        # Downgrade XGBoost HIGH to MEDIUM if vitals are only moderately elevated
-        # Critical thresholds: BP >= 160/100, HR >= 110, Temp >= 103°F
-        if xgb_risk == "HIGH" and not semantic_emergency:
-            is_critically_high_bp = sys_bp >= 160 or dia_bp >= 100
-            is_critically_high_hr = hr >= 110
-            is_critically_high_temp = temp_fahrenheit >= 103
-
-            # If no critical threshold crossed, downgrade to MEDIUM
-            if not (is_critically_high_bp or is_critically_high_hr or is_critically_high_temp):
-                xgb_risk = "MEDIUM"
-                print(f"🟡 DOWNGRADE: XGBoost HIGH → MEDIUM (moderate vitals, no emergency symptoms)")
+        semantic_emergency = False
+        if exp_brain:
+            bert_res = exp_brain(symptom)[0]
+            # Increased threshold from 0.5 to 0.55 to reduce over-escalation of MEDIUM cases
+            is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.55)
+            critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
+                 'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
+                 'disoriented', 'altered mental status', 'diabetic emergency']
+            semantic_emergency = any(word in symptom.lower() for word in critical_words) or is_bert_emergency
+        else:
+            # BERT model not available - use keyword-based emergency detection only
+            critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
+                 'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
+                 'disoriented', 'altered mental status', 'diabetic emergency']
+            semantic_emergency = any(word in symptom.lower() for word in critical_words)
 
         # 4. DUAL-BRAIN CONSENSUS LOGIC
         if semantic_emergency and xgb_risk != "HIGH":
@@ -774,15 +1776,99 @@ def triage():
             final_risk = "LOW"
             routing = "General Ward / Waiting Room"
 
+        adjusted_risk, _ = apply_contextual_risk_adjustments(
+            final_risk, age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history
+        )
+        if adjusted_risk != final_risk:
+            final_risk = adjusted_risk
+            if adjusted_risk == 'HIGH':
+                routing = 'Emergency Department'
+            elif adjusted_risk == 'MEDIUM':
+                routing = 'Urgent Care'
+            else:
+                routing = 'General Ward / Waiting Room'
+
+        calibrated_risk, _ = calibrate_medium_high_risk(
+            final_risk,
+            xgb_probs,
+            0,
+            semantic_emergency,
+            is_danger=False,
+            danger_severity='NORMAL',
+            symptom_text=symptom,
+            age=age,
+        )
+        if calibrated_risk != final_risk:
+            final_risk = calibrated_risk
+            if calibrated_risk == 'HIGH':
+                routing = 'Emergency Department'
+            elif calibrated_risk == 'MEDIUM':
+                routing = 'Urgent Care'
+            else:
+                routing = 'General Ward / Waiting Room'
+
+        # NEW: PAIN INTENSITY & DURATION ADJUSTMENT (Clinical Rule-Based)
+        # If pain is severe (7-10) OR duration is prolonged (2+ weeks), adjust risk upward
+        pain_adjustment_note = ""
+        if pain_intensity >= 7:
+            pain_adjustment_note = f"[PAIN] Severe pain intensity ({pain_intensity}/10) detected. "
+            if final_risk == "LOW":
+                final_risk = "MEDIUM"
+                routing = "Urgent Care"
+                print(f"⚠️  Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
+                app.logger.info(f"Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
+            elif final_risk == "MEDIUM":
+                # Already MEDIUM, but note the high pain for clinical decision-making
+                print(f"⚠️  Pain intensity high ({pain_intensity}/10) - escalate caution level")
+                app.logger.info(f"High pain intensity ({pain_intensity}/10) noted with MEDIUM risk")
+
+        duration_adjustment_note = ""
+        if duration == "2+ weeks":
+            duration_adjustment_note = f"[DURATION] Chronic symptom duration (2+ weeks) detected. "
+            if final_risk == "LOW":
+                final_risk = "MEDIUM"
+                routing = "Urgent Care"
+                print(f"⚠️  Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
+                app.logger.info(f"Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
+            elif final_risk == "MEDIUM":
+                # Already MEDIUM, but note the chronic nature
+                print(f"⚠️  Chronic condition (2+ weeks) - requires specialty follow-up")
+                app.logger.info(f"Prolonged symptom duration (2+ weeks) noted with MEDIUM risk")
+
         # Calculate score for non-override cases
         score = None  # Will be calculated below
 
-    # 5. SAVE TO DB with user_id
+    def recommend_specialist(symptom_text, risk_level):
+        text = (symptom_text or '').lower()
+        risk_upper = (risk_level or '').upper()
+
+        if 'HIGH' not in risk_upper and 'MEDIUM' not in risk_upper:
+            return 'General Medicine'
+
+        rules = [
+            (['chest pain', 'palpitation', 'cardiac', 'heart attack'], 'Cardiology'),
+            (['hemorrhage', 'bleeding', 'trauma', 'injury'], 'Trauma/Surgery'),
+            (['speech', 'stroke', 'seizure', 'paralysis', 'neurologic'], 'Neurology'),
+            (['breath', 'asthma', 'wheezing', 'respiratory'], 'Pulmonology')
+        ]
+
+        for keys, specialist in rules:
+            if any(key in text for key in keys):
+                return specialist
+
+        return 'Emergency Medicine' if 'HIGH' in risk_upper else 'General Medicine'
+
+    recommended_specialist = recommend_specialist(symptom, final_risk)
+    phc_id = request.form.get('phc_id') or current_user.phc_id
+    if phc_id == '':
+        phc_id = None
+
+    # 5. SAVE TO DB with user_id (including pain intensity and duration)
     conn = get_db_connection()
     conn.execute('''INSERT INTO patient_logs
-                 (user_id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, history, xgb_risk, dual_brain_risk, routing)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-              (current_user.id, age, gender, symptom, sys_bp, dia_bp, hr, temp_fahrenheit, history, xgb_risk, final_risk, routing))
+                      (user_id, phc_id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, respiration_rate, spo2, history, xgb_risk, dual_brain_risk, routing, recommended_specialist, pain_intensity, symptom_duration)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                  (current_user.id, phc_id, age, gender, symptom, sys_bp, dia_bp, hr, temp_fahrenheit, respiration_rate, spo2, history, xgb_risk, final_risk, routing, recommended_specialist, pain_intensity, duration))
     conn.commit()
     log_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
     conn.close()
@@ -845,12 +1931,17 @@ def triage():
             'vitals': {
                 'bp': f"{sys_bp}/{dia_bp}",
                 'hr': str(hr),
-                'temp': str(temp_fahrenheit)
+                'temp': str(temp_fahrenheit),
+                'respiration_rate': str(respiration_rate),
+                'spo2': str(spo2)
             },
             'symptoms': symptom,
             'age': age,
             'gender': gender,
             'history': history,
+            'pain_intensity': pain_intensity,  # NEW: Include pain level
+            'symptom_duration': duration,      # NEW: Include symptom duration
+            'recommended_specialist': recommended_specialist,
             'score': score,
             'timestamp': datetime.now().isoformat(),
             'log_id': log_id
@@ -866,7 +1957,7 @@ def triage():
 def appointments():
     conn = get_db_connection()
 
-    if current_user.role == 'doctor':
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
         # Doctors see appointments assigned to them or pending requests
         appointments_list = conn.execute('''
             SELECT a.*, u.fullname as patient_fullname, u.phone as patient_phone
@@ -889,7 +1980,7 @@ def appointments():
     appointments_list = [dict(row) for row in appointments_list]
 
     # Get appointment dates for calendar highlighting
-    if current_user.role == 'doctor':
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
         appointment_dates = conn.execute('''
             SELECT DISTINCT appointment_date, COUNT(*) as count
             FROM appointments
@@ -907,16 +1998,6 @@ def appointments():
     # Convert to dictionaries
     appointment_dates = [dict(row) for row in appointment_dates]
 
-    # Get recent patients for quick appointment booking (doctors only)
-    recent_patients = []
-    if current_user.role == 'doctor':
-        recent_patients = conn.execute('''
-            SELECT id, age, gender, symptoms, routing, timestamp
-            FROM patient_logs
-            ORDER BY id DESC LIMIT 20
-        ''').fetchall()
-        recent_patients = [dict(row) for row in recent_patients]
-
     # Get all doctors for patient appointment booking
     all_doctors = conn.execute('''
         SELECT id, fullname, specialization, experience
@@ -931,7 +2012,6 @@ def appointments():
     return render_template('appointments.html',
                          appointments=appointments_list,
                          appointment_dates=appointment_dates,
-                         recent_patients=recent_patients,
                          all_doctors=all_doctors,
                          user=current_user)
 
@@ -1007,7 +2087,7 @@ def doctors_directory():
 @login_required
 def patients_directory():
     # Only doctors can access patient directory
-    if current_user.role != 'doctor':
+    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
         flash('Access denied. Only doctors can view patient directory.')
         return redirect(url_for('patient_dashboard'))
 
@@ -1153,7 +2233,7 @@ def update_appointment(id):
     appointment = conn.execute('SELECT * FROM appointments WHERE id = ?', (id,)).fetchone()
 
     # Authorization check
-    if current_user.role == 'doctor':
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
         # Doctors can approve/reject pending appointments or update their own
         if appointment['status'] == 'Pending' or appointment['doctor_id'] == current_user.id:
             conn.execute('UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
@@ -1184,7 +2264,7 @@ def delete_appointment(id):
     appointment = conn.execute('SELECT * FROM appointments WHERE id = ?', (id,)).fetchone()
 
     # Authorization check
-    if current_user.role == 'doctor' or (current_user.role == 'patient' and appointment['patient_id'] == current_user.id):
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse') or (current_user.role == 'patient' and appointment['patient_id'] == current_user.id):
         conn.execute('DELETE FROM appointments WHERE id = ?', (id,))
         conn.commit()
         flash('Appointment deleted!')
@@ -1200,7 +2280,7 @@ def delete_appointment(id):
 def get_appointment_dates():
     conn = get_db_connection()
 
-    if current_user.role == 'doctor':
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
         dates = conn.execute('''
             SELECT appointment_date, COUNT(*) as count
             FROM appointments
@@ -1342,7 +2422,7 @@ def health_report():
 @login_required
 def reports():
     """Doctor's view of all patient reports"""
-    if current_user.role != 'doctor':
+    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
         flash('This page is only accessible to doctors')
         return redirect(url_for('patient_dashboard'))
 
@@ -1485,7 +2565,7 @@ def messages():
     conn = get_db_connection()
 
     # Get list of contacts based on user role
-    if current_user.role == 'doctor':
+    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
         # Doctors see all their patients
         contacts = conn.execute('''
             SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
@@ -2205,6 +3285,10 @@ def parse_medical_text(text):
     return parsed
 
 if __name__ == '__main__':
-    # Standard local Flask deployment
-    # Set use_reloader=False to avoid Windows socket warnings (but you'll need to manually restart)
-    app.run(debug=True, port=5000, use_reloader=True)
+    # Use configuration settings (respects production environment)
+    app.run(
+        debug=config.DEBUG,
+        port=config.APP_PORT,
+        use_reloader=config.DEBUG,  # Only auto-reload in development
+        host='0.0.0.0'  # Listen on all interfaces
+    )

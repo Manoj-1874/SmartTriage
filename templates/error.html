@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error {{ error_code }} - PriorityMed</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .error-container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px;
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .error-icon {
+            font-size: 80px;
+            margin-bottom: 30px;
+        }
+
+        .error-404 .error-icon { color: #FF6B6B; }
+        .error-500 .error-icon { color: #FFA726; }
+        .error-429 .error-icon { color: #66BB6A; }
+        .error-default .error-icon { color: #667eea; }
+
+        h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .error-message {
+            font-size: 18px;
+            color: #7f8c8d;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .error-details {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            text-align: left;
+        }
+
+        .error-details strong {
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .error-details p {
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 15px 30px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #2c3e50;
+            border: 2px solid #e9ecef;
+        }
+
+        .btn-secondary:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
+        }
+
+        @media (max-width: 768px) {
+            .error-container {
+                padding: 40px 20px;
+            }
+
+            h1 {
+                font-size: 36px;
+            }
+
+            .error-icon {
+                font-size: 60px;
+            }
+
+            .error-message {
+                font-size: 16px;
+            }
+
+            .action-buttons {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container error-{{ error_code }}">
+        {% if error_code == 404 %}
+            <div class="error-icon"><i class="fas fa-search"></i></div>
+            <h1>Page Not Found</h1>
+            <div class="error-message">
+                Oops! The page you're looking for seems to have wandered off.
+            </div>
+        {% elif error_code == 429 %}
+            <div class="error-icon"><i class="fas fa-hourglass-half"></i></div>
+            <h1>Too Many Requests</h1>
+            <div class="error-message">
+                Whoa there! You're moving too fast. Please slow down and try again in a moment.
+            </div>
+        {% elif error_code == 500 %}
+            <div class="error-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <h1>Server Error</h1>
+            <div class="error-message">
+                Something went wrong on our end. We're working to fix it!
+            </div>
+        {% else %}
+            <div class="error-icon"><i class="fas fa-bug"></i></div>
+            <h1>Error {{ error_code }}</h1>
+            <div class="error-message">
+                An unexpected error occurred.
+            </div>
+        {% endif %}
+
+        <div class="error-details">
+            <strong>Error Code: {{ error_code }}</strong>
+            <p>{{ error_message }}</p>
+        </div>
+
+        <div class="action-buttons">
+            <a href="javascript:history.back()" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Go Back
+            </a>
+            <a href="{{ url_for('index') }}" class="btn btn-primary">
+                <i class="fas fa-home"></i> Home
+            </a>
+        </div>
+    </div>
+</body>
+</html>

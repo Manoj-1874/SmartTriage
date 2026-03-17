@@ -31,6 +31,12 @@ class VitalSignsValidator:
     HEART_RATE_MIN = 30
     HEART_RATE_MAX = 250
 
+    RESPIRATION_RATE_MIN = 8
+    RESPIRATION_RATE_MAX = 60
+
+    SPO2_MIN = 50
+    SPO2_MAX = 100
+
     TEMP_F_MIN = 90.0
     TEMP_F_MAX = 115.0
 
@@ -103,7 +109,7 @@ class VitalSignsValidator:
 
     @staticmethod
     def validate_temperature(temperature, unit='F'):
-        """Validate temperature"""
+        """Validate temperature and return in Fahrenheit for display"""
         try:
             temperature = float(temperature)
         except (ValueError, TypeError):
@@ -127,6 +133,61 @@ class VitalSignsValidator:
             raise ValidationError("Temperature unit must be 'F' or 'C'", "temperature")
 
         return temperature
+
+    @staticmethod
+    def validate_respiration_rate(respiration_rate):
+        """Validate respiration rate (breaths per minute). Optional with default 16 (normal average)."""
+        # Allow None for backward compatibility with forms that don't provide RR
+        if respiration_rate is None:
+            return 16  # Normal average respiration rate
+
+        try:
+            respiration_rate = int(respiration_rate)
+        except (ValueError, TypeError):
+            raise ValidationError("Respiration rate must be a valid number", "respiration_rate")
+
+        if respiration_rate < VitalSignsValidator.RESPIRATION_RATE_MIN or respiration_rate > VitalSignsValidator.RESPIRATION_RATE_MAX:
+            raise ValidationError(
+                f"Respiration rate must be between {VitalSignsValidator.RESPIRATION_RATE_MIN} and {VitalSignsValidator.RESPIRATION_RATE_MAX} breaths/min",
+                "respiration_rate"
+            )
+
+        return respiration_rate
+
+    @staticmethod
+    def validate_spo2(spo2):
+        """Validate oxygen saturation (SpO2 percentage). Optional with default 98 (healthy normal)."""
+        # Allow None for backward compatibility with forms that don't provide SpO2
+        if spo2 is None:
+            return 98  # Healthy normal SpO2
+
+        try:
+            spo2 = int(spo2)
+        except (ValueError, TypeError):
+            raise ValidationError("SpO2 must be a valid number", "spo2")
+
+        if spo2 < VitalSignsValidator.SPO2_MIN or spo2 > VitalSignsValidator.SPO2_MAX:
+            raise ValidationError(
+                f"SpO2 must be between {VitalSignsValidator.SPO2_MIN}% and {VitalSignsValidator.SPO2_MAX}%",
+                "spo2"
+            )
+
+        return spo2
+
+    @staticmethod
+    def fahrenheit_to_celsius(temp_f):
+        """Convert Fahrenheit to Celsius for ML model input
+
+        CRITICAL: The XGBoost model was trained on Celsius values (avg 37.7°C).
+        Feeding Fahrenheit values (98.6°F) causes the model to see them as outliers.
+
+        Args:
+            temp_f: Temperature in Fahrenheit
+
+        Returns:
+            float: Temperature in Celsius
+        """
+        return (temp_f - 32) * 5/9
 
     @staticmethod
     def validate_gender(gender):
@@ -214,10 +275,16 @@ class VitalSignsValidator:
             validated['hr'] = cls.validate_heart_rate(data.get('hr'))
 
             # Validate temperature
-            validated['temp'] = cls.validate_temperature(
+            temp_f = cls.validate_temperature(
                 data.get('temp'),
                 data.get('temp_unit', 'F')
             )
+            validated['temp'] = temp_f  # Fahrenheit for display/storage
+            validated['temp_celsius'] = cls.fahrenheit_to_celsius(temp_f)  # Celsius for ML model
+
+            # Validate respiration and oxygen saturation (NEWS2 critical vitals)
+            validated['respiration_rate'] = cls.validate_respiration_rate(data.get('respiration_rate'))
+            validated['spo2'] = cls.validate_spo2(data.get('spo2'))
 
             # Validate symptoms
             validated['symptoms'] = cls.validate_symptoms(data.get('symptoms'))
