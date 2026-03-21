@@ -16,11 +16,11 @@ this Proprietary License Agreement ("Agreement").
 1. OWNERSHIP AND COPYRIGHT
 
 The SmartTriage Dashboard is proprietary software, fully owned and copyrighted
-by NilalThiruvila (hereinafter "Owner"). All rights, title, and interest in
+by Team Prime (hereinafter "Owner"). All rights, title, and interest in
 and to the Software and any modifications, derivatives, or enhancements thereof
 are exclusively owned by the Owner.
 
-Copyright © 2024-2026 NilalThiruvila. All Rights Reserved.
+Copyright © 2024-2026 Team Prime. All Rights Reserved.
 
 ================================================================================
 
@@ -97,7 +97,7 @@ If you use the Software:
     a) You must prominently display: "Powered by SmartTriage Dashboard"
        in any healthcare system using this Software
     b) You must include this LICENSE file in any authorized deployment
-    c) You must acknowledge NilalThiruvila as the original creator
+    c) You must acknowledge Team Prime as the original creator
     d) You must retain all copyright notices and proprietary labels
     e) You must include a link to the original repository (if applicable)
 
@@ -223,7 +223,7 @@ provisions shall continue in full force and effect.
 
 For licensing inquiries, permissions, or commercial use requests:
 
-    Name: NilalThiruvila
+    Name: Team Prime
     Project: SmartTriage Dashboard
     Purpose: Healthcare AI Triage System
     GitHub: [Your GitHub Repository URL]
