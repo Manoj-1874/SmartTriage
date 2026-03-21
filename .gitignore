@@ -11,4 +11,4 @@ models/
 *.safetensors
 .env.production
 .env.example
-
+.env.development
