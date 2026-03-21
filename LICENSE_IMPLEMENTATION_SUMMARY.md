@@ -60,7 +60,7 @@ A comprehensive proprietary license system has been implemented to protect the S
 **Visible Banner:**
 ```
 PROPRIETARY AND CONFIDENTIAL
-Copyright © 2024-2026 NilalThiruvila
+Copyright © 2024-2026 Team Prime
 All Rights Reserved
 
 UNAUTHORIZED COPYING, DUPLICATION, MODIFICATION, OR DISTRIBUTION

@@ -11,7 +11,7 @@ Effective Date: March 21, 2026
 
 LICENSE_QUICK_REFERENCE = {
     "Project": "SmartTriage Dashboard",
-    "Owner": "NilalThiruvila",
+    "Owner": "Team Prime",
     "License_Type": "PROPRIETARY AND CONFIDENTIAL",
     "Open_Source": False,
     "Status": "ACTIVELY ENFORCED",
@@ -90,7 +90,7 @@ PROJECT STATUS:
   • Type: PROPRIETARY SOFTWARE (NOT OPEN SOURCE)
   • License: Proprietary & Confidential
   • Status: ACTIVELY ENFORCED
-  • Owner: NilalThiruvila
+  • Owner: Team Prime
 
 ═══════════════════════════════════════════════════════════════
 
