@@ -12,3 +12,31 @@ models/
 .env.production
 .env.example
 .env.development
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Sensitive files - NEVER COMMIT
+.credentials
+credentials.json
+secrets.json
+api_keys.txt
+auth_tokens.txt
+private_keys/
+*.pem
+*.key
+
+# Keep LICENSE and README - these are essential
+!LICENSE
+!COPYRIGHT.txt
+!REDISTRIBUTION.md
+!README.md

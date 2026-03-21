@@ -1,0 +1,78 @@
+================================================================================
+SMARTTRIAGE DASHBOARD - COPYRIGHT NOTICE
+================================================================================
+
+PROPRIETARY AND CONFIDENTIAL
+
+Copyright © 2024-2026 NilalThiruvila
+All Rights Reserved.
+
+This software includes proprietary algorithms, machine learning models, and
+healthcare data analysis systems that are protected by intellectual property
+law and trade secret protection.
+
+UNAUTHORIZED COPYING, DUPLICATION, MODIFICATION, OR DISTRIBUTION IS STRICTLY
+PROHIBITED AND WILL RESULT IN LEGAL PROSECUTION.
+
+================================================================================
+
+LEGAL WARNING - DO NOT COPY OR DISTRIBUTE
+
+This software is protected under:
+  • Copyright Law - All source code and algorithms
+  • Patent Protection - AI/ML models and healthcare decision logic
+  • Trade Secret Law - Proprietary optimization techniques
+  • Contract Law - Licensing agreement terms
+
+PENALTY FOR UNAUTHORIZED USE:
+  • Civil damages up to $10,000+ per instance
+  • Injunctive relief (court orders to stop use)
+  • Attorney fees and court costs
+  • Criminal prosecution for willful infringement
+
+================================================================================
+
+PERMITTED USES:
+  ✓ Internal evaluation and testing
+  ✓ Educational purposes (with permission)
+  ✓ Licensed healthcare deployment (with written authorization)
+
+PROHIBITED USES:
+  ✗ Commercial deployment without license
+  ✗ Duplication or copying
+  ✗ Reverse engineering
+  ✗ Creating derivative works
+  ✗ Distribution to third parties
+  ✗ Integration into competing products
+
+================================================================================
+
+FOR LICENSING OR PERMISSION INQUIRIES:
+
+Contact: NilalThiruvila
+GitHub: [Your Repository]
+Email: [Your Email]
+
+DO NOT attempt to bypass or circumvent these protections.
+All violations will be documented and pursued legally.
+
+================================================================================
+
+MODIFICATION NOTICE:
+
+The source code in this repository is READ-ONLY for authorized users.
+Any attempts to modify, patch, or extend this software are prohibited
+without explicit written permission from the copyright holder.
+
+Modifications will be detected through:
+  • Git commit history
+  • File integrity checks
+  • Deployment monitoring
+  • Security audits
+
+================================================================================
+
+Last Updated: March 21, 2026
+Status: ACTIVE - LEGALLY ENFORCEABLE
+
+================================================================================

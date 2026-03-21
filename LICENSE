@@ -1,0 +1,260 @@
+SMARTTRIAGE DASHBOARD - PROPRIETARY LICENSE AGREEMENT
+
+Version 1.0
+Effective Date: March 21, 2026
+
+================================================================================
+
+IMPORTANT: READ THIS LICENSE CAREFULLY BEFORE USING THIS SOFTWARE.
+
+by downloading, installing, or using the SmartTriage Dashboard software
+(hereinafter "Software"), you agree to be bound by the terms and conditions of
+this Proprietary License Agreement ("Agreement").
+
+================================================================================
+
+1. OWNERSHIP AND COPYRIGHT
+
+The SmartTriage Dashboard is proprietary software, fully owned and copyrighted
+by NilalThiruvila (hereinafter "Owner"). All rights, title, and interest in
+and to the Software and any modifications, derivatives, or enhancements thereof
+are exclusively owned by the Owner.
+
+Copyright © 2024-2026 NilalThiruvila. All Rights Reserved.
+
+================================================================================
+
+2. LICENSE GRANT
+
+The Owner grants the User a LIMITED, NON-EXCLUSIVE, NON-TRANSFERABLE license
+to use the Software solely for:
+
+    a) Internal evaluation and testing purposes only
+    b) Personal, non-commercial healthcare systems investigation
+    c) Educational purposes at authorized institutions
+    d) Licensed clinical or hospital deployment only (with explicit written
+       permission from Owner)
+
+This license is strictly LIMITED and does NOT grant any rights beyond those
+explicitly stated in this Agreement.
+
+================================================================================
+
+3. PROHIBITED ACTIONS
+
+You STRICTLY MAY NOT:
+
+    a) DUPLICATE, COPY, or CLONE the Software or any portion thereof
+    b) REVERSE ENGINEER, DECOMPILE, or DISASSEMBLE the Software
+    c) CREATE DERIVATIVE WORKS based on the Software
+    d) MODIFY, ALTER, or ADAPT the Software in any way
+    e) DISTRIBUTE, PUBLISH, or SELL the Software or source code
+    f) SUBLICENSE the Software to any third party
+    g) TRANSFER the Software to another person or organization
+    h) REMOVE OR OBSCURE any copyright, trademark, or proprietary notices
+    i) USE the Software for any COMMERCIAL PURPOSE without explicit
+       written consent
+    j) COMPETE with the Owner using the Software or its technologies
+    k) USE the Software to develop a similar healthcare triage system
+    l) BUNDLE the Software with other products or services
+    m) EXTRACT the machine learning models for standalone use
+    n) SHARE credentials, authentication tokens, or access methods
+    o) DEPLOY the Software on public cloud platforms without authorization
+    p) EXPOSE the source code or internal mechanisms to third parties
+
+================================================================================
+
+4. RESTRICTIONS ON MODIFICATIONS
+
+    a) No modifications are permitted except as necessary for installation
+       and configuration for authorized use cases
+    b) Any bug fixes or security patches must be reported to Owner
+       immediately and may not be deployed without approval
+    c) Configuration changes must remain within the original scope of
+       functionality
+    d) Custom extensions or plugins require explicit written permission
+    e) Database schema modifications are prohibited
+
+================================================================================
+
+5. INTELLECTUAL PROPERTY PROTECTION
+
+    a) All proprietary algorithms, machine learning models, and heuristics
+       remain the exclusive intellectual property of Owner
+    b) You acknowledge that the Software contains valuable trade secrets
+       and confidential information
+    c) The XGBoost models, BERT implementations, and risk assessment
+       algorithms are protected by copyright and trade secret law
+    d) You agree to take all reasonable precautions to protect the
+       confidentiality of the Software
+
+================================================================================
+
+6. ATTRIBUTION REQUIREMENT
+
+If you use the Software:
+
+    a) You must prominently display: "Powered by SmartTriage Dashboard"
+       in any healthcare system using this Software
+    b) You must include this LICENSE file in any authorized deployment
+    c) You must acknowledge NilalThiruvila as the original creator
+    d) You must retain all copyright notices and proprietary labels
+    e) You must include a link to the original repository (if applicable)
+
+================================================================================
+
+7. COMMERCIAL USE PROHIBITION
+
+    a) The Software is STRICTLY PROHIBITED for commercial use without
+       explicit written licensing agreement from Owner
+    b) Commercial use includes, but is not limited to:
+       - Providing healthcare services for profit using this Software
+       - Charging fees for access to systems using this Software
+       - Selling the Software or derivatives
+       - Using the Software in a hospital/clinic for patient care and
+         billing
+       - Offering the Software as a SaaS (Software as a Service) solution
+
+    c) If you require commercial licensing, contact: [owner.contact.info]
+
+================================================================================
+
+8. NO WARRANTY AND LIMITATION OF LIABILITY
+
+    a) THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND,
+       EXPRESS OR IMPLIED
+    b) OWNER DISCLAIMS ALL WARRANTIES INCLUDING MERCHANTABILITY, FITNESS
+       FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT
+    c) OWNER SHALL NOT BE LIABLE FOR ANY DAMAGES, INCLUDING BUT NOT LIMITED
+       TO INDIRECT, INCIDENTAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES
+    d) OWNER SHALL NOT BE LIABLE FOR DATA LOSS, SYSTEM FAILURES, OR
+       HEALTHCARE OUTCOMES
+    e) YOU USE THE SOFTWARE AT YOUR OWN RISK AND ASSUME ALL RESPONSIBILITY
+
+================================================================================
+
+9. TERMINATION
+
+    a) This license is effective until terminated
+    b) Owner may terminate this license immediately if you violate any
+       terms of this Agreement
+    c) Upon termination, you must immediately:
+       - Stop all use of the Software
+       - Delete all copies from your systems
+       - Return or certify destruction of all materials
+       - Delete any derivative works or copies
+
+    d) Termination does not relieve you of obligations for past violations
+
+================================================================================
+
+10. AUDITING RIGHTS
+
+    a) Owner reserves the right to audit your use of the Software
+    b) You must grant Owner access to verify compliance with this Agreement
+    c) Audits may be performed annually or after suspected violations
+    d) You must maintain logs of all access and modifications to the Software
+    e) You must respond to audit requests within 15 days
+
+================================================================================
+
+11. DATA PRIVACY AND SECURITY
+
+    a) You are responsible for:
+       - Securing the Software and all data it processes
+       - Ensuring HIPAA compliance if handling patient data
+       - Encrypting all transmissions and storage
+       - Implementing appropriate access controls
+       - Maintaining audit logs of all activity
+
+    b) You must NOT:
+       - Share the Software with unauthorized parties
+       - Expose patient data processed by the Software
+       - Store credentials in unsecured locations
+       - Log sensitive information in plain text
+
+================================================================================
+
+12. INDEMNIFICATION
+
+You agree to indemnify, defend, and hold harmless Owner from any claims,
+damages, or losses arising from:
+
+    a) Your use or misuse of the Software
+    b) Your violation of this Agreement
+    c) Your violation of applicable laws or regulations
+    d) Healthcare outcomes or patient safety issues
+    e) Data breaches or security incidents
+    f) Your unauthorized modifications or integrations
+
+================================================================================
+
+13. APPLICABLE LAW
+
+This Agreement is governed by the laws of [JURISDICTION - India/Your Country],
+without regard to its conflict of law provisions. You irrevocably submit to
+the exclusive jurisdiction of the courts in [YOUR JURISDICTION].
+
+================================================================================
+
+14. ENTIRE AGREEMENT
+
+This Agreement constitutes the entire agreement between you and Owner regarding
+the Software. Any previous agreements, understandings, or negotiations are void.
+This Agreement supersedes all other terms, conditions, or communications.
+
+================================================================================
+
+15. AMENDMENT
+
+Owner reserves the right to modify this Agreement at any time. Continued use
+of the Software after modifications constitutes acceptance of the new terms.
+
+================================================================================
+
+16. SEVERABILITY
+
+If any provision of this Agreement is found to be unenforceable, the remaining
+provisions shall continue in full force and effect.
+
+================================================================================
+
+17. CONTACT INFORMATION
+
+For licensing inquiries, permissions, or commercial use requests:
+
+    Name: NilalThiruvila
+    Project: SmartTriage Dashboard
+    Purpose: Healthcare AI Triage System
+    GitHub: [Your GitHub Repository URL]
+    Email: [Your Email Address]
+
+    IMPORTANT: Unauthorized use will be LEGALLY PURSUED.
+
+================================================================================
+
+ACCEPTANCE
+
+BY DOWNLOADING, INSTALLING, OR USING THIS SOFTWARE, YOU ACKNOWLEDGE THAT YOU
+HAVE READ AND UNDERSTOOD THIS AGREEMENT AND AGREE TO BE BOUND BY ALL OF ITS
+TERMS AND CONDITIONS.
+
+IF YOU DO NOT AGREE TO THESE TERMS, PLEASE DO NOT USE THE SOFTWARE.
+
+================================================================================
+
+NO EXCEPTIONS OR MODIFICATIONS TO THIS LICENSE ARE PERMITTED WITHOUT EXPLICIT
+WRITTEN AUTHORIZATION FROM OWNER.
+
+VIOLATION OF THESE TERMS MAY RESULT IN LEGAL ACTION, INCLUDING CIVIL AND
+CRIMINAL PENALTIES.
+
+================================================================================
+
+END OF LICENSE AGREEMENT
+
+Last Updated: March 21, 2026
+Version: 1.0 (Proprietary)
+Status: ACTIVE AND ENFORCEABLE
+
+================================================================================
