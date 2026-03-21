@@ -10,3 +10,5 @@ instance/
 models/
 *.safetensors
 .env.production
+.env.example
+
