@@ -20,13 +20,48 @@ by Team Prime (hereinafter "Owner"). All rights, title, and interest in
 and to the Software and any modifications, derivatives, or enhancements thereof
 are exclusively owned by the Owner.
 
-Copyright © 2024-2026 Team Prime. All Rights Reserved.
+OWNER/CREATOR:
+    - Manoj Palanisamy (Manoj P)
+    - Email: manojpalanisamy515@gmail.com
+    - Has absolute authority and all rights to this Software
+
+Copyright © 2024-2026 Team Prime / Manoj Palanisamy. All Rights Reserved.
+
+================================================================================
+
+1B. OWNER'S UNRESTRICTED RIGHTS
+
+The Owner (Team Prime) has FULL, UNLIMITED, UNRESTRICTED rights to:
+
+    a) Modify, alter, delete, or completely rewrite the Software
+    b) Use the Software for ANY purpose, including commercial purposes
+    c) Create derivative works and modifications
+    d) Distribute, sell, license, or sublicense the Software
+    e) Change this license at any time
+    f) Grant additional licenses or permissions to third parties
+    g) Commercialize the Software in any way
+    h) Extract and use machine learning models independently
+    i) Deploy on any platform, including public clouds
+    j) Share source code with anyone of their choosing
+    k) Charge fees for access or use of the Software
+    l) Use the Software to compete with others
+    m) Do ANYTHING with the Software without limitation
+
+OWNER CONTACT (Full Authority):
+    - Manoj P (manojpalanisamy515@gmail.com) - AKA: Owner/Creator
+    - Has UNLIMITED rights over all aspects of the Software
+    - May grant or deny permissions as they see fit
+    - May modify this license unilaterally
+    - May enforce this license against all parties
+
+NO RESTRICTIONS APPLY TO THE OWNER.
+This license does NOT limit the Owner in any way.
 
 ================================================================================
 
 2. LICENSE GRANT
 
-The Owner grants the User a LIMITED, NON-EXCLUSIVE, NON-TRANSFERABLE license
+The Owner grants external Users a LIMITED, NON-EXCLUSIVE, NON-TRANSFERABLE license
 to use the Software solely for:
 
     a) Internal evaluation and testing purposes only
@@ -40,9 +75,51 @@ explicitly stated in this Agreement.
 
 ================================================================================
 
-3. PROHIBITED ACTIONS
+2A. AUTHORIZED TEAM MEMBERS EXCEPTION
 
-You STRICTLY MAY NOT:
+The following individuals are explicitly AUTHORIZED to:
+    - Access the source code repository
+    - Clone, pull, and work with the code
+    - Modify, fix, and improve the Software
+    - Commit and push changes to the team repository
+    - Review and merge pull requests
+    - Collaborate on development
+
+AUTHORIZED TEAM MEMBERS (Team Prime):
+    1. Manoj P - manojpalanisamy515@gmail.com
+    2. Kiran Sekar C - kiransekarc.23cse@kongu.edu
+    3. Lokesh P - lokeshp.23cse@kongu.edu
+
+REQUIREMENTS FOR AUTHORIZED TEAM MEMBERS:
+    a) Must be explicitly listed in this section with name and email
+    b) Must work within the team's private repository
+    c) Must comply with all other sections of this Agreement
+    d) Must NOT distribute code to any external party
+    e) Must NOT share login credentials or access methods
+    f) Must sign an NDA (Non-Disclosure Agreement) if requested
+    g) Must maintain code confidentiality even after leaving the team
+
+SCOPE OF AUTHORIZATION:
+    - Team members MAY modify the code for internal development
+    - Team members MAY commit to private repository
+    - Team members MAY work on bugs, features, improvements
+    - Team members MAY NOT sublicense to others
+    - Team members MAY NOT claim independent ownership
+    - Team members MAY NOT use code after leaving the team
+
+TERMINATION FOR TEAM MEMBERS:
+    When a team member leaves:
+    a) Their access must be revoked immediately
+    b) They must delete all local copies of code
+    c) They may NOT fork the repository
+    d) They may NOT retain code for personal use
+    e) They remain bound by confidentiality obligations indefinitely
+
+================================================================================
+
+3. PROHIBITED ACTIONS (FOR EXTERNAL PARTIES ONLY)
+
+EXTERNAL PARTIES (non-team members) STRICTLY MAY NOT:
 
     a) DUPLICATE, COPY, or CLONE the Software or any portion thereof
     b) REVERSE ENGINEER, DECOMPILE, or DISASSEMBLE the Software
@@ -61,6 +138,14 @@ You STRICTLY MAY NOT:
     n) SHARE credentials, authentication tokens, or access methods
     o) DEPLOY the Software on public cloud platforms without authorization
     p) EXPOSE the source code or internal mechanisms to third parties
+
+IMPORTANT EXEMPTION:
+These prohibitions do NOT apply to:
+    - Authorized Team Members (listed in Section 2A)
+    - They MAY modify, access, and work on the code
+    - But they must follow Section 2A authorization requirements
+    - Restrictions (a), (e), (f), (g), (h), (i), (j), (k), (l), (m), (n), (o), (p)
+      STILL APPLY to team members (no external distribution)
 
 ================================================================================
 
