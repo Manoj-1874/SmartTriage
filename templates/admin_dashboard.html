@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — DDHS Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin_dashboard.css') }}">
+</head>
+<body>
+    <div class="shell">
+        <!-- ━━━━ SIDEBAR ━━━━ -->
+        <aside class="sidebar">
+            <div class="s-brand">
+                <div class="s-logo-box">🏥</div>
+                <div class="s-brand-text">
+                    <div class="s-brand-name">DDHS</div>
+                    <div class="s-brand-tag">Emergency Ops</div>
+                </div>
+            </div>
+
+            <button class="s-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+
+            <div class="s-user">
+                <div class="s-ava">
+                    <i class="fas fa-shield-alt"></i>
+                    <div class="s-ava-dot"></div>
+                </div>
+                <div class="s-user-text">
+                    <div class="s-uname">Admin</div>
+                    <div class="s-urole">Operations</div>
+                </div>
+            </div>
+
+            <nav class="s-nav">
+                <div class="s-group">Emergency</div>
+                <a href="#dashboard" class="s-link active" onclick="showSection('dashboard'); return false;">
+                    <div class="s-icon">📊</div>
+                    <span class="s-label">Dashboard</span>
+                </a>
+                <a href="#emergencies" class="s-link" onclick="showSection('emergencies'); return false;">
+                    <div class="s-icon">🚨</div>
+                    <span class="s-label">Emergency Alerts</span>
+                </a>
+                <a href="#dispatch" class="s-link" onclick="showSection('dispatch'); return false;">
+                    <div class="s-icon">🚑</div>
+                    <span class="s-label">Ambulance Dispatch</span>
+                </a>
+
+                <div class="s-group" style="margin-top: 12px;">Tracking</div>
+                <a href="#tracking" class="s-link" onclick="showSection('tracking'); return false;">
+                    <div class="s-icon">📍</div>
+                    <span class="s-label">Case Tracking</span>
+                </a>
+                <a href="#workforce" class="s-link" onclick="showSection('workforce'); return false;">
+                    <div class="s-icon">👥</div>
+                    <span class="s-label">Workforce</span>
+                </a>
+                <a href="#reports-action" class="s-link" onclick="showSection('reports-action'); return false;">
+                    <div class="s-icon">📋</div>
+                    <span class="s-label">Patient Reports</span>
+                </a>
+
+                <div class="s-group" style="margin-top: 12px;">Analytics</div>
+                <a href="#reports" class="s-link" onclick="showSection('reports'); return false;">
+                    <div class="s-icon">📈</div>
+                    <span class="s-label">Reports</span>
+                </a>
+                <a href="#settings" class="s-link" onclick="showSection('settings'); return false;">
+                    <div class="s-icon">⚙️</div>
+                    <span class="s-label">Settings</span>
+                </a>
+            </nav>
+
+            <div class="s-footer">
+                <div class="s-status">
+                    <div class="s-dot"></div>
+                    <span class="s-status-txt">Live Monitoring</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ━━━━ MAIN ━━━━ -->
+        <main class="main">
+            <!-- Topbar -->
+            <div class="topbar">
+                <div class="t-breadcrumb">
+                    <span class="t-breadcrumb-active">Emergency Management</span>
+                    <span class="t-sep">/</span>
+                    <span id="breadcrumbPage">Dashboard</span>
+                </div>
+                <div class="t-right">
+                    <div class="t-clock" id="timeDisplay">09:47:28 AM</div>
+                    <a href="/logout" class="logout-btn">Sign Out</a>
+                </div>
+            </div>
+
+            <!-- Page Container -->
+            <div class="page-container">
+                <!-- ━━━━ DASHBOARD SECTION ━━━━ -->
+                <section class="content-section active" id="dashboard-section">
+                    <div class="section-header">
+                        <h1>Emergency Dashboard</h1>
+                        <p>Real-time emergency management overview</p>
+                    </div>
+
+                    <!-- KPI Grid -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card urgent">
+                            <div class="kpi-icon">🚨</div>
+                            <div class="kpi-content">
+                                <h3>Urgent Cases</h3>
+                                <div class="kpi-value" id="urgentCount">0</div>
+                                <small>Waiting Response</small>
+                            </div>
+                        </div>
+                        <div class="kpi-card active">
+                            <div class="kpi-icon">🚑</div>
+                            <div class="kpi-content">
+                                <h3>Active Ambulances</h3>
+                                <div class="kpi-value" id="activeAmbCount">0</div>
+                                <small>En Route / Responding</small>
+                            </div>
+                        </div>
+                        <div class="kpi-card high-risk">
+                            <div class="kpi-icon">⚠️</div>
+                            <div class="kpi-content">
+                                <h3>High Risk Cases</h3>
+                                <div class="kpi-value" id="highRiskCount">0</div>
+                                <small>Requiring Attention</small>
+                            </div>
+                        </div>
+                        <div class="kpi-card responding">
+                            <div class="kpi-icon">✅</div>
+                            <div class="kpi-content">
+                                <h3>Cases Handled</h3>
+                                <div class="kpi-value" id="handledCount">0</div>
+                                <small>Today</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Queue -->
+                    <div class="realtime-section">
+                        <div class="status-container">
+                            <h2>🔴 Live Emergency Queue</h2>
+                            <div class="emergency-queue" id="emergencyQueue">
+                                <div class="queue-item">
+                                    <div class="queue-priority urgent">URGENT</div>
+                                    <div class="queue-info"><strong>Patient ID: #001</strong></div>
+                                    <div class="queue-location">Chest Pain + Cough | Risk Score: 35</div>
+                                    <div class="queue-location">📍 Location: Downtown Medical Center</div>
+                                    <button class="btn-dispatch-quick" onclick="showSection('dispatch')">DISPATCH NOW</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="status-container">
+                            <h2>🚑 Ambulance Fleet Status</h2>
+                            <div class="fleet-status" id="fleetStatus">
+                                <div class="ambulance-item">
+                                    <div class="amb-badge active">Active</div>
+                                    <div class="amb-info"><strong>AMB-001</strong></div>
+                                    <div class="amb-crew">En Route to Emergency - ETA 3 min</div>
+                                    <div class="amb-crew">👨‍⚕️ Crew: Dr. Sharma, Paramedic Patel</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ EMERGENCY ALERTS SECTION ━━━━ -->
+                <section class="content-section" id="emergencies-section">
+                    <div class="section-header">
+                        <h1>Emergency Alerts</h1>
+                        <p>Monitor all high-risk cases requiring immediate attention</p>
+                    </div>
+
+                    <div class="filters-bar">
+                        <input type="text" id="searchPatient" placeholder="Search by patient name or ID..." />
+                        <select id="filterSeverity">
+                            <option value="">All Severity Levels</option>
+                            <option value="critical">🔴 Critical</option>
+                            <option value="urgent">🟠 Urgent</option>
+                            <option value="high">🟡 High</option>
+                        </select>
+                        <select id="filterStatus">
+                            <option value="">All Statuses</option>
+                            <option value="pending">Pending</option>
+                            <option value="dispatched">Dispatched</option>
+                            <option value="en-route">En Route</option>
+                        </select>
+                    </div>
+
+                    <div class="alerts-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Priority</th>
+                                    <th>Patient Info</th>
+                                    <th>Symptoms</th>
+                                    <th>Risk Score</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="emergenciesTable">
+                                <tr>
+                                    <td colspan="8" style="text-align: center; padding: 20px; color: var(--t-muted);">Loading emergency cases...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- ━━━━ AMBULANCE DISPATCH SECTION ━━━━ -->
+                <section class="content-section" id="dispatch-section">
+                    <div class="section-header">
+                        <h1>Ambulance Dispatch</h1>
+                        <p>Assign ambulances to emergency cases</p>
+                    </div>
+
+                    <div class="dispatch-grid">
+                        <div class="dispatch-form-container">
+                            <h3>Dispatch Assignment</h3>
+                            <form id="dispatchForm" onsubmit="handleDispatch(event)">
+                                <div class="form-group">
+                                    <label>Select Emergency Case</label>
+                                    <select id="caseSelect" required>
+                                        <option value="">Choose a case...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Assign Ambulance</label>
+                                    <select id="ambulanceSelect" required>
+                                        <option value="">Choose ambulance...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Paramedic Lead</label>
+                                    <select id="paramedic" required>
+                                        <option value="">Choose paramedic...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Destination Hospital</label>
+                                    <select id="hospital" required>
+                                        <option value="">Choose hospital...</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Priority Level</label>
+                                    <div class="priority-buttons">
+                                        <label><input type="radio" name="priority" value="critical" required /> Critical</label>
+                                        <label><input type="radio" name="priority" value="urgent" /> Urgent</label>
+                                        <label><input type="radio" name="priority" value="high" /> High</label>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>Special Instructions</label>
+                                    <textarea id="notes" placeholder="Add any special notes..."></textarea>
+                                </div>
+
+                                <button type="submit" class="btn-dispatch-large">🚑 Dispatch Ambulance</button>
+                            </form>
+                        </div>
+
+                        <div class="map-container">
+                            <h3>Dispatch Map</h3>
+                            <div class="simple-map">
+                                <div class="map-placeholder">
+                                    📍 Real-time GPS Map<br>
+                                    <small>Showing ambulance location</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ CASE TRACKING SECTION ━━━━ -->
+                <section class="content-section" id="tracking-section">
+                    <div class="section-header">
+                        <h1>Case Tracking</h1>
+                        <p>Track emergency response progression</p>
+                    </div>
+
+                    <div class="tracking-container">
+                        <div class="case-timeline">
+                            <h3>Case Timeline</h3>
+                            <div class="timeline">
+                                <div class="timeline-item completed">
+                                    <div class="timeline-marker">✓</div>
+                                    <div class="timeline-content">
+                                        <strong>AI Assessment Completed</strong>
+                                        <small>Analysis of vital signs and symptoms</small>
+                                    </div>
+                                </div>
+                                <div class="timeline-item completed">
+                                    <div class="timeline-marker">✓</div>
+                                    <div class="timeline-content">
+                                        <strong>Alert Triggered</strong>
+                                        <small>High-risk case identified</small>
+                                    </div>
+                                </div>
+                                <div class="timeline-item completed">
+                                    <div class="timeline-marker">✓</div>
+                                    <div class="timeline-content">
+                                        <strong>Ambulance Dispatched</strong>
+                                        <small>Unit AMB-001 en route</small>
+                                    </div>
+                                </div>
+                                <div class="timeline-item active">
+                                    <div class="timeline-marker">→</div>
+                                    <div class="timeline-content">
+                                        <strong>En Route</strong>
+                                        <small>ETA 3 minutes</small>
+                                    </div>
+                                </div>
+                                <div class="timeline-item pending">
+                                    <div class="timeline-marker">●</div>
+                                    <div class="timeline-content">
+                                        <strong>Patient Pickup</strong>
+                                        <small>Awaiting arrival at location</small>
+                                    </div>
+                                </div>
+                                <div class="timeline-item pending">
+                                    <div class="timeline-marker">●</div>
+                                    <div class="timeline-content">
+                                        <strong>Hospital Arrival</strong>
+                                        <small>Handoff to medical staff</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="case-details">
+                            <h3>Case Details</h3>
+                            <div class="details-box">
+                                <p><strong>Patient Name:</strong> Henry Cavil</p>
+                                <p><strong>Age:</strong> 22 years</p>
+                                <p><strong>Gender:</strong> Male</p>
+                                <p><strong>Blood Type:</strong> AB+</p>
+                                <p><strong>Risk Level:</strong> <span style="color: #DC2626; font-weight: 600;">URGENT</span></p>
+                                <p><strong>Risk Score:</strong> 85/100</p>
+                                <p><strong>Location:</strong> Downtown Medical Center</p>
+                                <p><strong>Ambulance:</strong> AMB-001</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ WORKFORCE MONITORING SECTION ━━━━ -->
+                <section class="content-section" id="workforce-section">
+                    <div class="section-header">
+                        <h1>Workforce Monitoring</h1>
+                        <p>Track attendance and manage PHC doctors and nurses</p>
+                    </div>
+
+                    <div class="workforce-container">
+                        <!-- Attendance Filters -->
+                        <div class="attendance-filters">
+                            <select id="filterPhc">
+                                <option value="">All PHC Facilities</option>
+                                <option value="phc_north">PHC North</option>
+                                <option value="phc_south">PHC South</option>
+                                <option value="phc_east">PHC East</option>
+                                <option value="phc_west">PHC West</option>
+                            </select>
+                            <select id="filterRole">
+                                <option value="">All Roles</option>
+                                <option value="phc_doctor">PHC Doctors</option>
+                                <option value="phc_nurse">PHC Nurses</option>
+                            </select>
+                            <select id="filterAttendance">
+                                <option value="">All Status</option>
+                                <option value="present">Present Today</option>
+                                <option value="absent">Absent</option>
+                                <option value="late">Late Check-in</option>
+                            </select>
+                        </div>
+
+                        <!-- Attendance Summary -->
+                        <div class="attendance-summary">
+                            <div class="summary-card">
+                                <div class="summary-icon">✅</div>
+                                <div class="summary-info">
+                                    <div class="summary-label">Present Today</div>
+                                    <div class="summary-value" id="presentCount">12</div>
+                                </div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon">❌</div>
+                                <div class="summary-info">
+                                    <div class="summary-label">Absent</div>
+                                    <div class="summary-value" id="absentCount">2</div>
+                                </div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon">⏰</div>
+                                <div class="summary-info">
+                                    <div class="summary-label">Late Check-in</div>
+                                    <div class="summary-value" id="lateCount">1</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Attendance Table -->
+                        <div class="attendance-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Role</th>
+                                        <th>PHC Facility</th>
+                                        <th>Check-in Time</th>
+                                        <th>Status</th>
+                                        <th>Current Patients</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="attendanceTable">
+                                    <tr>
+                                        <td colspan="7" style="text-align: center; padding: 20px; color: var(--t-muted);">Loading staff attendance...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Staff Grid View -->
+                        <div style="margin-top: 30px;">
+                            <h3>Staff Directory</h3>
+                            <div class="staff-grid" id="staffGrid">
+                                <div class="staff-card">
+                                    <div class="staff-header">
+                                        <div class="staff-badge">👨‍⚕️</div>
+                                        <div class="staff-status present">Present</div>
+                                    </div>
+                                    <h4>Dr. Rajesh Kumar</h4>
+                                    <div class="staff-role">PHC Doctor</div>
+                                    <div class="staff-facility">PHC North</div>
+                                    <div class="staff-check-in">✓ 08:32 AM</div>
+                                    <div class="staff-contact">📞 9876543210</div>
+                                    <div class="staff-actions">
+                                        <button class="btn-small" onclick="alert('Call Dr. Rajesh Kumar')">Call</button>
+                                        <button class="btn-small" onclick="alert('Assign patient to Dr. Rajesh Kumar')">Assign</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ PATIENT REPORTS & ACTION SECTION ━━━━ -->
+                <section class="content-section" id="reports-action-section">
+                    <div class="section-header">
+                        <h1>Patient Reports & Actions</h1>
+                        <p>Monitor patient complaints and take action</p>
+                    </div>
+
+                    <div class="reports-action-container">
+                        <!-- Report Filters -->
+                        <div class="report-filters">
+                            <input type="text" id="searchReport" placeholder="Search by patient or PHC facility..." />
+                            <select id="filterReportStatus">
+                                <option value="">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="under-review">Under Review</option>
+                                <option value="assigned">Assigned</option>
+                                <option value="resolved">Resolved</option>
+                            </select>
+                            <select id="filterReportPriority">
+                                <option value="">All Priority</option>
+                                <option value="critical">Critical</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+
+                        <!-- Reports Summary -->
+                        <div class="reports-summary">
+                            <div class="report-card-summary">
+                                <div class="rs-icon">📩</div>
+                                <div class="rs-info">
+                                    <div class="rs-label">Pending Reports</div>
+                                    <div class="rs-value" id="pendingReports">5</div>
+                                </div>
+                            </div>
+                            <div class="report-card-summary">
+                                <div class="rs-icon">🔍</div>
+                                <div class="rs-info">
+                                    <div class="rs-label">Under Review</div>
+                                    <div class="rs-value" id="reviewReports">3</div>
+                                </div>
+                            </div>
+                            <div class="report-card-summary">
+                                <div class="rs-icon">✅</div>
+                                <div class="rs-info">
+                                    <div class="rs-label">Resolved Today</div>
+                                    <div class="rs-value" id="resolvedReports">8</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reports Table -->
+                        <div class="reports-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Patient</th>
+                                        <th>Report Type</th>
+                                        <th>PHC / Staff</th>
+                                        <th>Priority</th>
+                                        <th>Status</th>
+                                        <th>Date</th>
+                                        <th>Assigned To</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reportsTable">
+                                    <tr>
+                                        <td colspan="8" style="text-align: center; padding: 20px; color: var(--t-muted);">Loading patient reports...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Delegation Modal -->
+                        <div style="margin-top: 30px;">
+                            <h3>Assign Actions to PDL Staff</h3>
+                            <div class="delegation-form">
+                                <div class="form-row">
+                                    <input type="text" id="delegatePatient" placeholder="Patient Name or ID" />
+                                    <select id="delegateRole">
+                                        <option value="">Assign To...</option>
+                                        <option value="phc_doctor">PHC Doctor</option>
+                                        <option value="phc_nurse">PHC Nurse</option>
+                                    </select>
+                                    <input type="text" id="delegatePerson" placeholder="Select staff member" />
+                                </div>
+                                <div class="form-row">
+                                    <select id="delegateAction">
+                                        <option value="">Action Type...</option>
+                                        <option value="follow-up-call">Follow-up Call</option>
+                                        <option value="home-visit">Home Visit</option>
+                                        <option value="medication-check">Medication Check</option>
+                                        <option value="vital-signs-check">Vital Signs Check</option>
+                                    </select>
+                                    <textarea id="delegateNotes" placeholder="Notes or instructions..."></textarea>
+                                    <button class="btn-primary" onclick="handleDelegation()">Delegate Action</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ REPORTS SECTION ━━━━ -->
+                <section class="content-section" id="reports-section">
+                    <div class="section-header">
+                        <h1>Reports & Analytics</h1>
+                        <p>Performance metrics and analytics</p>
+                    </div>
+
+                    <div class="reports-grid">
+                        <div class="report-card">
+                            <h3>Daily Statistics</h3>
+                            <div class="stat-item">
+                                <span>Total Cases</span>
+                                <strong>24</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span>Cases Resolved</span>
+                                <strong>22</strong>
+                            </div>
+                            <div class="stat-item">
+                                <span>Avg Response Time</span>
+                                <strong>4.2 min</strong>
+                            </div>
+                        </div>
+
+                        <div class="report-card">
+                            <h3>Performance Metrics</h3>
+                            <div class="metric-bar">
+                                <label class="metric-label">Response Rate: 95%</label>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 95%"></div>
+                                </div>
+                            </div>
+                            <div class="metric-bar">
+                                <label class="metric-label">Success Rate: 88%</label>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: 88%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="report-card">
+                            <h3>Hospital Capacity</h3>
+                            <div class="hospital-status">
+                                <div class="hosp-item">
+                                    <strong>District General</strong>
+                                    <div class="capacity-bar">
+                                        <div class="capacity-fill" style="width: 75%"></div>
+                                    </div>
+                                    <small>75/100 beds</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ━━━━ SETTINGS SECTION ━━━━ -->
+                <section class="content-section" id="settings-section">
+                    <div class="section-header">
+                        <h1>Settings & Configuration</h1>
+                        <p>Customize your dashboard preferences</p>
+                    </div>
+
+                    <div class="settings-container">
+                        <div class="settings-section">
+                            <h3>Alert Thresholds</h3>
+                            <div class="setting-item">
+                                <label>Risk Score Threshold</label>
+                                <input type="range" min="50" max="100" value="70" />
+                                <span>70</span>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>Notifications</h3>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" checked /> Email Alerts
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" checked /> SMS Alerts
+                                </label>
+                            </div>
+                            <div class="setting-item">
+                                <label>
+                                    <input type="checkbox" checked /> Sound Alerts
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <h3>System Preferences</h3>
+                            <button class="btn-secondary">Save Settings</button>
+                            <button class="btn-secondary">Reset to Default</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/admin_dashboard.js') }}"></script>
+</body>
+</html>

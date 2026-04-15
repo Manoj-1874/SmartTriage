@@ -494,30 +494,30 @@
     .eye-toggle:hover{color:var(--brand)}
     [data-theme="dark"] .eye-toggle:hover{color:var(--brand-light)}
 
-    /* Doctor fields slide */
-    .doctor-section{
+    /* Healthcare Professional fields slide */
+    .professional-section{
         overflow:hidden;
         max-height:0;
         transition:max-height .45s var(--ease), opacity .35s var(--ease);
         opacity:0;
     }
-    .doctor-section.active{max-height:300px;opacity:1;}
+    .professional-section.active{max-height:300px;opacity:1;}
 
-    .doctor-section-inner{
+    .professional-section-inner{
         background:var(--brand-faint);
         border:1px solid rgba(11,155,122,.2);
         border-radius:var(--radius-md);
         padding:16px;
         margin-bottom:16px;
     }
-    [data-theme="dark"] .doctor-section-inner{background:rgba(11,155,122,.05);}
+    [data-theme="dark"] .professional-section-inner{background:rgba(11,155,122,.05);}
 
-    .doctor-section-label{
+    .professional-section-label{
         display:flex;align-items:center;gap:8px;
         font-size:12px;font-weight:700;color:var(--brand);
         margin-bottom:14px;letter-spacing:.3px;text-transform:uppercase;
     }
-    [data-theme="dark"] .doctor-section-label{color:var(--brand-light)}
+    [data-theme="dark"] .professional-section-label{color:var(--brand-light)}
 
     /* Password strength */
     .pw-strength-bar{
@@ -753,13 +753,7 @@
                                 <span>DDHS Admin</span>
                             </label>
                         </div>
-                        <div class="role-opt">
-                            <input type="radio" name="role" id="rolePhcDoctor" value="phc_doctor" onchange="handleRoleChange()">
-                            <label for="rolePhcDoctor">
-                                <i class="fas fa-stethoscope"></i>
-                                <span>PHC Doctor</span>
-                            </label>
-                        </div>
+
                         <div class="role-opt">
                             <input type="radio" name="role" id="rolePhcNurse" value="phc_nurse" onchange="handleRoleChange()">
                             <label for="rolePhcNurse">
@@ -805,10 +799,10 @@
                     </div>
                 </div>
 
-                <!-- Doctor-only fields -->
-                <div class="doctor-section" id="doctorSection">
-                    <div class="doctor-section-inner">
-                        <div class="doctor-section-label">
+                <!-- Healthcare Professional fields -->
+                <div class="professional-section" id="professionalSection">
+                    <div class="professional-section-inner">
+                        <div class="professional-section-label">
                             <i class="fas fa-stethoscope"></i>
                             Medical Credentials
                         </div>
@@ -963,9 +957,9 @@ document.addEventListener('mousemove', e => {
 /* ─── ROLE TOGGLE ─── */
 function handleRoleChange() {
     const selected = document.querySelector('input[name="role"]:checked')?.value || 'patient';
-    const isDr = ['doctor', 'phc_doctor', 'phc_nurse'].includes(selected);
+    const isHealthcare = ['phc_nurse', 'doctor'].includes(selected);
     const isDdhs = selected === 'ddhs_admin';
-    const section = document.getElementById('doctorSection');
+    const section = document.getElementById('professionalSection');
     const ico     = document.getElementById('formIcoIcon');
     const wrap    = document.getElementById('formIco');
     const title   = document.getElementById('formTitle');
@@ -975,14 +969,14 @@ function handleRoleChange() {
     const exp     = document.getElementById('experience');
     const phcId   = document.getElementById('phc_id');
 
-    section.classList.toggle('active', isDr);
-    spec.required = lic.required = exp.required = isDr;
-    phcId.required = isDr || isDdhs;
+    section.classList.toggle('active', isHealthcare);
+    spec.required = lic.required = exp.required = isHealthcare;
+    phcId.required = isHealthcare || isDdhs;
 
-    if(selected === 'doctor' || selected === 'phc_doctor') {
+    if(selected === 'doctor') {
         ico.className   = 'fas fa-user-md';
-        title.textContent = selected === 'doctor' ? 'Doctor Registration' : 'PHC Doctor Registration';
-        sub.textContent   = 'Join PriorityMed as a Healthcare Provider';
+        title.textContent = 'Doctor Registration';
+        sub.textContent   = 'Join PriorityMed as a Doctor';
     } else if(selected === 'phc_nurse') {
         ico.className   = 'fas fa-user-nurse';
         title.textContent = 'PHC Nurse Registration';

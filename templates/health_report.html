@@ -1,18 +1,33 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriorityMed — My Health Progress</title>
+    <title>PriorityMed â€” My Health Progress</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- Fallback: If Chart.js doesn't load, inject from cdnjs -->
+    <script>
+    setTimeout(() => {
+      if (typeof Chart === 'undefined') {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
+        script.onload = () => {
+          if (typeof renderCharts === 'function') {
+            renderCharts();
+          }
+        };
+        document.head.appendChild(script);
+      }
+    }, 500);
+    </script>
     <script>window.chtlConfig = { chatbotId: "6396798553" }</script>
     <script async data-id="6396798553" id="chtl-script" type="text/javascript" src="https://chatling.ai/js/embed.js"></script>
 <style>
-/* ═══════════════════════════════════════
-   DESIGN TOKENS — full match with dashboard
-═══════════════════════════════════════ */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+   DESIGN TOKENS â€” full match with dashboard
+â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 :root {
     --brand:        #0B9B7A;
     --brand-dark:   #087A60;
@@ -102,7 +117,7 @@
     --brand-pale:   rgba(11,155,122,.07);
 }
 
-/* ═══════════════════════════════════════ RESET */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESET */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{overflow-x:hidden;scroll-behavior:smooth}
 body{
@@ -118,10 +133,10 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border-med);border-radius:99px}
 
-/* ═══════════════════════════════════════ LAYOUT */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LAYOUT */
 .shell{display:flex;min-height:100vh;position:relative;overflow-x:hidden;}
 
-/* ═══════════════════════════════════════ SIDEBAR */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR */
 .sidebar{
     width:var(--sidebar-w);background:var(--sidebar-bg);
     border-right:1px solid var(--sidebar-line);
@@ -222,11 +237,11 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .s-status-txt{color:#4ADE80}
 .sidebar.collapsed .s-status-txt{opacity:0;width:0;overflow:hidden}
 
-/* ═══════════════════════════════════════ MAIN */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MAIN */
 .main{
     margin-left:var(--sidebar-w);
     flex:1;
-    min-width:0;          /* ← crucial: lets flex item shrink below content size */
+    min-width:0;          /* â† crucial: lets flex item shrink below content size */
     width:calc(100% - var(--sidebar-w));
     min-height:100vh;
     display:flex;flex-direction:column;
@@ -238,7 +253,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
     width:calc(100% - var(--sidebar-col));
 }
 
-/* ═══════════════════════════════════════ TOPBAR */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOPBAR */
 .topbar{
     position:sticky;top:0;z-index:200;height:60px;padding:0 28px;
     background:var(--base);border-bottom:1px solid var(--border);
@@ -276,7 +291,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .t-btn:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
 .t-badge{position:absolute;top:5px;right:5px;width:7px;height:7px;background:var(--clr-red);border-radius:50%;border:1.5px solid var(--base);}
 
-/* ═══════════════════════════════════════ PAGE */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PAGE */
 .page{padding:24px 28px 52px;flex:1;min-width:0;overflow-x:hidden;width:100%;}
 .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .sec-label{
@@ -289,7 +304,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .sec-link{color:var(--brand-light)}
 .sec-link:hover{gap:9px}
 
-/* ═══════════════════════════════════════ HERO BANNER */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HERO BANNER */
 .hero-banner{
     background:linear-gradient(135deg, #064E3B 0%, #065F46 35%, #047857 65%, #0B9B7A 100%);
     border-radius:var(--radius-2xl);padding:0;margin-bottom:28px;
@@ -413,7 +428,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .vital-val{font-size:18px;font-weight:800;color:#fff;line-height:1;margin-bottom:2px;}
 .vital-lbl{font-size:9.5px;color:rgba(255,255,255,.5);font-weight:500;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
 
-/* ═══════════════════════════════════════ STATS GRID */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• STATS GRID */
 .stats-row{
     display:grid;
     grid-template-columns:repeat(5,minmax(0,1fr));
@@ -441,7 +456,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .stat-bar{height:4px;background:var(--border);border-radius:99px;margin-top:12px;overflow:hidden;}
 .stat-bar-fill{height:100%;border-radius:99px;transition:width 1.2s var(--ease);}
 
-/* ═══════════════════════════════════════ PHOTO CAROUSEL */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PHOTO CAROUSEL */
 .carousel-section{
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .15s both;
     width:100%;min-width:0;
@@ -495,7 +510,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .c-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);transition:all .3s;cursor:pointer;}
 .c-dot.active{width:18px;border-radius:99px;background:rgba(255,255,255,.9);}
 
-/* ═══════════════════════════════════════ CHARTS AREA */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CHARTS AREA */
 .charts-grid{
     display:grid;grid-template-columns:3fr 2fr;gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .2s both;
@@ -542,14 +557,14 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;color:var(--t-muted);}
 .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
-/* ═══════════════════════════════════════ FOUR CHARTS ROW */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• FOUR CHARTS ROW */
 .charts-4{
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .25s both;
     width:100%;min-width:0;
 }
 
-/* ═══════════════════════════════════════ VITALS MONITOR */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VITALS MONITOR */
 .vitals-monitor{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-xl);overflow:hidden;
@@ -590,7 +605,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .vm-sparkline svg{width:100%;height:36px;}
 .vm-trend-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
-/* ═══════════════════════════════════════ TIMELINE */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TIMELINE */
 .timeline-card{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-xl);overflow:hidden;
@@ -659,7 +674,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .tl-score-num{color:var(--brand-light)}
 .tl-score-lbl{font-size:9.5px;color:var(--t-faint);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
 
-/* ═══════════════════════════════════════ HEALTH FACTORS */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HEALTH FACTORS */
 .factors-grid{
     display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .4s both;
@@ -694,7 +709,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .arc-bg{fill:none;stroke:var(--border);stroke-width:6;}
 .arc-fill{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset 1.4s var(--ease);}
 
-/* ═══════════════════════════════════════ WELLNESS TIP BANNER */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• WELLNESS TIP BANNER */
 .wellness-banner{
     border-radius:var(--radius-xl);padding:24px 30px;margin-bottom:26px;
     display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;
@@ -720,7 +735,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 }
 .wb-btn:hover{background:#B45309;transform:translateY(-1px);}
 
-/* ═══════════════════════════════════════ EMPTY STATE */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• EMPTY STATE */
 .empty-state{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-2xl);padding:80px 40px;
@@ -747,21 +762,21 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 }
 .btn-primary:hover{background:var(--brand-dark);color:#fff;transform:translateY(-2px);box-shadow:0 8px 20px rgba(11,155,122,.35);}
 
-/* ═══════════════════════════════════════ FOOTER */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• FOOTER */
 .page-footer{
     text-align:center;padding:18px 0 4px;border-top:1px solid var(--border);
     font-size:11.5px;color:var(--t-faint);transition:border-color var(--t-base);
 }
 
-/* ═══════════════════════════════════════ ANIMATIONS */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ANIMATIONS */
 @keyframes fadeUp{
     from{opacity:0;transform:translateY(16px)}
     to{opacity:1;transform:translateY(0)}
 }
 
-/* ═══════════════════════════════════════ RESPONSIVE */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESPONSIVE */
 
-/* Large screens: tighten stats from 5→3 col earlier */
+/* Large screens: tighten stats from 5â†’3 col earlier */
 @media(max-width:1500px){
     .stats-row{grid-template-columns:repeat(3,minmax(0,1fr))}
 }
@@ -809,7 +824,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 <body>
 <div class="shell">
 
-<!-- ══════════ SIDEBAR ══════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â• -->
 <aside class="sidebar" id="sidebar">
     <div class="s-brand">
         <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
@@ -871,7 +886,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
     </div>
 </aside>
 
-<!-- ══════════ MAIN ══════════ -->
+<!-- â•â•â•â•â•â•â•â•â•â• MAIN â•â•â•â•â•â•â•â•â•â• -->
 <div class="main" id="mainContent">
 
     <!-- TOPBAR -->
@@ -907,7 +922,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 
 {% if health_records %}
 
-        <!-- ══════════ HERO BANNER ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• HERO BANNER â•â•â•â•â•â•â•â•â•â• -->
         <div class="hero-banner">
             <div class="hero-bg-grid"></div>
             <div class="hero-bg-glow"></div>
@@ -962,7 +977,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                         </div>
                         <div class="vital-chip">
                             <div class="vital-ico"><i class="fas fa-thermometer-half"></i></div>
-                            <div class="vital-val">98.6°</div>
+                            <div class="vital-val">98.6Â°</div>
                             <div class="vital-lbl">Temp</div>
                         </div>
                     </div>
@@ -970,7 +985,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- ══════════ STATS ROW ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• STATS ROW â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head"><div class="sec-label">Key Health Metrics</div></div>
         <div class="stats-row">
             <div class="stat-card" style="--accent:var(--brand)">
@@ -992,7 +1007,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                         {{ summary.bp_trend_text if summary else 'Normal' }}
                     </span>
                 </div>
-                <div class="stat-val" style="font-size:20px;">{{ summary.avg_bp if summary else '—' }}</div>
+                <div class="stat-val" style="font-size:20px;">{{ summary.avg_bp if summary else 'â€”' }}</div>
                 <div class="stat-lbl">Avg Blood Pressure</div>
                 <div class="stat-bar"><div class="stat-bar-fill" style="width:65%;background:var(--clr-red);"></div></div>
             </div>
@@ -1002,7 +1017,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                     <div class="stat-ico" style="background:var(--clr-purple-bg);color:var(--clr-purple)"><i class="fas fa-heart"></i></div>
                     <span class="stat-badge t-up"><i class="fas fa-check-circle"></i> {{ summary.hr_trend_text if summary else 'Stable' }}</span>
                 </div>
-                <div class="stat-val">{{ summary.avg_hr if summary else '—' }}</div>
+                <div class="stat-val">{{ summary.avg_hr if summary else 'â€”' }}</div>
                 <div class="stat-lbl">Avg Heart Rate (bpm)</div>
                 <div class="stat-bar"><div class="stat-bar-fill" style="width:72%;background:var(--clr-purple);"></div></div>
             </div>
@@ -1010,9 +1025,9 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                 <div style="background:var(--clr-amber);position:absolute;top:0;left:0;width:3px;height:100%;border-radius:2px 0 0 2px;"></div>
                 <div class="stat-top">
                     <div class="stat-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber)"><i class="fas fa-exclamation-triangle"></i></div>
-                    <span class="stat-badge {{ 't-up' if summary and summary.current_risk == 'LOW' else 't-warn' if summary and summary.current_risk == 'MEDIUM' else 't-red' }}">{{ summary.current_risk if summary else '—' }}</span>
+                    <span class="stat-badge {{ 't-up' if summary and summary.current_risk == 'LOW' else 't-warn' if summary and summary.current_risk == 'MEDIUM' else 't-red' }}">{{ summary.current_risk if summary else 'â€”' }}</span>
                 </div>
-                <div class="stat-val" style="font-size:20px;">{{ summary.current_risk if summary else '—' }}</div>
+                <div class="stat-val" style="font-size:20px;">{{ summary.current_risk if summary else 'â€”' }}</div>
                 <div class="stat-lbl">Current Risk Level</div>
                 <div class="stat-bar"><div class="stat-bar-fill" style="width:{{ '30' if summary and summary.current_risk == 'LOW' else '60' if summary and summary.current_risk == 'MEDIUM' else '90' }}%;background:var(--clr-amber);"></div></div>
             </div>
@@ -1022,13 +1037,13 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                     <div class="stat-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue)"><i class="fas fa-star"></i></div>
                     <span class="stat-badge t-info"><i class="fas fa-chart-line"></i> Score</span>
                 </div>
-                <div class="stat-val">{{ score_data.overall_score if score_data else '—' }}</div>
+                <div class="stat-val">{{ score_data.overall_score if score_data else 'â€”' }}</div>
                 <div class="stat-lbl">Overall Health Score</div>
                 <div class="stat-bar"><div class="stat-bar-fill" style="width:{{ score_data.overall_score if score_data else 78 }}%;background:var(--clr-blue);"></div></div>
             </div>
         </div>
 
-        <!-- ══════════ PHOTO CAROUSEL ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• PHOTO CAROUSEL â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head"><div class="sec-label">Health Education</div></div>
         <div class="carousel-section">
             <div class="carousel-wrap">
@@ -1040,7 +1055,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Keep Your Heart<br><em>Strong & Healthy</em></h2>
                             <p class="slide-p">Regular monitoring of blood pressure and heart rate can reduce cardiovascular risk by up to 40%.</p>
                         </div>
-                        <div class="slide-visual">❤️</div>
+                        <div class="slide-visual">â¤ï¸</div>
                     </div>
                     <div class="carousel-slide slide-2">
                         <div class="slide-bg-blob" style="width:280px;height:280px;background:rgba(96,165,250,.18);right:-40px;top:-60px;"></div>
@@ -1049,7 +1064,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Mind & Body<br><em>in Harmony</em></h2>
                             <p class="slide-p">Stress management and mindfulness practices directly improve measurable health metrics and immune function.</p>
                         </div>
-                        <div class="slide-visual">🧠</div>
+                        <div class="slide-visual">ðŸ§ </div>
                     </div>
                     <div class="carousel-slide slide-3">
                         <div class="slide-bg-blob" style="width:280px;height:280px;background:rgba(167,139,250,.18);right:-40px;top:-60px;"></div>
@@ -1058,7 +1073,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Early Detection<br><em>Saves Lives</em></h2>
                             <p class="slide-p">AI-powered early warning systems detect risk patterns months before traditional methods, enabling proactive care.</p>
                         </div>
-                        <div class="slide-visual">🔬</div>
+                        <div class="slide-visual">ðŸ”¬</div>
                     </div>
                     <div class="carousel-slide slide-4">
                         <div class="slide-bg-blob" style="width:280px;height:280px;background:rgba(253,186,116,.18);right:-40px;top:-60px;"></div>
@@ -1067,7 +1082,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Fuel Your Body<br><em>With Purpose</em></h2>
                             <p class="slide-p">A balanced diet rich in whole foods directly correlates with better vital sign readings and lower chronic disease risk.</p>
                         </div>
-                        <div class="slide-visual">🥗</div>
+                        <div class="slide-visual">ðŸ¥—</div>
                     </div>
                 </div>
                 <button class="carousel-btn prev" id="cPrev"><i class="fas fa-chevron-left"></i></button>
@@ -1081,7 +1096,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- ══════════ MAIN CHARTS ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• MAIN CHARTS â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head"><div class="sec-label">Health Analytics</div></div>
         <div class="charts-grid">
             <div class="card">
@@ -1172,7 +1187,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- ══════════ VITALS LIVE MONITOR ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• VITALS LIVE MONITOR â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head"><div class="sec-label">Vitals Monitor</div></div>
         <div class="vitals-monitor">
             <div class="vm-head">
@@ -1215,7 +1230,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                         <div class="vm-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-thermometer-half"></i></div>
                         <div class="vm-status-dot" style="background:var(--clr-green);box-shadow:0 0 0 3px var(--clr-green-bg);"></div>
                     </div>
-                    <div class="vm-num">98.6°</div>
+                    <div class="vm-num">98.6Â°</div>
                     <div class="vm-unit">Fahrenheit</div>
                     <div class="vm-lbl">Body Temperature</div>
                     <div class="vm-sparkline">
@@ -1229,7 +1244,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                     </div>
                     <div class="vm-num">98%</div>
                     <div class="vm-unit">oxygen saturation</div>
-                    <div class="vm-lbl">SpO₂ Level</div>
+                    <div class="vm-lbl">SpOâ‚‚ Level</div>
                     <div class="vm-sparkline">
                         <svg viewBox="0 0 120 36"><polyline id="spo2SparkPoly" points="" stroke="#2563EB" class="vm-trend-line" stroke-width="2.5"/></svg>
                     </div>
@@ -1237,14 +1252,14 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- ══════════ HEALTH FACTORS ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• HEALTH FACTORS â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head"><div class="sec-label">Health Score Breakdown</div></div>
         <div class="factors-grid">
             <div class="factor-card">
                 <div style="position:absolute;top:0;left:0;right:0;height:3px;border-radius:2px 2px 0 0;background:linear-gradient(90deg,var(--brand),var(--brand-light));"></div>
                 <div class="factor-ico-wrap" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-arrow-trend-up"></i></div>
                 <div class="factor-title">Risk Improvement</div>
-                <div class="factor-val" style="color:var(--brand);">{{ score_data.risk_improvement if score_data else '—' }}%</div>
+                <div class="factor-val" style="color:var(--brand);">{{ score_data.risk_improvement if score_data else 'â€”' }}%</div>
                 <div class="factor-lbl">vs first checkup baseline</div>
                 <div class="factor-bar"><div class="factor-bar-fill" style="width:{{ score_data.risk_improvement if score_data else 75 }}%;background:var(--brand);"></div></div>
                 <div class="factor-desc">Your risk profile has shown measurable improvement based on recent checkup data trends.</div>
@@ -1253,7 +1268,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                 <div style="position:absolute;top:0;left:0;right:0;height:3px;border-radius:2px 2px 0 0;background:linear-gradient(90deg,var(--clr-blue),#60A5FA);"></div>
                 <div class="factor-ico-wrap" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-wave-square"></i></div>
                 <div class="factor-title">Vitals Stability</div>
-                <div class="factor-val" style="color:var(--clr-blue);">{{ score_data.vitals_stability if score_data else '—' }}%</div>
+                <div class="factor-val" style="color:var(--clr-blue);">{{ score_data.vitals_stability if score_data else 'â€”' }}%</div>
                 <div class="factor-lbl">consistency across readings</div>
                 <div class="factor-bar"><div class="factor-bar-fill" style="width:{{ score_data.vitals_stability if score_data else 82 }}%;background:var(--clr-blue);"></div></div>
                 <div class="factor-desc">Blood pressure and heart rate readings remain within healthy ranges consistently across visits.</div>
@@ -1269,20 +1284,20 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- ══════════ WELLNESS BANNER ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• WELLNESS BANNER â•â•â•â•â•â•â•â•â•â• -->
         <div class="wellness-banner">
             <div class="wb-left">
                 <div class="wb-tag"><i class="fas fa-lightbulb"></i> Today's Health Tip</div>
-                <div class="wb-title">💧 Hydration is Your #1 Health Habit</div>
-                <p class="wb-text">Drinking 8+ glasses of water daily improves blood pressure regulation, kidney function, and overall vitals stability. Based on your health data, staying well-hydrated could improve your health score by an estimated 5–8 points.</p>
+                <div class="wb-title">ðŸ’§ Hydration is Your #1 Health Habit</div>
+                <p class="wb-text">Drinking 8+ glasses of water daily improves blood pressure regulation, kidney function, and overall vitals stability. Based on your health data, staying well-hydrated could improve your health score by an estimated 5â€“8 points.</p>
             </div>
             <div class="wb-right">
-                <div class="wb-ico">🌿</div>
+                <div class="wb-ico">ðŸŒ¿</div>
                 <a href="/checkup" class="wb-btn"><i class="fas fa-stethoscope"></i> Start Checkup</a>
             </div>
         </div>
 
-        <!-- ══════════ TIMELINE ══════════ -->
+        <!-- â•â•â•â•â•â•â•â•â•â• TIMELINE â•â•â•â•â•â•â•â•â•â• -->
         <div class="sec-head">
             <div class="sec-label">Checkup History</div>
             <div style="font-size:12px;color:var(--t-muted);">Showing last {{ [health_records|length, 10]|min }} of {{ health_records|length }} records</div>
@@ -1314,7 +1329,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <div class="tl-chip"><i class="fas fa-user"></i> Age {{ record.age }}</div>
                             <div class="tl-chip"><i class="fas fa-tint"></i> BP {{ record.sys_bp }}/{{ record.dia_bp }}</div>
                             <div class="tl-chip"><i class="fas fa-heartbeat"></i> HR {{ record.hr }} bpm</div>
-                            <div class="tl-chip"><i class="fas fa-thermometer-half"></i> {{ record.temp }}°F</div>
+                            <div class="tl-chip"><i class="fas fa-thermometer-half"></i> {{ record.temp }}Â°F</div>
                         </div>
                         <div class="tl-routing"><i class="fas fa-route" style="color:var(--brand);"></i> {{ record.routing }}</div>
                     </div>
@@ -1343,17 +1358,33 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
         </div>
 {% endif %}
 
-        <div class="page-footer">© 2024 PriorityMed &nbsp;·&nbsp; Secure Patient Portal &nbsp;·&nbsp; HIPAA Compliant &nbsp;·&nbsp; All rights reserved</div>
+        <div class="page-footer">Â© 2024 PriorityMed &nbsp;Â·&nbsp; Secure Patient Portal &nbsp;Â·&nbsp; HIPAA Compliant &nbsp;Â·&nbsp; All rights reserved</div>
     </div><!-- /page -->
 </div><!-- /main -->
 </div><!-- /shell -->
 
 <script>
-/* ─── DATA ─── */
+/* â”€â”€â”€ DATA â”€â”€â”€ */
 const healthRecords = {{ health_records | tojson if health_records else '[]' | safe }};
 window._activeCharts = [];
 
-/* ─── THEME ─── */
+// Parse chart data if available
+let chartData = {labels: [], bp_sys: [], bp_dia: [], hr: [], temp: [], risk: []};
+try {
+    const chartDataJson = `{{ chart_data | safe }}`;
+    if(chartDataJson && chartDataJson.length > 0 && chartDataJson !== '{}'){
+        chartData = JSON.parse(chartDataJson);
+        console.log('[Chart Data] Loaded successfully:', chartData);
+    } else {
+        console.log('[Chart Data] No chart data provided, will use healthRecords');
+    }
+} catch(e){
+    console.error('[Chart Data] Parse error:', e, 'Raw:', {{ chart_data | safe }});
+}
+console.log('[Health Records] Count:', healthRecords.length);
+console.log('[Chart Data] Labels:', chartData.labels ? chartData.labels.length : 0);
+
+/* â”€â”€â”€ THEME â”€â”€â”€ */
 const html = document.documentElement;
 const themeToggle = document.getElementById('themeToggle');
 const themeIco = document.getElementById('themeIco');
@@ -1371,7 +1402,7 @@ themeToggle.addEventListener('click', () => {
 });
 function isDark(){ return html.getAttribute('data-theme') === 'dark'; }
 
-/* ─── SIDEBAR ─── */
+/* â”€â”€â”€ SIDEBAR â”€â”€â”€ */
 const sidebar = document.getElementById('sidebar');
 document.getElementById('sidebarToggle').addEventListener('click', () => {
     sidebar.classList.toggle('collapsed');
@@ -1379,14 +1410,14 @@ document.getElementById('sidebarToggle').addEventListener('click', () => {
 });
 if(localStorage.getItem('pmSide') === 'true') sidebar.classList.add('collapsed');
 
-/* ─── CLOCK ─── */
+/* â”€â”€â”€ CLOCK â”€â”€â”€ */
 function tick(){
     const el = document.getElementById('liveClock');
     if(el) el.textContent = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
 setInterval(tick,1000); tick();
 
-/* ─── CAROUSEL ─── */
+/* â”€â”€â”€ CAROUSEL â”€â”€â”€ */
 let cIdx = 0;
 const slides = document.querySelectorAll('.carousel-slide');
 const dots = document.querySelectorAll('.c-dot');
@@ -1400,7 +1431,7 @@ document.getElementById('cNext')?.addEventListener('click', () => goSlide(cIdx +
 dots.forEach((d,i) => d.addEventListener('click', () => goSlide(i)));
 setInterval(() => goSlide(cIdx + 1), 5500);
 
-/* ─── SPARKLINES ─── */
+/* â”€â”€â”€ SPARKLINES â”€â”€â”€ */
 function buildSparkPoints(values, w=120, h=36, pad=4){
     if(!values.length) return '';
     const min = Math.min(...values), max = Math.max(...values);
@@ -1427,7 +1458,7 @@ function renderSparklines(){
 }
 renderSparklines();
 
-/* ─── CHARTS ─── */
+/* â”€â”€â”€ CHARTS â”€â”€â”€ */
 let bpChartInst = null;
 let bpMode = 'line';
 
@@ -1453,75 +1484,109 @@ const tooltipStyle = () => {
 };
 
 function renderAllCharts(){
-    window._activeCharts.forEach(c => c.destroy());
-    window._activeCharts = [];
-    if(!healthRecords.length) return;
+    try {
+        window._activeCharts.forEach(c => {try{c.destroy()}catch(e){}});
+        window._activeCharts = [];
 
-    const rev = [...healthRecords].reverse();
-    const dates = rev.map(r => {
-        const d = new Date(r.timestamp);
-        return isNaN(d) ? r.timestamp : d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
-    });
-    const sysBP = rev.map(r=>r.sys_bp);
-    const diaBP = rev.map(r=>r.dia_bp);
-    const hrData = rev.map(r=>r.hr);
-    const tempData = rev.map(r=>r.temp);
+        // Use chart data if available, fallback to health records
+        let dates, sysBP, diaBP, hrData, tempData, rev;
+
+        console.log('[renderAllCharts] Starting - chartData.labels:', chartData.labels ? chartData.labels.length : 0, ', healthRecords:', healthRecords.length);
+
+        if(chartData && chartData.labels && chartData.labels.length > 0){
+            dates = chartData.labels;
+            sysBP = chartData.bp_sys;
+            diaBP = chartData.bp_dia;
+            hrData = chartData.hr;
+            tempData = chartData.temp;
+            console.log('[renderAllCharts] Using chartData');
+        } else if(healthRecords && healthRecords.length > 0) {
+            rev = [...healthRecords].reverse();
+            dates = rev.map(r => {
+                const d = new Date(r.timestamp);
+                return isNaN(d) ? r.timestamp : d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+            });
+            sysBP = rev.map(r=>r.sys_bp||0);
+            diaBP = rev.map(r=>r.dia_bp||0);
+            hrData = rev.map(r=>r.hr||0);
+            tempData = rev.map(r=>r.temp||0);
+            console.log('[renderAllCharts] Using healthRecords');
+        } else {
+            console.warn('[renderAllCharts] No data available!');
+            return;
+        }
+
+        console.log('[renderAllCharts] Data prepared - dates:', dates.length, 'bp_sys:', sysBP.length);
 
     const d = chartDefaults();
 
     /* BP Chart */
     const bpCtx = document.getElementById('bpChart');
     if(bpCtx){
-        const isBar = bpMode === 'bar';
-        const c = new Chart(bpCtx.getContext('2d'), {
-            type: bpMode,
-            data:{
-                labels: dates,
-                datasets:[{
-                    label:'Systolic',
-                    data: sysBP,
-                    borderColor:'#DC2626',
-                    backgroundColor: isBar ? 'rgba(220,38,38,.7)' : (ctx) => {
-                        const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
-                        g.addColorStop(0, isDark()?'rgba(220,38,38,.2)':'rgba(220,38,38,.12)');
-                        g.addColorStop(1,'rgba(220,38,38,0)');
-                        return g;
-                    },
-                    borderWidth:2.5,fill:!isBar,tension:.4,
-                    pointBackgroundColor:'#DC2626',pointBorderColor:isDark()?'#152A20':'#fff',
-                    pointBorderWidth:2.5,pointRadius:3.5,pointHoverRadius:6
-                },{
-                    label:'Diastolic',
-                    data: diaBP,
-                    borderColor:'#2563EB',
-                    backgroundColor: isBar ? 'rgba(37,99,235,.7)' : (ctx) => {
-                        const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
-                        g.addColorStop(0, isDark()?'rgba(37,99,235,.15)':'rgba(37,99,235,.08)');
-                        g.addColorStop(1,'rgba(37,99,235,0)');
-                        return g;
-                    },
-                    borderWidth:2.5,fill:!isBar,tension:.4,
-                    pointBackgroundColor:'#2563EB',pointBorderColor:isDark()?'#152A20':'#fff',
-                    pointBorderWidth:2.5,pointRadius:3.5,pointHoverRadius:6
-                }]
-            },
-            options:{
-                responsive:true,maintainAspectRatio:false,
-                plugins:{legend:{position:'bottom',labels:{color:d.tickC,font:{family:'Outfit',size:12},usePointStyle:true,padding:20}},tooltip:tooltipStyle()},
-                scales:{
-                    y:{beginAtZero:false,ticks:{color:d.tickC,font:{size:11,family:'Outfit'}},grid:{color:d.gridC,drawBorder:false},border:{display:false}},
-                    x:{ticks:{color:d.tickC,font:{size:11,family:'Outfit'},maxRotation:45},grid:{display:false,drawBorder:false},border:{display:false}}
+        try {
+            const isBar = bpMode === 'bar';
+            const c = new Chart(bpCtx.getContext('2d'), {
+                type: bpMode,
+                data:{
+                    labels: dates,
+                    datasets:[{
+                        label:'Systolic',
+                        data: sysBP,
+                        borderColor:'#DC2626',
+                        backgroundColor: isBar ? 'rgba(220,38,38,.7)' : (ctx) => {
+                            const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
+                            g.addColorStop(0, isDark()?'rgba(220,38,38,.2)':'rgba(220,38,38,.12)');
+                            g.addColorStop(1,'rgba(220,38,38,0)');
+                            return g;
+                        },
+                        borderWidth:2.5,fill:!isBar,tension:.4,
+                        pointBackgroundColor:'#DC2626',pointBorderColor:isDark()?'#152A20':'#fff',
+                        pointBorderWidth:2.5,pointRadius:3.5,pointHoverRadius:6
+                    },{
+                        label:'Diastolic',
+                        data: diaBP,
+                        borderColor:'#2563EB',
+                        backgroundColor: isBar ? 'rgba(37,99,235,.7)' : (ctx) => {
+                            const g = ctx.chart.ctx.createLinearGradient(0,0,0,260);
+                            g.addColorStop(0, isDark()?'rgba(37,99,235,.15)':'rgba(37,99,235,.08)');
+                            g.addColorStop(1,'rgba(37,99,235,0)');
+                            return g;
+                        },
+                        borderWidth:2.5,fill:!isBar,tension:.4,
+                        pointBackgroundColor:'#2563EB',pointBorderColor:isDark()?'#152A20':'#fff',
+                        pointBorderWidth:2.5,pointRadius:3.5,pointHoverRadius:6
+                    }]
+                },
+                options:{
+                    responsive:true,maintainAspectRatio:false,
+                    plugins:{legend:{position:'bottom',labels:{color:d.tickC,font:{family:'Outfit',size:12},usePointStyle:true,padding:20}},tooltip:tooltipStyle()},
+                    scales:{
+                        y:{beginAtZero:false,ticks:{color:d.tickC,font:{size:11,family:'Outfit'}},grid:{color:d.gridC,drawBorder:false},border:{display:false}},
+                        x:{ticks:{color:d.tickC,font:{size:11,family:'Outfit'},maxRotation:45},grid:{display:false,drawBorder:false},border:{display:false}}
+                    }
                 }
-            }
-        });
-        bpChartInst = c;
-        window._activeCharts.push(c);
+            });
+            bpChartInst = c;
+            window._activeCharts.push(c);
+            console.log('[BP Chart] Rendered successfully');
+        } catch(e) {
+            console.error('[BP Chart] Failed to render:', e);
+        }
+    } else {
+        console.warn('[BP Chart] Canvas element not found');
     }
 
     /* Risk Donut */
-    const high = healthRecords.filter(r => r.dual_brain_risk.includes('HIGH')).length;
-    const med  = healthRecords.filter(r => r.dual_brain_risk.includes('MEDIUM')).length;
-    const low  = healthRecords.filter(r => r.dual_brain_risk.includes('LOW')).length;
+    let high = 0, med = 0, low = 0;
+    if(chartData && chartData.risk && chartData.risk.length > 0){
+        high = chartData.risk.filter(r => r === 'HIGH').length;
+        med = chartData.risk.filter(r => r === 'MEDIUM').length;
+        low = chartData.risk.filter(r => r === 'LOW').length;
+    } else {
+        high = healthRecords.filter(r => r.dual_brain_risk.includes('HIGH')).length;
+        med  = healthRecords.filter(r => r.dual_brain_risk.includes('MEDIUM')).length;
+        low  = healthRecords.filter(r => r.dual_brain_risk.includes('LOW')).length;
+    }
     const rCtx = document.getElementById('riskChart');
     if(rCtx){
         const rColors = ['#DC2626','#D97706','#16A34A'];
@@ -1593,7 +1658,7 @@ function renderAllCharts(){
             data:{
                 labels:dates,
                 datasets:[{
-                    label:'Temperature (°F)',
+                    label:'Temperature (Â°F)',
                     data:tempData,
                     backgroundColor: tempData.map(t => t > 99.5 ? 'rgba(220,38,38,.8)' : 'rgba(217,119,6,.7)'),
                     borderColor: tempData.map(t => t > 99.5 ? '#DC2626' : '#D97706'),
@@ -1689,11 +1754,18 @@ function renderAllCharts(){
         });
         window._activeCharts.push(c);
     }
+    } catch(e){
+        console.error('[renderAllCharts] Fatal error:', e);
+    }
 }
 
-renderAllCharts();
+try {
+    renderAllCharts();
+} catch(e) {
+    console.error('[Auto-render] Failed:', e);
+}
 
-/* ─── SWITCH BP CHART ─── */
+/* â”€â”€â”€ SWITCH BP CHART â”€â”€â”€ */
 window.switchBPChart = function(type, btn){
     bpMode = type;
     document.querySelectorAll('.ctab').forEach(t=>t.classList.remove('active'));
@@ -1716,7 +1788,7 @@ window.switchBPChart = function(type, btn){
     }
 };
 
-/* ─── TIMELINE FILTER ─── */
+/* â”€â”€â”€ TIMELINE FILTER â”€â”€â”€ */
 window.filterTl = function(level, btn){
     document.querySelectorAll('.tl-filter').forEach(f=>f.classList.remove('active'));
     btn.classList.add('active');
@@ -1725,7 +1797,7 @@ window.filterTl = function(level, btn){
     });
 };
 
-/* ─── COUNTER ANIMATION ─── */
+/* â”€â”€â”€ COUNTER ANIMATION â”€â”€â”€ */
 function animCount(el, target, dur=900){
     const start = performance.now();
     const run = now => {
@@ -1742,7 +1814,7 @@ setTimeout(() => {
     if(sc1 && !isNaN(parseInt(sc1.textContent))) animCount(sc1, parseInt(sc1.textContent));
 }, 400);
 
-/* ─── SCORE ORB ANIMATION ─── */
+/* â”€â”€â”€ SCORE ORB ANIMATION â”€â”€â”€ */
 setTimeout(() => {
     const orb = document.getElementById('scoreOrb');
     if(orb){
@@ -1759,7 +1831,7 @@ setTimeout(() => {
     if(hsEl && !isNaN(parseInt(hsEl.textContent))) animCount(hsEl, parseInt(hsEl.textContent));
 }, 500);
 
-/* ─── INTERSECT OBSERVER for progress bars ─── */
+/* â”€â”€â”€ INTERSECT OBSERVER for progress bars â”€â”€â”€ */
 const bars = document.querySelectorAll('.stat-bar-fill, .factor-bar-fill');
 const observer = new IntersectionObserver(entries => {
     entries.forEach(e => {
@@ -1776,3 +1848,4 @@ setTimeout(() => bars.forEach(b => b.style.transition='width 1.4s cubic-bezier(.
 </script>
 </body>
 </html>
+

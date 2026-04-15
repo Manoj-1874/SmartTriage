@@ -1013,13 +1013,6 @@
                             </label>
                         </div>
                         <div class="role-opt">
-                            <input type="radio" name="role" id="roleDoctor" value="doctor">
-                            <label for="roleDoctor">
-                                <i class="fas fa-user-md"></i>
-                                <span>Doctor</span>
-                            </label>
-                        </div>
-                        <div class="role-opt">
                             <input type="radio" name="role" id="roleDdhsAdmin" value="ddhs_admin">
                             <label for="roleDdhsAdmin">
                                 <i class="fas fa-user-shield"></i>
@@ -1027,12 +1020,13 @@
                             </label>
                         </div>
                         <div class="role-opt">
-                            <input type="radio" name="role" id="rolePhcDoctor" value="phc_doctor">
-                            <label for="rolePhcDoctor">
-                                <i class="fas fa-stethoscope"></i>
-                                <span>PHC Doctor</span>
+                            <input type="radio" name="role" id="roleDoctor" value="doctor">
+                            <label for="roleDoctor">
+                                <i class="fas fa-user-md"></i>
+                                <span>Doctor</span>
                             </label>
                         </div>
+
                         <div class="role-opt">
                             <input type="radio" name="role" id="rolePhcNurse" value="phc_nurse">
                             <label for="rolePhcNurse">
@@ -1192,7 +1186,6 @@ function updateRole(role) {
         patient:    { icon: 'fas fa-user-injured', title: 'Patient Portal', sub: 'Sign in to access your healthcare dashboard' },
         doctor:     { icon: 'fas fa-user-md', title: 'Doctor Portal', sub: 'Sign in to access your doctor dashboard' },
         ddhs_admin: { icon: 'fas fa-user-shield', title: 'DDHS Command Portal', sub: 'Monitor PHC workforce and live escalations' },
-        phc_doctor: { icon: 'fas fa-stethoscope', title: 'PHC Doctor Portal', sub: 'Access PHC triage and specialist workflow' },
         phc_nurse:  { icon: 'fas fa-user-nurse', title: 'PHC Nurse Portal', sub: 'Track PHC workflow and patient queue' }
     };
 

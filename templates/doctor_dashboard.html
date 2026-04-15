@@ -15,8 +15,8 @@
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
         script.onload = () => {
-          if (typeof renderCharts === 'function') {
-            renderCharts();
+          if (typeof render === 'function') {
+            render();
           }
         };
         document.head.appendChild(script);
@@ -798,7 +798,7 @@
                     <i class="fas fa-user-injured"></i>
                     <span>Patients</span>
                 </a>
-                <a href="/reports" class="nav-item">
+                <a href="/doctor/reports" class="nav-item">
                     <i class="far fa-file-alt"></i>
                     <span>Reports</span>
                 </a>
@@ -817,7 +817,7 @@
         <div class="main-content">
             <!-- Welcome Section -->
             <div class="welcome-section">
-                <h1>Welcome back, {% if user %}{{ user.fullname.split()[0] }}{% else %}Richard{% endif %}</h1>
+                <h1>Welcome back, {% if user %}{{ user.fullname }}{% else %}Doctor{% endif %}</h1>
                 <p>Track, manage and forecast your patient reports and data.</p>
             </div>
 

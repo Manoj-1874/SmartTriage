@@ -383,6 +383,60 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
 .toast.show{transform:translateY(0);opacity:1;}
 .toast-ico{font-size:16px;}
 
+/* Patient History Modal */
+#patientHistoryModal{
+  display:none;position:fixed;top:0;left:0;width:100%;height:100%;
+  background:rgba(0,0,0,.42);backdrop-filter:blur(4px);z-index:1050;
+  justify-content:center;align-items:center;padding:20px;
+}
+#patientHistoryModal.show{display:flex;}
+
+.patient-info{padding:0 0 20px;border-bottom:1px solid var(--border);}
+.patient-info h3{margin:0 0 8px;font-size:18px;color:var(--t-primary);}
+.patient-info p{margin:0;font-size:13px;}
+
+.history-card{
+  border:1px solid var(--border);border-radius:var(--radius-md);padding:16px;margin-bottom:12px;
+  background:var(--bg-overlay);transition:all var(--t-base);
+}
+.history-card:hover{border-color:var(--brand-light);box-shadow:0 4px 12px rgba(11,155,122,.12);}
+
+.h-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.h-date{font-size:12px;color:var(--t-muted);display:flex;align-items:center;gap:6px;}
+.h-risk{
+  font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;
+  letter-spacing:.5px;text-transform:uppercase;
+}
+
+.h-vitals{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;
+  padding:12px;background:var(--bg-secondary);border-radius:8px;
+}
+.vital{text-align:center;font-size:13px;}
+.vital span{display:block;font-size:11px;color:var(--t-muted);margin-bottom:4px;}
+.vital strong{display:block;font-size:16px;font-weight:600;color:var(--brand);}
+
+.h-symptoms,.h-notes{
+  font-size:12.5px;color:var(--t-primary);margin-bottom:8px;line-height:1.4;
+}
+.h-symptoms strong,.h-notes strong{color:var(--t-primary);font-weight:600;}
+
+.empty-state{text-align:center;padding:40px 20px;}
+.empty-ico{font-size:48px;color:var(--t-faint);margin-bottom:16px;}
+.empty-title{font-size:16px;font-weight:600;color:var(--t-secondary);margin-bottom:8px;}
+.empty-sub{font-size:13px;color:var(--t-faint);margin:0;}
+
+.loading{text-align:center;padding:40px;color:var(--t-muted);}
+.loading i{margin-right:8px;}
+
+.act-btn.act-history{
+  background:var(--brand);color:white;border:0;padding:6px 10px;
+  border-radius:5px;font-size:11px;cursor:pointer;font-weight:600;
+  display:inline-flex;align-items:center;gap:4px;transition:all var(--t-base);
+  margin-right:6px;
+}
+.act-btn.act-history:hover{background:var(--brand-dark);transform:translateY(-1px);box-shadow:0 4px 12px var(--brand-glow);}
+
 /* page footer */
 .page-footer{text-align:center;padding:18px 0 4px;border-top:1px solid var(--border);font-size:11.5px;color:var(--t-faint);margin-top:8px;transition:border-color var(--t-base);}
 
@@ -976,8 +1030,10 @@ function renderAppts(){
   // Search
   if(currentSearch){
     data=data.filter(a=>{
-      const hay=(a.doctor_name+' '+(a.specialization||'')+' '+(a.appointment_date||'')+' '+(a.reason||'')).toLowerCase();
-      return hay.includes(currentSearch);
+      const searchTerms = userRole==='doctor'
+        ? (a.patient_fullname+' '+(a.appointment_date||'')+' '+(a.reason||''))
+        : (a.doctor_name+' '+(a.specialization||'')+' '+(a.appointment_date||'')+' '+(a.reason||''));
+      return searchTerms.toLowerCase().includes(currentSearch);
     });
   }
 
@@ -1017,7 +1073,7 @@ function renderAppts(){
       <div class="appt-bar" style="background:${barColor};"></div>
       <div class="appt-ava" style="background:${avatarBg};"><i class="fas fa-user-md"></i></div>
       <div class="appt-info">
-        <div class="appt-doc">${a.doctor_name?'Dr. '+a.doctor_name:'Appointment #'+a.id}</div>
+        <div class="appt-doc">${userRole==='doctor'?(a.patient_fullname?a.patient_fullname:'Patient #'+a.id):(a.doctor_name?'Dr. '+a.doctor_name:'Appointment #'+a.id)}</div>
         <div class="appt-meta">
           <span class="appt-meta-i"><i class="far fa-calendar"></i> ${a.appointment_date||'—'}</span>
           <span class="appt-meta-i"><i class="far fa-clock"></i> ${a.appointment_time||'—'}</span>
@@ -1038,6 +1094,7 @@ function buildActions(a,s){
   let html='';
   if(userRole==='doctor'){
     if(s==='pending'){
+      html+=`<button type="button" class="act-btn act-history" onclick="viewPatientHistory(${a.patient_id})"><i class="fas fa-file-medical-alt"></i> History</button>`;
       html+=`<form action="/appointments/update/${a.id}" method="POST" style="display:inline"><input type="hidden" name="status" value="Approved"><button type="submit" class="act-btn act-approve"><i class="fas fa-check"></i> Approve</button></form>`;
       html+=`<form action="/appointments/update/${a.id}" method="POST" style="display:inline"><input type="hidden" name="status" value="Rejected"><button type="submit" class="act-btn act-reject"><i class="fas fa-times"></i> Reject</button></form>`;
     } else if(s==='approved'){
@@ -1050,6 +1107,60 @@ function buildActions(a,s){
   }
   html+=`<form action="/appointments/delete/${a.id}" method="POST" style="display:inline" onsubmit="return confirm('Delete this appointment?')"><button type="submit" class="act-btn act-delete"><i class="fas fa-trash"></i></button></form>`;
   return html;
+}
+
+/* ── PATIENT HISTORY MODAL ── */
+function viewPatientHistory(patientId){
+  fetch(`/api/patient-records/${patientId}`)
+    .then(r=>r.json())
+    .then(data=>{
+      const historyModal=document.getElementById('patientHistoryModal');
+      const historyContent=document.getElementById('historyContent');
+
+      if(!data.records || data.records.length===0){
+        historyContent.innerHTML=`
+          <div class="empty-state">
+            <div class="empty-ico"><i class="fas fa-folder-open"></i></div>
+            <div class="empty-title">No Health Records</div>
+            <p class="empty-sub">This patient has no previous health records.</p>
+          </div>`;
+      } else {
+        const recordsHtml=data.records.map(r=>`
+          <div class="history-card">
+            <div class="h-header">
+              <div class="h-date"><i class="far fa-calendar"></i> ${r.timestamp||'—'}</div>
+              <div class="h-risk" style="background:${r.dual_brain_risk==='HIGH'?'#fee2e2':r.dual_brain_risk==='MEDIUM'?'#fef3c7':'#dcfce7'};color:${r.dual_brain_risk==='HIGH'?'#dc2626':r.dual_brain_risk==='MEDIUM'?'#d97706':'#16a34a'}">
+                ${r.dual_brain_risk||'LOW'} RISK
+              </div>
+            </div>
+            <div class="h-vitals">
+              <div class="vital"><span>BP</span> <strong>${r.sys_bp}/${r.dia_bp}</strong></div>
+              <div class="vital"><span>HR</span> <strong>${r.hr} bpm</strong></div>
+              <div class="vital"><span>Temp</span> <strong>${r.temp}°F</strong></div>
+            </div>
+            <div class="h-symptoms"><strong>Symptoms:</strong> ${r.symptoms||'None reported'}</div>
+            <div class="h-notes"><strong>Routing:</strong> ${r.routing||'—'}</div>
+          </div>
+        `).join('');
+
+        historyContent.innerHTML=`
+          <div class="patient-info">
+            <h3>${data.patient_name}</h3>
+            <p style="color:var(--t-muted);font-size:13px;margin-bottom:20px;">${data.records.length} health record${data.records.length!==1?'s':''}</p>
+          </div>
+          ${recordsHtml}`;
+      }
+
+      historyModal.classList.add('show');
+    })
+    .catch(err=>{
+      console.error('Error fetching patient records:',err);
+      alert('Failed to load patient records');
+    });
+}
+
+function closeHistoryModal(){
+  document.getElementById('patientHistoryModal').classList.remove('show');
 }
 
 /* ── INIT ── */
@@ -1067,5 +1178,19 @@ document.addEventListener('DOMContentLoaded',function(){
   }
 });
 </script>
+
+<!-- Patient History Modal -->
+<div id="patientHistoryModal" class="modal" onclick="event.target.id==='patientHistoryModal' && closeHistoryModal()">
+  <div class="modal-content" style="max-width:600px;max-height:80vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h2>Patient Health Records</h2>
+      <button type="button" class="modal-close" onclick="closeHistoryModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" id="historyContent">
+      <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading records...</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

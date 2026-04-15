@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, g
+from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, g, make_response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -34,6 +34,8 @@ from utils.security import (
     require_role, audit_action, PasswordPolicy, generate_secure_token
 )
 from utils.monitoring import health_bp
+from utils.integrated_dual_brain_risk import IntegratedDualBrainRisk
+from utils.disease_database import LocalDiseaseDatabase
 
 warnings.filterwarnings('ignore')
 
@@ -173,6 +175,14 @@ STABLE_MODEL_PATH = config.STABLE_MODEL_PATH
 # Initialize database manager with thread-safe connection pooling
 db_manager = DatabaseManager(config)
 app.logger.info("Database manager initialized with connection pooling")
+
+# Initialize local disease database (Offline-First Layer)
+try:
+    LocalDiseaseDatabase.init_database()
+    stats = LocalDiseaseDatabase.get_statistics()
+    app.logger.info(f"✅ Local disease database ready: {stats['total_diseases']} diseases by severity: {stats['by_severity']}")
+except Exception as e:
+    app.logger.warning(f"⚠️ Could not initialize local disease database: {e}")
 
 # Register cleanup on shutdown
 @atexit.register
@@ -734,6 +744,28 @@ try:
 
     print("[OK] System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
 
+    # Initialize integrated dual-brain risk assessment system
+    try:
+        integrated_risk = IntegratedDualBrainRisk(
+            xgb_model=xgb_risk_model,
+            scaler=scaler,
+            feature_names=feature_names,
+            bert_model=exp_brain
+        )
+        print("[OK] System 3 (Integrated Dual-Brain) Online - Ready for disease recognition + BERT + XGBoost fusion.")
+    except Exception as e:
+        print(f"[WARNING] Integrated risk system error: {e}")
+        integrated_risk = None
+
+    # Initialize semantic disease database for local recognition
+    try:
+        from utils.medical_ai_knowledge_system import SemanticDiseaseDatabase
+        local_disease_db = SemanticDiseaseDatabase()
+        print("[OK] Local Disease Database (15+ diseases) loaded for fast recognition.")
+    except Exception as e:
+        print(f"[WARNING] Local disease database failed to load: {e}")
+        local_disease_db = None
+
 except Exception as e:
     print(f"[WARNING] Model load error, running in UI-only mode: {e}")
     # Create dummy models for UI testing if loading fails
@@ -742,6 +774,7 @@ except Exception as e:
     encoders = None
     scaler = None
     feature_names = []
+    integrated_risk = None
 
 # --- 4. HELPER FUNCTIONS (Thread-Safe) ---
 class ManagedDBConnection:
@@ -776,6 +809,74 @@ def get_db_connection():
     return ManagedDBConnection(db_manager.get_connection())
 
 
+def scan_external_severity(text_summary):
+    """
+    CLINICAL ACCURACY FIX: Dynamic Wikipedia Severity Parser
+
+    When external APIs (Wikipedia, Wikidata) return disease summaries,
+    this function scans the text for clinical danger keywords to determine
+    actual disease severity, not just BERT guessing.
+
+    Examples:
+    - Leptospirosis: "fatal", "hemorrhage", "kidney failure" → HIGH/CRITICAL
+    - Diabetes: "chronic", "management" → MODERATE
+
+    Args:
+        text_summary (str): Disease summary from Wikipedia/external API
+
+    Returns:
+        str: Inferred severity ('CRITICAL', 'HIGH', 'MODERATE', or 'UNKNOWN')
+    """
+    if not text_summary or not isinstance(text_summary, str):
+        return 'UNKNOWN'
+
+    text_lower = text_summary.lower()
+
+    # CRITICAL danger keywords: Immediate life threat
+    critical_keywords = [
+        'fatal', 'mortality', 'death', 'fatal outcome', 'lethal',
+        'life-threatening', 'emergency', 'resuscitation', 'intensive care',
+        'severe hemorrhage', 'massive bleeding', 'sepsis', 'septic shock',
+        'respiratory failure', 'acute respiratory distress', 'ards',
+        'cardiogenic shock', 'anaphylactic shock', 'refractory shock',
+        'multi-organ failure', 'organ failure', 'kidney failure',
+        'acute kidney injury', 'renal failure', 'dialysis',
+        'pulmonary hemorrhage', 'cerebral hemorrhage', 'intracranial',
+        'cardiac arrest', 'ventricular fibrillation', 'asystole',
+        'myocardial infarction', 'acute coronary',
+        'stroke', 'cerebral infarction', 'hemorrhagic stroke'
+    ]
+
+    # HIGH danger keywords: Serious, needs urgent specialist care
+    high_keywords = [
+        'severe', 'acute', 'serious', 'critical', 'urgent',
+        'hospitalization required', 'requiring hospital', 'requires admission',
+        'infectious disease', 'epidemic', 'pandemic', 'outbreak',
+        'zoonotic', 'vector-borne', 'contagious', 'transmissible',
+        'bleeding disorder', 'hemorrhage', 'hemoptysis',
+        'pneumonia', 'meningitis', 'encephalitis',
+        'myocarditis', 'pericarditis', 'endocarditis',
+        'hepatitis', 'liver failure', 'hepatic',
+        'immunocompromised', 'immunosuppressed',
+        'surgical intervention', 'surgical treatment', 'surgery required',
+        'high mortality', 'high fatality', 'prognosis poor'
+    ]
+
+    # Count critical and high keywords
+    critical_count = sum(1 for keyword in critical_keywords if keyword in text_lower)
+    high_count = sum(1 for keyword in high_keywords if keyword in text_lower)
+
+    # Determine severity based on keyword presence
+    if critical_count >= 2:
+        return 'CRITICAL'
+    elif critical_count >= 1 or high_count >= 3:
+        return 'HIGH'
+    elif high_count >= 1:
+        return 'HIGH'
+    else:
+        return 'MODERATE'
+
+
 def send_verification_email(recipient_email, token):
     """Send verification email with token link. Uses SMTP env vars; falls back to printing link."""
     verify_link = url_for('verify_email', token=token, _external=True)
@@ -798,7 +899,7 @@ def send_verification_email(recipient_email, token):
             msg['To'] = recipient_email
             msg.set_content(body)
 
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
@@ -867,7 +968,6 @@ def get_dashboard_stats():
     high = c.fetchone()[0]
     c.execute("SELECT COUNT(*) FROM patient_logs WHERE dual_brain_risk LIKE '%OVERRIDE%'")
     overrides = c.fetchone()[0]
-
     # Get appointments count
     c.execute("SELECT COUNT(*) FROM appointments WHERE appointment_date >= date('now')")
     upcoming_appointments = c.fetchone()[0]
@@ -876,7 +976,19 @@ def get_dashboard_stats():
     return {'total': total, 'high': high, 'overrides': overrides, 'appointments': upcoming_appointments}
 
 
-ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_doctor', 'phc_nurse'}
+def get_role_dashboard_redirect():
+    """Get the correct dashboard URL based on current user's role"""
+    if current_user.role == 'ddhs_admin':
+        return url_for('admin_dashboard')
+    elif current_user.role == 'doctor':
+        return url_for('doctor_dashboard')
+    elif current_user.role == 'phc_nurse':
+        return url_for('phc_nurse_dashboard')
+    else:  # patient
+        return url_for('patient_dashboard')
+
+
+ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_nurse'}
 
 # --- 5. AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -934,12 +1046,14 @@ def login():
             )
             login_user(user, remember=request.form.get('remember'))
 
-            # Redirect based on role
+            # Redirect based on role - ROLE-SPECIFIC URLs
             if user.role == 'ddhs_admin':
-                return redirect(url_for('ddhs_dashboard'))
-            if user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
+                return redirect(url_for('admin_dashboard'))
+            elif user.role == 'doctor':
                 return redirect(url_for('doctor_dashboard'))
-            else:
+            elif user.role == 'phc_nurse':
+                return redirect(url_for('phc_nurse_dashboard'))
+            else:  # patient
                 return redirect(url_for('patient_dashboard'))
         else:
             return render_template('login.html', error='Invalid password. Please try again.', email=email, selected_role=role)
@@ -1006,7 +1120,7 @@ def signup():
         expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
 
         try:
-            if role in ('doctor', 'phc_doctor', 'phc_nurse'):
+            if role in ('doctor', 'phc_nurse'):
                 specialization = InputSanitizer.sanitize_string(request.form.get('specialization'), max_length=100)
                 license = InputSanitizer.sanitize_string(request.form.get('license'), max_length=50)
                 experience = InputSanitizer.sanitize_string(request.form.get('experience'), max_length=50)
@@ -1338,21 +1452,658 @@ def patient_dashboard():
 @app.route('/doctor/dashboard')
 @login_required
 def doctor_dashboard():
-    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
-        flash('Access denied')
+    """Doctor-specific dashboard - ONLY for general doctors"""
+    if current_user.role != 'doctor':
+        flash('Access denied - this page is for doctors only')
         return redirect(url_for('index'))
 
     stats = get_dashboard_stats()
     conn = get_db_connection()
-    patients = conn.execute("SELECT * FROM patient_logs ORDER BY id DESC LIMIT 10").fetchall()
-    latest_patient = conn.execute("SELECT * FROM patient_logs ORDER BY id DESC LIMIT 1").fetchone()
+
+    # Regular doctor sees ONLY patients they have appointments with
+    patients = conn.execute("""
+        SELECT DISTINCT pl.* FROM patient_logs pl
+        INNER JOIN appointments a ON a.patient_id = pl.user_id
+        WHERE a.doctor_id = ?
+        ORDER BY pl.timestamp DESC LIMIT 10
+    """, (current_user.id,)).fetchall()
+
+    latest_patient = conn.execute("""
+        SELECT pl.* FROM patient_logs pl
+        INNER JOIN appointments a ON a.patient_id = pl.user_id
+        WHERE a.doctor_id = ?
+        ORDER BY pl.timestamp DESC LIMIT 1
+    """, (current_user.id,)).fetchone()
+
     conn.close()
 
-    return render_template('index.html',
+    return render_template('doctor_dashboard.html',
                          patients=patients,
                          stats=stats,
                          latest_patient=latest_patient,
                          user=current_user)
+
+@app.route('/doctor/reports')
+@login_required
+def doctor_reports():
+    """Doctor - View patient reports"""
+    if current_user.role != 'doctor':
+        flash('Access denied - this page is for doctors only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Get patient reports - doctor sees only their own patients (those with appointments)
+    patients = conn.execute("""
+        SELECT DISTINCT u.id, u.fullname, u.email, u.phone
+        FROM users u
+        INNER JOIN appointments a ON u.id = a.patient_id
+        WHERE a.doctor_id = ?
+        ORDER BY u.fullname ASC
+    """, (current_user.id,)).fetchall()
+
+    patient_reports = []
+    patient_details = {}  # Dictionary to hold detailed patient info for modal
+
+    for patient in patients:
+        patient_dict = dict(patient)
+        records = conn.execute("""
+            SELECT * FROM patient_logs
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+        """, (patient['id'],)).fetchall()
+
+        records_list = [dict(r) for r in records]
+        patient_dict['total_records'] = len(records_list)
+
+        # Calculate health score based on risk levels
+        if records_list:
+            risk_counts = {}
+            for r in records_list:
+                risk = r.get('dual_brain_risk', 'LOW')
+                risk_counts[risk] = risk_counts.get(risk, 0) + 1
+
+            # Score: LOW=100, MEDIUM=70, HIGH=40
+            score = 0
+            for risk, count in risk_counts.items():
+                if risk == 'LOW':
+                    score += count * 10
+                elif risk == 'MEDIUM':
+                    score += count * 7
+                else:
+                    score += count * 4
+            patient_dict['health_score'] = min(100, score // max(1, len(records_list)))
+
+            # Latest vitals and symptoms
+            latest = records_list[0]
+            patient_dict['last_checkup'] = latest.get('timestamp', '')
+            patient_dict['symptoms'] = latest.get('symptoms', 'N/A')
+            patient_dict['risk_level'] = latest.get('dual_brain_risk', 'UNKNOWN')
+            patient_dict['vitals'] = {
+                'hr': latest.get('hr', '--'),
+                'bp': f"{latest.get('sys_bp', '--')}/{latest.get('dia_bp', '--')}"
+            }
+        else:
+            patient_dict['health_score'] = 0
+            patient_dict['last_checkup'] = 'N/A'
+            patient_dict['symptoms'] = 'N/A'
+            patient_dict['risk_level'] = 'UNKNOWN'
+            patient_dict['vitals'] = {'hr': '--', 'bp': '--/--'}
+
+        patient_reports.append(patient_dict)
+
+        # Build patient_details for modal view
+        patient_details[str(patient['id'])] = {
+            'name': patient['fullname'],
+            'email': patient['email'],
+            'phone': patient['phone'] or 'N/A',
+            'records': records_list
+        }
+
+    stats = get_dashboard_stats()
+
+    # Calculate doctor-specific stats
+    total_patient_records = sum(p['total_records'] for p in patient_reports)
+    high_risk = sum(1 for p in patient_reports if p['risk_level'] == 'HIGH')
+    avg_score = sum(p['health_score'] for p in patient_reports) / len(patient_reports) if patient_reports else 0
+
+    # Prepare stats dict for template
+    stats = {
+        'total_patients': len(patient_reports),
+        'total_records': total_patient_records,
+        'high_risk_patients': high_risk,
+        'recent_checkups': total_patient_records,
+        'avg_health_score': round(avg_score, 1)
+    }
+
+    conn.close()
+
+    return render_template('reports.html',
+                         patient_reports=patient_reports,
+                         patient_details=patient_details,
+                         stats=stats,
+                         user=current_user)
+
+
+
+@app.route('/phc/nurse/dashboard')
+@login_required
+def phc_nurse_dashboard():
+    """PHC Nurse dashboard - manages vital signs, check-ins, appointments for their facility"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # PHC Nurse sees: regular check-ins from their facility, vital sign tracking, appointments
+    patients = conn.execute("""
+        SELECT * FROM patient_logs
+        WHERE phc_id = ?
+        ORDER BY timestamp DESC LIMIT 10
+    """, (current_user.phc_id,)).fetchall()
+
+    # Get today's appointments for in-clinic tracking at their facility
+    today = datetime.now().strftime('%Y-%m-%d')
+    appointments = conn.execute("""
+        SELECT a.*, u.fullname, u.phone FROM appointments a
+        LEFT JOIN users u ON u.id = a.patient_id
+        WHERE DATE(a.appointment_date) = ? AND a.status = 'scheduled' AND a.doctor_id IN (
+            SELECT id FROM users WHERE phc_id = ?
+        )
+        ORDER BY a.appointment_date ASC
+    """, (today, current_user.phc_id)).fetchall()
+    appointments = [dict(row) for row in appointments] if appointments else []
+
+    # Vital signs requiring attention (high BP, high heart rate) from their facility
+    vitals_alert = conn.execute("""
+        SELECT pl.*, u.fullname FROM patient_logs pl
+        LEFT JOIN users u ON u.id = pl.user_id
+        WHERE pl.phc_id = ? AND (pl.sys_bp > 140 OR pl.dia_bp > 90 OR pl.hr > 100)
+        AND DATE(pl.timestamp) = ?
+        ORDER BY pl.timestamp DESC LIMIT 8
+    """, (current_user.phc_id, today)).fetchall()
+
+    # Calculate patient stats from appointments
+    total_appointments = conn.execute(
+        "SELECT COUNT(*) as count FROM appointments WHERE patient_id IN (SELECT user_id FROM patient_logs WHERE phc_id = ?) OR appointment_date LIKE ?",
+        (current_user.phc_id, today + '%')
+    ).fetchone()
+
+    completed_appointments = conn.execute(
+        "SELECT COUNT(*) as count FROM appointments WHERE status = 'Completed' AND doctor_id IN (SELECT id FROM users WHERE phc_id = ?)",
+        (current_user.phc_id,)
+    ).fetchone()
+
+    pending_appointments = conn.execute(
+        "SELECT COUNT(*) as count FROM appointments WHERE status = 'Pending' AND doctor_id IN (SELECT id FROM users WHERE phc_id = ?)",
+        (current_user.phc_id,)
+    ).fetchone()
+
+    latest_patient = conn.execute("""
+        SELECT * FROM patient_logs
+        WHERE phc_id = ?
+        ORDER BY timestamp DESC LIMIT 1
+    """, (current_user.phc_id,)).fetchone()
+
+    conn.close()
+
+    patient_stats = {
+        'total': total_appointments['count'] if total_appointments else 0,
+        'completed': completed_appointments['count'] if completed_appointments else 0,
+        'pending': pending_appointments['count'] if pending_appointments else 0
+    }
+
+    return render_template('phc_nurse_dashboard.html',
+                         patients=patients,
+                         appointments=appointments,
+                         vitals_alert=vitals_alert,
+                         patient_stats=patient_stats,
+                         user=current_user)
+
+# ===== PHC NURSE ROUTES =====
+@app.route('/phc/nurse/appointments')
+@login_required
+def phc_nurse_appointments():
+    """PHC Nurse - View facility appointments"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Get appointments for doctors in this facility (all appointments at the facility)
+    appointments = conn.execute("""
+        SELECT a.*, u.fullname as patient_name, d.fullname as doctor_name
+        FROM appointments a
+        LEFT JOIN users u ON u.id = a.patient_id
+        LEFT JOIN users d ON d.id = a.doctor_id
+        WHERE d.phc_id = ? OR a.patient_id IN (
+            SELECT user_id FROM patient_logs WHERE phc_id = ?
+        )
+        ORDER BY a.appointment_date DESC
+    """, (current_user.phc_id, current_user.phc_id)).fetchall()
+
+    appointments = [dict(row) for row in appointments]
+    stats = get_dashboard_stats()
+
+    conn.close()
+
+    return render_template('phc_nurse_dashboard.html',
+                         appointments=appointments,
+                         stats=stats,
+                         current_page='appointments',
+                         user=current_user)
+
+@app.route('/phc/nurse/patients')
+@login_required
+def phc_nurse_patients():
+    """PHC Nurse - View facility patients"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Get all patients from this facility
+    patients = conn.execute("""
+        SELECT DISTINCT u.id, u.fullname, u.email, u.phone, COUNT(DISTINCT pl.id) as total_cases
+        FROM users u
+        INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+        WHERE u.role = 'patient'
+        GROUP BY u.id
+        ORDER BY u.fullname ASC
+    """, (current_user.phc_id,)).fetchall()
+
+    patients = [dict(row) for row in patients]
+    stats = get_dashboard_stats()
+
+    conn.close()
+
+    return render_template('phc_nurse_dashboard.html',
+                         patients=patients,
+                         stats=stats,
+                         current_page='patients',
+                         user=current_user)
+
+@app.route('/phc/nurse/reports')
+@login_required
+def phc_nurse_reports():
+    """PHC Nurse - View facility patient reports"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Get patient reports from this facility
+    patients = conn.execute("""
+        SELECT DISTINCT u.id, u.fullname, u.email, u.phone
+        FROM users u
+        INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+        WHERE u.role = 'patient'
+        ORDER BY u.fullname ASC
+    """, (current_user.phc_id,)).fetchall()
+
+    patient_reports = []
+    for patient in patients:
+        patient_dict = dict(patient)
+        records = conn.execute("""
+            SELECT * FROM patient_logs
+            WHERE user_id = ? AND phc_id = ?
+            ORDER BY timestamp DESC
+        """, (patient['id'], current_user.phc_id)).fetchall()
+
+        records_list = [dict(r) for r in records]
+        patient_dict['total_records'] = len(records_list)
+
+        # Calculate health score based on risk levels
+        if records_list:
+            risk_counts = {}
+            for r in records_list:
+                risk = r.get('dual_brain_risk', 'LOW')
+                risk_counts[risk] = risk_counts.get(risk, 0) + 1
+
+            # Score: LOW=100, MEDIUM=70, HIGH=40
+            score = 0
+            for risk, count in risk_counts.items():
+                if risk == 'LOW':
+                    score += count * 10
+                elif risk == 'MEDIUM':
+                    score += count * 7
+                else:
+                    score += count * 4
+            patient_dict['health_score'] = min(100, score // max(1, len(records_list)))
+
+            # Latest vitals and symptoms
+            latest = records_list[0]
+            patient_dict['last_checkup'] = latest.get('timestamp', '')
+            patient_dict['symptoms'] = latest.get('symptoms', 'N/A')
+            patient_dict['risk_level'] = latest.get('dual_brain_risk', 'UNKNOWN')
+            patient_dict['vitals'] = {
+                'hr': latest.get('hr', '--'),
+                'bp': f"{latest.get('sys_bp', '--')}/{latest.get('dia_bp', '--')}"
+            }
+        else:
+            patient_dict['health_score'] = 0
+            patient_dict['last_checkup'] = 'N/A'
+            patient_dict['symptoms'] = 'N/A'
+            patient_dict['risk_level'] = 'UNKNOWN'
+            patient_dict['vitals'] = {'hr': '--', 'bp': '--/--'}
+
+        patient_reports.append(patient_dict)
+
+    stats = get_dashboard_stats()
+
+    conn.close()
+
+    return render_template('phc_nurse_dashboard.html',
+                         patient_reports=patient_reports,
+                         stats=stats,
+                         current_page='reports',
+                         user=current_user)
+
+@app.route('/phc/nurse/messages')
+@login_required
+def phc_nurse_messages():
+    """PHC Nurse - Messaging with facility patients"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Get facility patients for messaging
+    contacts = conn.execute("""
+        SELECT DISTINCT u.id, u.fullname, u.email, u.role,
+               (SELECT COUNT(*) FROM messages
+                WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+        FROM users u
+        INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+        WHERE u.role = 'patient'
+        ORDER BY u.fullname ASC
+    """, (current_user.id, current_user.phc_id)).fetchall()
+
+    contacts = [dict(row) for row in contacts]
+    stats = get_dashboard_stats()
+
+    conn.close()
+
+    return render_template('phc_nurse_dashboard.html',
+                         contacts=contacts,
+                         stats=stats,
+                         current_page='messages',
+                         user=current_user)
+
+# ===== PHC DOCTOR ROUTES =====
+
+
+
+
+
+
+
+
+
+
+
+# ===== NEW WORKFLOW DASHBOARDS =====
+@app.route('/phc/nurse/intake')
+@login_required
+def phc_nurse_intake():
+    """PHC Nurse Patient Intake & AI Triage Dashboard"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this page is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    return render_template('phc_nurse_intake.html', user=current_user)
+
+
+
+
+
+# ===== API ENDPOINTS FOR WORKFLOW =====
+@app.route('/api/patient-assessment', methods=['POST'])
+@login_required
+def api_patient_assessment():
+    """NEW: Integrated dual-brain assessment with disease recognition, BERT + XGBoost fusion
+
+    Features:
+    - Disease recognition (local DB → SNOMED-CT → external APIs) - handles misspellings via fuzzy matching
+    - Symptom extraction from disease profile
+    - BERT semantic analysis of symptoms
+    - XGBoost analysis of numerical vital signs
+    - Dual-brain fusion with disease context
+    - Falls back to symptom-based assessment if disease unknown
+    """
+    # BUG FIX 4: Allow simulator to bypass role check with demo token for dashboard population
+    sim_token = request.headers.get('X-Simulation-Token')
+    if sim_token != 'DEMO_TOKEN_SMARTTRIAGE_123':
+        if current_user.role != 'phc_nurse':
+            return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        data = request.get_json()
+
+        # Validate required fields
+        required = ['patientName', 'age', 'gender', 'bp', 'hr', 'temp', 'spo2', 'rr', 'symptoms']
+        for field in required:
+            if field not in data:
+                return jsonify({'error': f'Missing field: {field}'}), 400
+
+        # Extract BP into systolic and diastolic
+        bp_parts = data['bp'].split('/')
+        sys_bp = int(bp_parts[0]) if len(bp_parts) > 0 else 0
+        dia_bp = int(bp_parts[1]) if len(bp_parts) > 1 else 0
+
+        # Extract vital signs
+        age = int(data['age'])
+        gender = data['gender']
+        hr = int(data['hr'])
+        temp_c = float(data['temp'])
+        temp_f = (temp_c * 9/5) + 32  # Convert to Fahrenheit for assessment
+        spo2 = int(data['spo2'])
+        rr = int(data['rr'])
+        symptoms = data['symptoms']
+
+        # Optional disease input (NEW)
+        disease_input = data.get('disease_name', '').strip()
+        pain_intensity = int(data.get('pain_intensity', 5))
+        symptom_duration_hours = int(data.get('symptom_duration_hours', 24))
+        comorbidities = data.get('comorbidities', [])
+
+        # ===== INTEGRATED DUAL-BRAIN ASSESSMENT =====
+        final_risk = data.get('riskLevel', 'MEDIUM')  # Default/fallback
+        assessment_result = None
+        bert_score = None
+        xgb_score = None
+        disease_recognized = None
+
+        # BUG FIX 2: Run AI assessment even if disease_input is empty (symptoms-only analysis)
+        if integrated_risk:
+            try:
+                # Run full integrated assessment with disease_input=None if not provided
+                assessment_result = integrated_risk.assess_patient_with_disease_context(
+                    disease_input=disease_input if disease_input else None,  # Can be None
+                    symptoms=symptoms,
+                    age=age,
+                    gender=gender,
+                    sys_bp=sys_bp,
+                    dia_bp=dia_bp,
+                    hr=hr,
+                    temp_f=temp_f,
+                    spo2=spo2,
+                    respiration_rate=rr,
+                    pain_intensity=pain_intensity,
+                    symptom_duration_hours=symptom_duration_hours,
+                    comorbidities=comorbidities if comorbidities else None,
+                )
+
+                # Extract results from integrated assessment
+                if assessment_result and assessment_result['final_risk']:
+                    final_result = assessment_result['final_risk']
+                    final_risk = final_result.get('risk_category', 'MEDIUM')
+                    bert_score = assessment_result['bert_analysis'].get('risk_score')
+                    xgb_score = assessment_result['xgboost_analysis'].get('risk_score')
+                    disease_recognized = assessment_result['disease_recognition']['final_risk'].get('disease_identified')
+
+                    logging.info(f"[INTEGRATED] Disease: {disease_recognized} | BERT: {bert_score:.2%} | XGBoost: {xgb_score:.2%} | Final: {final_risk}")
+            except Exception as e:
+                logging.error(f"[ERROR] Integrated assessment failed: {str(e)}")
+                # Fall back to basic assessment
+                final_risk = data.get('riskLevel', 'MEDIUM')
+
+        # Determine urgency from final risk
+        if final_risk.upper() == 'HIGH':
+            urgency = 'URGENT - Go to ER'
+            routing = 'ER'
+        elif final_risk.upper() == 'CRITICAL':
+            urgency = 'EMERGENCY - Call 911'
+            routing = 'EMERGENCY'
+        elif final_risk.upper() == 'MEDIUM':
+            urgency = 'PRIORITY - Specialist within 24-48h'
+            routing = 'SPECIALIST'
+        else:
+            urgency = 'ROUTINE - Monitor and follow up'
+            routing = 'MONITOR'
+
+        # ===== SAVE TO DATABASE =====
+        conn = get_db_connection()
+        cursor = conn.cursor()  # BUG FIX 1: Create cursor explicitly for lastrowid
+        cursor.execute("""
+            INSERT INTO patient_logs
+            (patient_name, age, gender, sys_bp, dia_bp, hr, temperature, spo2, respiration_rate,
+             symptoms, dual_brain_risk, routing, recommended_specialist, user_id, phc_id, timestamp,
+             pain_intensity, symptom_duration, disease_input, bert_score, xgb_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            data['patientName'],
+            age,
+            gender,
+            sys_bp,
+            dia_bp,
+            hr,
+            temp_c,
+            spo2,
+            rr,
+            symptoms,
+            final_risk,
+            routing,
+            disease_recognized or 'General Physician',
+            current_user.id,
+            current_user.phc_id or 1,
+            datetime.now().isoformat(),
+            pain_intensity,
+            symptom_duration_hours,
+            disease_input,
+            bert_score,
+            xgb_score
+        ))
+
+        conn.commit()
+        log_id = cursor.lastrowid  # BUG FIX 1: Use cursor.lastrowid instead of conn.lastrowid
+        conn.close()
+
+        # ===== RETURN RESPONSE =====
+        response = {
+            'success': True,
+            'message': f'Assessment complete. Risk: {final_risk}. {urgency}',
+            'data': {
+                'logId': log_id,
+                'riskLevel': final_risk,
+                'routing': routing,
+                'urgency': urgency,
+                'diseaseRecognized': disease_recognized,
+            }
+        }
+
+        # Include detailed assessment if available
+        if assessment_result:
+            response['assessment'] = {
+                'bert_analysis': {
+                    'score': bert_score,
+                    'label': assessment_result['bert_analysis'].get('risk_label'),
+                    'confidence': assessment_result['bert_analysis'].get('confidence')
+                },
+                'xgboost_analysis': {
+                    'score': xgb_score,
+                    'label': assessment_result['xgboost_analysis'].get('risk_label')
+                },
+                'disease_context': disease_recognized,
+                'reasoning': assessment_result['final_risk'].get('reasoning')
+            }
+
+        return jsonify(response), 200
+
+    except Exception as e:
+        logging.error(f"[ERROR] Patient assessment error: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/patient/reports')
+@login_required
+def api_patient_reports():
+    """Get patient's health reports and assessments"""
+    if current_user.role != 'patient':
+        return jsonify({'error': 'Access denied'}), 403
+
+    try:
+        conn = get_db_connection()
+
+        # Get all patient logs (health assessments) for this patient
+        reports = conn.execute("""
+            SELECT id, patient_name, age, gender, sys_bp, dia_bp, hr, temperature, spo2,
+                   respiration_rate, symptoms, news2_score, dual_brain_risk, timestamp
+            FROM patient_logs
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+        """, (current_user.id,)).fetchall()
+
+        # Convert to list of dicts with proper formatting
+        reports_list = []
+        for report in reports:
+            r = dict(report)
+            # Format timestamps
+            if r['timestamp']:
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(r['timestamp'])
+                    r['date'] = dt.strftime('%B %d, %Y')
+                    r['time'] = dt.strftime('%I:%M %p')
+                except:
+                    r['date'] = r['timestamp']
+                    r['time'] = ''
+
+            # Format BP
+            if r['sys_bp'] and r['dia_bp']:
+                r['blood_pressure'] = f"{r['sys_bp']}/{r['dia_bp']} mmHg"
+            else:
+                r['blood_pressure'] = 'N/A'
+
+            # Determine risk level display
+            risk = str(r['dual_brain_risk']).upper() if r['dual_brain_risk'] else 'UNKNOWN'
+            if 'HIGH' in risk:
+                r['risk_display'] = 'HIGH RISK'
+                r['risk_color'] = 'red'
+            elif 'MEDIUM' in risk:
+                r['risk_display'] = 'MEDIUM RISK'
+                r['risk_color'] = 'amber'
+            else:
+                r['risk_display'] = 'LOW RISK'
+                r['risk_color'] = 'green'
+
+            reports_list.append(r)
+
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'reports': reports_list,
+            'total': len(reports_list)
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 def normalize_risk_bucket(value):
@@ -1442,7 +2193,7 @@ def submit_triage_outcome(log_id):
         if request.is_json:
             return jsonify({'success': False, 'error': message}), 400
         flash(message, 'error')
-        return redirect(url_for('doctor_dashboard'))
+        return redirect(get_role_dashboard_redirect())
 
     conn = get_db_connection()
     log_row = conn.execute('SELECT id FROM patient_logs WHERE id = ?', (log_id,)).fetchone()
@@ -1451,7 +2202,7 @@ def submit_triage_outcome(log_id):
         if request.is_json:
             return jsonify({'success': False, 'error': 'log_id not found'}), 404
         flash('Triage log not found.', 'error')
-        return redirect(url_for('doctor_dashboard'))
+        return redirect(get_role_dashboard_redirect())
 
     conn.execute('''
         UPDATE patient_logs
@@ -1475,7 +2226,7 @@ def submit_triage_outcome(log_id):
         }), 200
 
     flash(f'Outcome saved for triage log #{log_id}.', 'success')
-    return redirect(url_for('doctor_dashboard'))
+    return redirect(get_role_dashboard_redirect())
 
 
 @app.route('/triage/model-performance', methods=['GET'])
@@ -1626,22 +2377,27 @@ def triage():
         return "[ERROR] XGBoost model not loaded. Check server logs."
 
     try:
-        # 1. Grab and VALIDATE data from form
-        form_data = {
-            'age': request.form.get('age'),
-            'gender': request.form.get('gender'),
-            'sys_bp': request.form.get('sys_bp'),
-            'dia_bp': request.form.get('dia_bp'),
-            'hr': request.form.get('hr'),
-            'temp': request.form.get('temp'),
-            'temp_unit': request.form.get('temp_unit', 'F'),
-            'respiration_rate': request.form.get('respiration_rate'),
-            'spo2': request.form.get('spo2'),
-            'history': request.form.get('history', 'None'),
-            'symptoms': request.form.get('symptom'),  # Note: form uses 'symptom' not 'symptoms'
-            'pain_level': request.form.get('pain_level'),  # NEW: Pain intensity (1-10)
-            'duration': request.form.get('duration')  # NEW: Symptom duration
-        }
+        # 1. Grab and VALIDATE data from form (SAFE extraction to avoid recursion)
+        try:
+            form_data = {
+                'age': str(request.form.get('age', '')).strip(),
+                'gender': str(request.form.get('gender', '')).strip(),
+                'sys_bp': str(request.form.get('sys_bp', '')).strip(),
+                'dia_bp': str(request.form.get('dia_bp', '')).strip(),
+                'hr': str(request.form.get('hr', '')).strip(),
+                'temp': str(request.form.get('temp', '')).strip(),
+                'temp_unit': str(request.form.get('temp_unit', 'F')).strip(),
+                'respiration_rate': str(request.form.get('respiration_rate', '')).strip(),
+                'spo2': str(request.form.get('spo2', '')).strip(),
+                'history': str(request.form.get('history', 'None')).strip(),
+                'symptoms': str(request.form.get('symptom', '')).strip(),  # Note: form uses 'symptom' not 'symptoms'
+                'pain_level': str(request.form.get('pain_level', '0')).strip(),  # NEW: Pain intensity (1-10)
+                'duration': str(request.form.get('duration', '')).strip()  # NEW: Symptom duration
+            }
+        except RecursionError as re:
+            app.logger.error(f"[RECURSION ERROR] Form data extraction failed: {type(re).__name__}")
+            flash('Error processing form data - recursion detected', 'error')
+            return redirect(url_for('checkup'))
 
         # Validate all inputs
         validated_data = VitalSignsValidator.validate_triage_data(form_data)
@@ -1659,6 +2415,16 @@ def triage():
         history = validated_data['history']
         symptom = validated_data['symptoms']
 
+        # CLEAN SYMPTOM TEXT: Remove "Selected symptoms: " prefix if present
+        # The frontend tags add this prefix; we need clean symptom data for disease recognition
+        if symptom.startswith('Selected symptoms:'):
+            # Extract just the symptom portion, remove any notes after "Additional notes:"
+            symptom = symptom.replace('Selected symptoms:', '', 1).strip()
+            # Split on "Additional notes:" and take only the symptoms part
+            if '\n\nAdditional notes:' in symptom:
+                symptom = symptom.split('\n\nAdditional notes:')[0].strip()
+            print(f"[SYMPTOM CLEANUP] Cleaned symptom string: '{validated_data['symptoms']}' → '{symptom}'")
+
         # NEW: Extract pain & duration (with safe defaults if not provided)
         pain_level = validated_data.get('pain_level')
         duration = validated_data.get('duration')
@@ -1670,286 +2436,605 @@ def triage():
         except (ValueError, TypeError):
             pain_intensity = 0
 
-        # Validate duration format
-        valid_durations = ['Today', '2-3 days', '1 week', '2+ weeks']
-        duration = duration if duration in valid_durations else 'Unknown'
+        print(f"[FORM-DEBUG] Raw pain_level from form: {request.form.get('pain_level')}")
+        print(f"[FORM-DEBUG] Raw duration from form: {request.form.get('duration')}")
+        print(f"[VALIDATOR-DEBUG] After validator: pain_level={pain_level}, duration={duration}")
 
-        # AUTO-SPELL-CORRECT SYMPTOMS (for hospital rush scenarios)
+        # Duration is already validated by VitalSignsValidator, just use it directly
+        if not duration or duration not in ['Today', '2-3 days', '1 week', '2+ weeks', 'Unknown']:
+            duration = 'Unknown'
+
+        print(f"[PARSED] pain_level extracted: {pain_level}, pain_intensity: {pain_intensity}, duration: {duration}")
+
+        # ===== IMPROVED DISEASE RECOGNITION (Not weak fuzzy matching) =====
+        # Try to recognize the symptom as a disease name using proper medical knowledge
         original_symptom = symptom
-        symptom, was_corrected, correction_confidence = symptom_corrector.correct_symptom(symptom)
-        if was_corrected:
-            print(f"[SPELL-CORRECT] Patient entered: '{original_symptom}' → Corrected to: '{symptom}' (confidence: {correction_confidence:.1%})")
-            app.logger.info(f"Symptom auto-corrected: '{original_symptom}' → '{symptom}'")
+        disease_recognized = None
+        disease_profile = None
+        estimated_severity = None
 
-    except ValidationError as e:
-        flash(f'Validation Error: {e.message}', 'error')
-        return redirect(url_for('checkup'))
-    except Exception as e:
-        flash(f'Error processing form data: {str(e)}', 'error')
-        return redirect(url_for('checkup'))
-    # 2.5. EMERGENCY PATCH: Rule-based override for healthy patients
-    # Note: Model expects Celsius, but override function expects Fahrenheit for display
-    from utils.triage_override import (
-        should_override_to_low_risk,
-        calculate_healthy_score,
-        apply_contextual_risk_adjustments,
-        calibrate_medium_high_risk,
-    )
+        # Step 0: Map common symptom combinations to likely diseases
+        # This improves recognition for symptom-based input (not just disease names)
+        symptom_lower = symptom.lower()
 
-    should_override, override_reason, health_score = should_override_to_low_risk(
-        age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history, respiration_rate, spo2
-    )
-
-    if should_override:
-        # Patient has healthy vitals and routine/mild symptoms - assign LOW risk directly
-        final_risk = "LOW"
-        routing = "General Ward / Waiting Room"
-        xgb_risk = "LOW (OVERRIDE)"  # For logging purposes
-        score = health_score
-
-        print(f"🟢 HEALTHY OVERRIDE: {override_reason} (Score: {health_score}/100)")
-    else:
-        # Proceed with standard XGBoost + BERT dual-brain assessment
-        gen_enc = encoders['Gender'].transform([gender])[0] if gender in encoders['Gender'].classes_ else 0
-        symp_enc = encoders['Symptoms'].transform([symptom])[0] if symptom in encoders['Symptoms'].classes_ else 0
-        hist_enc = encoders['Pre_Conditions'].transform([history])[0] if history in encoders['Pre_Conditions'].classes_ else 0
-
-        patient_df = pd.DataFrame([[age, gen_enc, symp_enc, sys_bp, dia_bp, hr, temp, hist_enc]], columns=feature_names)
-        patient_scaled = scaler.transform(patient_df)
-
-        xgb_probs = xgb_risk_model.predict_proba(patient_scaled)[0]
-
-        # ===== NEW: ENHANCED CALIBRATION (Fixes MEDIUM/HIGH overfitting) =====
-        from utils.model_calibration import (
-            classify_xgb_risk_with_calibration,
-            refine_medium_high_boundary,
-            calibrate_based_on_vitals
-        )
-
-        # Step 1: Intelligent XGBoost classification using probability thresholds
-        xgb_risk, xgb_confidence = classify_xgb_risk_with_calibration(
-            xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
-        )
-        print(f"  1️⃣  XGBoost Result: {xgb_risk} (confidence: {xgb_confidence:.2f})")
-
-        # Step 2: Secondary refinement of MEDIUM/HIGH boundary
-        xgb_risk = refine_medium_high_boundary(
-            xgb_risk, xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
-        )
-        print(f"  2️⃣  After Boundary Refinement: {xgb_risk}")
-
-        # Step 3: Vital signs calibration
-        xgb_risk = calibrate_based_on_vitals(
-            xgb_risk, sys_bp, dia_bp, hr, temp_fahrenheit, spo2, respiration_rate, symptom, history
-        )
-        print(f"  3️⃣  After Vital Signs Calibration: {xgb_risk}")
-        # ===== END: ENHANCED CALIBRATION =====
-
-        # 3. RUN SYSTEM 2 (Shadow Brain + Safety Net)
-        semantic_emergency = False
-        if exp_brain:
-            bert_res = exp_brain(symptom)[0]
-            # Increased threshold from 0.5 to 0.55 to reduce over-escalation of MEDIUM cases
-            is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.55)
-            critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
-                 'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
-                 'disoriented', 'altered mental status', 'diabetic emergency']
-            semantic_emergency = any(word in symptom.lower() for word in critical_words) or is_bert_emergency
+        # ========== LAYER 1: LOCAL OFFLINE DATABASE (Zero-Latency) ==========
+        # Check exact disease name match in local database first (fastest)
+        local_db_result = LocalDiseaseDatabase.search_disease(symptom_lower)
+        if local_db_result:
+            print(f"[LAYER-1-EXACT] 🔵 Local DB (exact match): '{symptom}' → {local_db_result['severity']} ({local_db_result['confidence']*100:.0f}%)")
+            disease_recognized = symptom
+            estimated_severity = local_db_result['severity']
+            disease_profile = local_db_result
         else:
-            # BERT model not available - use keyword-based emergency detection only
-            critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
-                 'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
-                 'disoriented', 'altered mental status', 'diabetic emergency']
-            semantic_emergency = any(word in symptom.lower() for word in critical_words)
+            # Try keyword matching in local database (with strict stop-word filtering)
+            local_keyword_results = LocalDiseaseDatabase.search_disease_keywords(symptom_lower)
+            if local_keyword_results:
+                # Get the highest confidence match
+                best_match = max(local_keyword_results.values(), key=lambda x: x['confidence'])
+                print(f"[LAYER-1-KEYWORD] 🔵 Local DB (keyword match): '{symptom}' → {best_match['disease_name']} ({best_match['severity']}) @ {best_match['confidence']*100:.0f}%")
+                disease_recognized = best_match['disease_name']
+                estimated_severity = best_match['severity']
+                disease_profile = best_match
+            else:
+                print(f"[LAYER-1] 🔍 No matches in local database - will attempt Layer 2 (External API + Semantic Classifier)")
 
-        # 4. DUAL-BRAIN CONSENSUS LOGIC
-        if semantic_emergency and xgb_risk != "HIGH":
-            final_risk = "HIGH (SAFETY OVERRIDE)"
-            routing = "Resuscitation / Cardiology"
-        elif xgb_risk == "HIGH":
-            final_risk = "HIGH"
-            routing = "Emergency Department"
-        elif xgb_risk == "MEDIUM":
-            final_risk = "MEDIUM"
-            routing = "Urgent Care"
+        # ========== LAYER 2: SERIOUS DISEASE PATTERN MATCHING ==========
+        # Database of SERIOUS diseases that require HIGH/CRITICAL severity
+        # Only used if not already recognized by Layer 1
+        if not disease_recognized:
+            print(f"[LAYER-2] Checking serious disease patterns...")
+        serious_diseases = {
+            # Cancers (CRITICAL)
+            'cancer': 'CRITICAL',
+            'mesothelioma': 'CRITICAL',
+            'lymphoma': 'CRITICAL',
+            'leukemia': 'CRITICAL',
+            'carcinoma': 'CRITICAL',
+            'tumor': 'HIGH',
+            'malignant': 'CRITICAL',
+
+            # Cardiovascular emergencies (CRITICAL)
+            'myocardial infarction': 'CRITICAL',
+            'heart attack': 'CRITICAL',
+            'stroke': 'CRITICAL',
+            'pulmonary embolism': 'CRITICAL',
+            'aortic dissection': 'CRITICAL',
+
+            # Respiratory emergencies (HIGH/CRITICAL)
+            'pneumonia': 'HIGH',
+            'sepsis': 'CRITICAL',
+            'acute respiratory': 'HIGH',
+            'respiratory failure': 'CRITICAL',
+
+            # Neurological emergencies (CRITICAL)
+            'meningitis': 'CRITICAL',
+            'encephalitis': 'CRITICAL',
+            'intracranial': 'CRITICAL',
+            'hemorrhage': 'CRITICAL',
+
+            # Systemic emergencies (CRITICAL)
+            'anaphylaxis': 'CRITICAL',
+            'shock': 'CRITICAL',
+            'organ failure': 'CRITICAL',
+        }
+
+        # Only check serious diseases if not already recognized by local DB
+        disease_recognized_from_db = None
+        severity_from_db = None
+        if not disease_recognized:
+            for disease_keyword, severity in serious_diseases.items():
+                if disease_keyword in symptom_lower:
+                    disease_recognized_from_db = disease_keyword
+                    severity_from_db = severity
+                    print(f"[LAYER-2-PATTERN] 🟠 Serious disease pattern: '{disease_keyword}' → Severity: {severity}")
+                    disease_recognized = disease_keyword
+                    estimated_severity = severity
+                    break
+
+        # Common high-risk symptom combinations
+        high_risk_combos = {
+            # Respiratory emergencies
+            ('fever', 'cough', 'shortness'): 'Pneumonia',
+            ('fever', 'cough', 'breath'): 'Pneumonia',
+            ('cough', 'fever'): 'Respiratory Infection',
+            ('fever', 'cough', 'sore'): 'Bronchitis',
+            ('chest', 'pain', 'cough'): 'Pleurisy',
+            ('chest', 'pain', 'shortness'): 'Pulmonary Embolism',
+
+            # Cardiac emergencies
+            ('chest', 'pain', 'fever'): 'Myocarditis',
+            ('chest', 'pain', 'pressure'): 'Acute Coronary Syndrome',
+            ('chest', 'pain', 'difficulty'): 'Acute Coronary Syndrome',
+
+            # Neurological emergencies
+            ('severe', 'headache', 'fever'): 'Meningitis',
+            ('headache', 'stiff', 'neck'): 'Meningitis',
+            ('dizzy', 'confusion', 'fever'): 'Encephalitis',
+
+            # Gastrointestinal emergencies
+            ('severe', 'abdominal', 'fever'): 'Appendicitis',
+            ('vomiting', 'fever', 'diarrhea'): 'Gastroenteritis',
+        }
+
+        # Check for high-risk combinations first
+        disease_recognized_from_combos = None
+        severity_from_combos = None
+
+        # Priority 1: Use local DB result if found (already set above)
+        if disease_recognized and estimated_severity:
+            disease_recognized_from_combos = disease_recognized
+            severity_from_combos = estimated_severity
+            print(f"[PRIORITY-1-LOCAL] ✅ Using local database result: '{disease_recognized}' ({severity_from_combos})")
+        # Priority 2: Check pattern-matched serious diseases
+        elif disease_recognized_from_db:
+            disease_recognized_from_combos = disease_recognized_from_db.title()
+            severity_from_combos = severity_from_db
+            print(f"[PRIORITY-2-PATTERN] ✅ Using pattern match: '{disease_recognized_from_combos}' ({severity_from_combos})")
+        # Priority 3: Check symptom combinations
         else:
+            for word_combo, disease_name in high_risk_combos.items():
+                if all(word in symptom_lower for word in word_combo):
+                    disease_recognized_from_combos = disease_name
+                    severity_from_combos = 'HIGH'
+                    print(f"[PRIORITY-3-COMBO] ✅ Symptom combination detected: {word_combo} → {disease_name} (HIGH)")
+                    break
+
+        # If no high-risk combo found, try moderate combos
+        if not disease_recognized_from_combos:
+            moderate_combos = {
+                ('cough', 'sore'): 'Pharyngitis',
+                ('fever', 'body'): 'Viral Infection',
+                ('dizziness', 'nausea'): 'Gastroenteritis',
+                ('rash', 'fever'): 'Viral Exanthem',
+            }
+            for word_combo, disease_name in moderate_combos.items():
+                if all(word in symptom_lower for word in word_combo):
+                    disease_recognized_from_combos = disease_name
+                    severity_from_combos = 'MODERATE'
+                    print(f"[SYMPTOM-COMBO] Detected: {word_combo} → Likely disease: {disease_name} (MODERATE RISK)")
+                    break
+
+        try:
+            # Use combo result if found
+            if disease_recognized_from_combos:
+                disease_recognized = disease_recognized_from_combos
+                estimated_severity = severity_from_combos
+                print(f"[COMBO-RECOGNIZED] Patient entered: '{original_symptom}' → Recognized as: '{disease_recognized}' (Severity: {estimated_severity})")
+                app.logger.info(f"Disease recognized from symptom combo: '{original_symptom}' → '{disease_recognized}' ({estimated_severity})")
+
+            # Step 1: Check LOCAL database FIRST (fast & accurate)
+            if not disease_recognized and local_disease_db:
+                disease_profile = local_disease_db.get_disease_profile(symptom)
+                if disease_profile:
+                    disease_recognized = disease_profile.name
+                    estimated_severity = disease_profile.severity_level
+                    print(f"[LOCAL-DB] Patient entered: '{original_symptom}' → Found in database: '{disease_recognized}' (Severity: {estimated_severity})")
+                    app.logger.info(f"Disease found in local DB: '{original_symptom}' → '{disease_recognized}'")
+
+            # Step 2: If still not recognized, classify severity for unknown diseases (ALWAYS WORKS)
+            if not disease_recognized:
+                from utils.disease_severity_classifier import DiseaseSeverityClassifier
+                severity, confidence = DiseaseSeverityClassifier.classify_disease_severity(symptom)
+                estimated_severity = severity
+
+                # ENHANCEMENT: For symptom combinations with fever, boost severity
+                if 'fever' in symptom_lower and ('cough' in symptom_lower or 'shortness' in symptom_lower or 'breath' in symptom_lower):
+                    # Fever + respiratory symptoms = HIGH risk (pneumonia, flu, serious respiratory infection)
+                    if severity in ['MODERATE', 'MILD']:
+                        estimated_severity = 'HIGH'
+                        print(f"[SEVERITY-BOOST] Fever + respiratory symptoms detected → Boosting from {severity} to HIGH")
+                elif 'chest' in symptom_lower and 'pain' in symptom_lower:
+                    # Chest pain = HIGH risk unless explicitly MILD
+                    if severity in ['MODERATE', 'MILD']:
+                        estimated_severity = 'HIGH'
+                        print(f"[SEVERITY-BOOST] Chest pain detected → Boosting from {severity} to HIGH")
+                elif 'severe' in symptom_lower and 'headache' in symptom_lower:
+                    # Severe headache + fever = meningitis risk = CRITICAL
+                    if 'fever' in symptom_lower:
+                        estimated_severity = 'CRITICAL'
+                        print(f"[SEVERITY-BOOST] Severe headache + fever detected → Boosting to CRITICAL")
+                    else:
+                        estimated_severity = 'HIGH'
+                        print(f"[SEVERITY-BOOST] Severe headache detected → Boosting to HIGH")
+
+                disease_recognized = symptom
+                print(f"[SEMANTIC-SEVERITY] Unknown disease '{symptom}' classified as: {estimated_severity} (confidence: {confidence:.1%})")
+                app.logger.info(f"Disease classified via semantic analysis: '{symptom}' → Severity: {estimated_severity} (confidence: {confidence:.1%})")
+
+                # Step 4: Try multi-source medical APIs for enhanced info (non-blocking, FAST TIMEOUT)
+                # NOTE: External APIs have anti-bot protection and timeout slowly. For hackathon safety,
+                # we use a 2-second timeout so it fails fast and falls back to local AI instantly.
+                # This prevents UI freezing during the demo while keeping the architecture elegant.
+                if estimated_severity != 'CRITICAL':
+                    try:
+                        from utils.medical_database_apis import MedicalDatabaseAPIs
+                        api_result = MedicalDatabaseAPIs.search_disease_comprehensive(symptom, timeout=2)
+
+                        if api_result.get('found'):
+                            sources_found = list(api_result.get('sources', {}).keys())
+                            print(f"[MULTI-API] ✓ Found '{symptom}' in: {', '.join(sources_found)}")
+                            app.logger.info(f"Disease enhanced with external data from: {', '.join(sources_found)}")
+
+                            # FIX: Dynamic Wikipedia Severity Parsing
+                            # Extract summary from Wikipedia/external API and parse for danger keywords
+                            wikipedia_summary = None
+                            if 'wikipedia' in api_result.get('sources', {}):
+                                wiki_data = api_result['sources'].get('wikipedia', {})
+                                # Wikipedia API returns 'snippet' (not 'summary' or 'content')
+                                wikipedia_summary = wiki_data.get('snippet', '')
+                                # Remove HTML tags if present
+                                import re
+                                wikipedia_summary = re.sub(r'<[^>]+>', '', wikipedia_summary)
+
+                            if wikipedia_summary and wikipedia_summary.strip():
+                                # Scan Wikipedia text for clinical danger keywords
+                                parsed_severity = scan_external_severity(wikipedia_summary)
+                                if parsed_severity in ['CRITICAL', 'HIGH']:
+                                    old_severity = estimated_severity
+                                    estimated_severity = parsed_severity
+                                    print(f"📊 [WIKI-SEVERITY] Parsed Wikipedia snippet → Boosting from {old_severity} to {parsed_severity}")
+                                    print(f"    Keywords found in: {wikipedia_summary[:100]}...")
+                                    app.logger.info(f"[WIKI-SEVERITY] Dynamic parsing of '{symptom}' Wikipedia snippet → Boosted to {parsed_severity}")
+                        else:
+                            app.logger.debug(f"[MULTI-API] External sources had no data for '{symptom}' - using local classification")
+                    except Exception as api_err:
+                        # API failure is non-critical - system already classified severity via local AI
+                        # Fast timeout ensures UI stays responsive even if external APIs are slow
+                        app.logger.debug(f"[MULTI-API] Fast timeout (2s) reached - OK, continuing with local classification")
+
+        except Exception as recognition_err:
+            # Fallback: Use original symptom, classify severity
+            print(f"[DISEASE RECOGNITION ERROR] {type(recognition_err).__name__}: {recognition_err}")
+            app.logger.warning(f"Disease recognition failed: {recognition_err}")
+            disease_recognized = original_symptom
+            symptom = original_symptom
+
+            # Still try to classify severity even on error
+            try:
+                from utils.disease_severity_classifier import DiseaseSeverityClassifier
+                severity, _ = DiseaseSeverityClassifier.classify_disease_severity(original_symptom)
+                estimated_severity = severity
+            except:
+                estimated_severity = 'UNKNOWN'
+
+        # 2.5. EMERGENCY PATCH: Rule-based override for healthy patients
+        # Note: Model expects Celsius, but override function expects Fahrenheit for display
+        try:
+            from utils.triage_override import (
+                should_override_to_low_risk,
+                calculate_healthy_score,
+                apply_contextual_risk_adjustments,
+                calibrate_medium_high_risk,
+            )
+
+            should_override, override_reason, health_score = should_override_to_low_risk(
+                age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history, respiration_rate, spo2
+            )
+        except RecursionError as re:
+            app.logger.error(f"[RECURSION] Override check failed")
+            should_override = False
+            override_reason = ""
+            health_score = 50
+        except Exception as ov_err:
+            app.logger.warning(f"Override check warning: {type(ov_err).__name__}")
+            should_override = False
+            override_reason = ""
+            health_score = 50
+
+        if should_override:
+            # Patient has healthy vitals and routine/mild symptoms - assign LOW risk directly
             final_risk = "LOW"
             routing = "General Ward / Waiting Room"
+            xgb_risk = "LOW (OVERRIDE)"  # For logging purposes
+            score = health_score
+            print(f"🟢 HEALTHY OVERRIDE: {override_reason} (Score: {health_score}/100)")
+        else:
+            # Proceed with standard XGBoost + BERT dual-brain assessment
+            try:
+                gen_enc = encoders['Gender'].transform([gender])[0] if gender in encoders['Gender'].classes_ else 0
 
-        adjusted_risk, _ = apply_contextual_risk_adjustments(
-            final_risk, age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history
-        )
-        if adjusted_risk != final_risk:
-            final_risk = adjusted_risk
-            if adjusted_risk == 'HIGH':
-                routing = 'Emergency Department'
-            elif adjusted_risk == 'MEDIUM':
-                routing = 'Urgent Care'
+                # BUG FIX 3: If symptom not in training data, flag it and rely heavier on BERT + NEWS2
+                if symptom in encoders['Symptoms'].classes_:
+                    symp_enc = encoders['Symptoms'].transform([symptom])[0]
+                    unknown_symptom = False
+                else:
+                    symp_enc = 0  # Default encoding
+                    unknown_symptom = True
+                    print(f"⚠️  WARNING: Unknown symptom '{symptom}' not in XGBoost training data - relying on BERT semantic analysis")
+                    app.logger.warning(f"Unknown symptom '{symptom}' - XGBoost may be inaccurate, using BERT override")
+
+                hist_enc = encoders['Pre_Conditions'].transform([history])[0] if history in encoders['Pre_Conditions'].classes_ else 0
+
+                patient_df = pd.DataFrame([[age, gen_enc, symp_enc, sys_bp, dia_bp, hr, temp, hist_enc]], columns=feature_names)
+                patient_scaled = scaler.transform(patient_df)
+
+                xgb_probs = xgb_risk_model.predict_proba(patient_scaled)[0]
+
+                # ===== NEW: ENHANCED CALIBRATION (Fixes MEDIUM/HIGH overfitting) =====
+                from utils.model_calibration import (
+                    classify_xgb_risk_with_calibration,
+                    refine_medium_high_boundary,
+                    calibrate_based_on_vitals
+                )
+
+                # Step 1: Intelligent XGBoost classification using probability thresholds
+                xgb_risk, xgb_confidence = classify_xgb_risk_with_calibration(
+                    xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
+                )
+                print(f"  1️⃣  XGBoost Result: {xgb_risk} (confidence: {xgb_confidence:.2f})")
+
+                # Step 2: Secondary refinement of MEDIUM/HIGH boundary
+                xgb_risk = refine_medium_high_boundary(
+                    xgb_risk, xgb_probs, symptom, age, sys_bp, dia_bp, hr, temp_fahrenheit, history
+                )
+                print(f"  2️⃣  After Boundary Refinement: {xgb_risk}")
+
+                # Step 3: Vital signs calibration
+                xgb_risk = calibrate_based_on_vitals(
+                    xgb_risk, sys_bp, dia_bp, hr, temp_fahrenheit, spo2, respiration_rate, symptom, history
+                )
+                print(f"  3️⃣  After Vital Signs Calibration: {xgb_risk}")
+                # ===== END: ENHANCED CALIBRATION =====
+            except RecursionError as re:
+                app.logger.error(f"[RECURSION] Model calibration failed")
+                xgb_risk = "MEDIUM"  # Safe default
+                xgb_confidence = 0.5
+            except Exception as cal_err:
+                app.logger.warning(f"Calibration warning: {type(cal_err).__name__}")
+                xgb_risk = "MEDIUM"  # Safe default
+                xgb_confidence = 0.5
+
+            # 3. RUN SYSTEM 2 (Shadow Brain + Safety Net)
+            semantic_emergency = False
+            if exp_brain:
+                bert_res = exp_brain(symptom)[0]
+                # Increased threshold from 0.5 to 0.55 to reduce over-escalation of MEDIUM cases
+                is_bert_emergency = (bert_res['label'] == 'LABEL_1' and bert_res['score'] > 0.55)
+                critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
+                     'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
+                     'disoriented', 'altered mental status', 'diabetic emergency']
+                semantic_emergency = any(word in symptom.lower() for word in critical_words) or is_bert_emergency
             else:
-                routing = 'General Ward / Waiting Room'
+                # BERT model not available - use keyword-based emergency detection only
+                critical_words = ['distress', 'hemorrhage', 'speech', 'crushing', 'chest pain',
+                     'unconscious', 'confusion', 'bleeding', 'anaphylaxis', 'throat swelling', 'cannot breathe',
+                     'disoriented', 'altered mental status', 'diabetic emergency']
+                semantic_emergency = any(word in symptom.lower() for word in critical_words)
 
-        calibrated_risk, _ = calibrate_medium_high_risk(
-            final_risk,
-            xgb_probs,
-            0,
-            semantic_emergency,
-            is_danger=False,
-            danger_severity='NORMAL',
-            symptom_text=symptom,
-            age=age,
-        )
-        if calibrated_risk != final_risk:
-            final_risk = calibrated_risk
-            if calibrated_risk == 'HIGH':
-                routing = 'Emergency Department'
-            elif calibrated_risk == 'MEDIUM':
-                routing = 'Urgent Care'
-            else:
-                routing = 'General Ward / Waiting Room'
+            # 3b. APPLY DISEASE SEVERITY BOOST (NEW!)
+            # Based on disease classification, boost risk for serious conditions
+            # This overrides weak XGBoost predictions when we have strong medical evidence
+            severity_boosted = False
+            if estimated_severity:
+                from utils.disease_severity_classifier import DiseaseSeverityClassifier
+                severity_multiplier = DiseaseSeverityClassifier.get_risk_multiplier(estimated_severity)
 
-        # NEW: PAIN INTENSITY & DURATION ADJUSTMENT (Clinical Rule-Based)
-        # If pain is severe (7-10) OR duration is prolonged (2+ weeks), adjust risk upward
-        pain_adjustment_note = ""
-        if pain_intensity >= 7:
-            pain_adjustment_note = f"[PAIN] Severe pain intensity ({pain_intensity}/10) detected. "
-            if final_risk == "LOW":
+                if estimated_severity == 'CRITICAL':
+                    print(f"🔴 [CRITICAL DISEASE] {disease_recognized} → Boosting risk to CRITICAL (overriding XGBoost: {xgb_risk})")
+                    xgb_risk = "CRITICAL"
+                    severity_boosted = True
+                elif estimated_severity == 'HIGH':
+                    # Boost HIGH severity diseases regardless of XGBoost result
+                    if xgb_risk in ["MEDIUM", "LOW"]:
+                        print(f"🟠 [HIGH DISEASE] {disease_recognized} → Boosting risk from {xgb_risk} to HIGH")
+                        xgb_risk = "HIGH"
+                        severity_boosted = True
+                elif estimated_severity == 'MODERATE':
+                    # Boost MODERATE to at least MEDIUM if XGBoost says LOW
+                    if xgb_risk == "LOW":
+                        print(f"🟡 [MODERATE DISEASE] {disease_recognized} → Boosting risk from LOW to MEDIUM")
+                        xgb_risk = "MEDIUM"
+                        severity_boosted = True
+
+            # 4. DUAL-BRAIN CONSENSUS LOGIC
+            if semantic_emergency and xgb_risk != "HIGH" and xgb_risk != "CRITICAL":
+                final_risk = "HIGH (SAFETY OVERRIDE)"
+                routing = "Resuscitation / Cardiology"
+            elif xgb_risk == "CRITICAL":
+                final_risk = "CRITICAL"
+                routing = "Resuscitation / Emergency"
+            elif xgb_risk == "HIGH":
+                final_risk = "HIGH"
+                routing = "Emergency Department"
+            elif xgb_risk == "MEDIUM":
                 final_risk = "MEDIUM"
                 routing = "Urgent Care"
-                print(f"⚠️  Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
-                app.logger.info(f"Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
-            elif final_risk == "MEDIUM":
-                # Already MEDIUM, but note the high pain for clinical decision-making
-                print(f"⚠️  Pain intensity high ({pain_intensity}/10) - escalate caution level")
-                app.logger.info(f"High pain intensity ({pain_intensity}/10) noted with MEDIUM risk")
-
-        duration_adjustment_note = ""
-        if duration == "2+ weeks":
-            duration_adjustment_note = f"[DURATION] Chronic symptom duration (2+ weeks) detected. "
-            if final_risk == "LOW":
-                final_risk = "MEDIUM"
-                routing = "Urgent Care"
-                print(f"⚠️  Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
-                app.logger.info(f"Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
-            elif final_risk == "MEDIUM":
-                # Already MEDIUM, but note the chronic nature
-                print(f"⚠️  Chronic condition (2+ weeks) - requires specialty follow-up")
-                app.logger.info(f"Prolonged symptom duration (2+ weeks) noted with MEDIUM risk")
-
-        # Calculate score for non-override cases
-        score = None  # Will be calculated below
-
-    def recommend_specialist(symptom_text, risk_level):
-        text = (symptom_text or '').lower()
-        risk_upper = (risk_level or '').upper()
-
-        if 'HIGH' not in risk_upper and 'MEDIUM' not in risk_upper:
-            return 'General Medicine'
-
-        rules = [
-            (['chest pain', 'palpitation', 'cardiac', 'heart attack'], 'Cardiology'),
-            (['hemorrhage', 'bleeding', 'trauma', 'injury'], 'Trauma/Surgery'),
-            (['speech', 'stroke', 'seizure', 'paralysis', 'neurologic'], 'Neurology'),
-            (['breath', 'asthma', 'wheezing', 'respiratory'], 'Pulmonology')
-        ]
-
-        for keys, specialist in rules:
-            if any(key in text for key in keys):
-                return specialist
-
-        return 'Emergency Medicine' if 'HIGH' in risk_upper else 'General Medicine'
-
-    recommended_specialist = recommend_specialist(symptom, final_risk)
-    phc_id = request.form.get('phc_id') or current_user.phc_id
-    if phc_id == '':
-        phc_id = None
-
-    # 5. SAVE TO DB with user_id (including pain intensity and duration)
-    conn = get_db_connection()
-    conn.execute('''INSERT INTO patient_logs
-                      (user_id, phc_id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, respiration_rate, spo2, history, xgb_risk, dual_brain_risk, routing, recommended_specialist, pain_intensity, symptom_duration)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                  (current_user.id, phc_id, age, gender, symptom, sys_bp, dia_bp, hr, temp_fahrenheit, respiration_rate, spo2, history, xgb_risk, final_risk, routing, recommended_specialist, pain_intensity, duration))
-    conn.commit()
-    log_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-    conn.close()
-
-    # 6. Calculate dynamic score based on risk factors (if not already set by override)
-    if score is None:
-        def calculate_score(risk_level, sys_bp, dia_bp, hr, temp, history):
-            """Calculate risk score (0-100) based on vitals and health history"""
-            score = 0
-
-            # Blood pressure contribution (max 25 points)
-            if sys_bp > 140 or dia_bp > 90:
-                score += 20
-            elif sys_bp > 130 or dia_bp > 80:
-                score += 12
-            elif sys_bp < 90 or dia_bp < 60:
-                score += 18
             else:
-                score += 5
+                final_risk = "LOW"
+                routing = "General Ward / Waiting Room"
 
-            # Heart rate contribution (max 20 points)
-            if hr < 60 or hr > 100:
-                score += 15
-            elif hr < 40 or hr > 120:
-                score += 18
+            # Only apply contextual adjustments if no disease severity boost
+            if not severity_boosted:
+                adjusted_risk, _ = apply_contextual_risk_adjustments(
+                    final_risk, age, sys_bp, dia_bp, hr, temp_fahrenheit, symptom, history
+                )
+                if adjusted_risk != final_risk:
+                    print(f"[CONTEXTUAL-ADJUST] Adjusted risk from {final_risk} to {adjusted_risk}")
+                    final_risk = adjusted_risk
+                    if adjusted_risk == 'HIGH':
+                        routing = 'Emergency Department'
+                    elif adjusted_risk == 'MEDIUM':
+                        routing = 'Urgent Care'
+                    else:
+                        routing = 'General Ward / Waiting Room'
+
+            # NOTE: Only apply calibration if no disease severity boost was applied
+            # Disease severity boosts should not be downgraded by probability calibration
+            if not severity_boosted:
+                calibrated_risk, _ = calibrate_medium_high_risk(
+                    final_risk,
+                    xgb_probs,
+                    0,
+                    semantic_emergency,
+                    is_danger=False,
+                    danger_severity='NORMAL',
+                    symptom_text=symptom,
+                    age=age,
+                )
+                if calibrated_risk != final_risk:
+                    print(f"[CALIBRATION] Adjusted risk from {final_risk} to {calibrated_risk}")
+                    final_risk = calibrated_risk
+                    if calibrated_risk == 'HIGH':
+                        routing = 'Emergency Department'
+                    elif calibrated_risk == 'MEDIUM':
+                        routing = 'Urgent Care'
+                    else:
+                        routing = 'General Ward / Waiting Room'
             else:
-                score += 5
+                print(f"[DISEASE-SEVERITY-LOCK] Risk locked at {final_risk} due to disease severity boost - bypassing calibration")
 
-            # Temperature contribution (max 20 points)
-            if temp > 100.4 or temp < 95:
-                score += 18
-            elif temp > 99 or temp < 97:
-                score += 10
-            else:
-                score += 3
+            # NEW: PAIN INTENSITY & DURATION ADJUSTMENT (Clinical Rule-Based)
+            # If pain is severe (7-10) OR duration is prolonged (2+ weeks), adjust risk upward
+            pain_adjustment_note = ""
+            if pain_intensity >= 7:
+                pain_adjustment_note = f"[PAIN] Severe pain intensity ({pain_intensity}/10) detected. "
+                if final_risk == "LOW":
+                    final_risk = "MEDIUM"
+                    routing = "Urgent Care"
+                    print(f"⚠️  Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
+                    app.logger.info(f"Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
+                elif final_risk == "MEDIUM":
+                    # Already MEDIUM, but note the high pain for clinical decision-making
+                    print(f"⚠️  Pain intensity high ({pain_intensity}/10) - escalate caution level")
+                    app.logger.info(f"High pain intensity ({pain_intensity}/10) noted with MEDIUM risk")
 
-            # Medical history contribution (max 15 points)
-            if history and history.lower() != 'none':
-                score += 12
-            else:
-                score += 2
+            duration_adjustment_note = ""
+            if duration == "2+ weeks":
+                duration_adjustment_note = f"[DURATION] Chronic symptom duration (2+ weeks) detected. "
+                if final_risk == "LOW":
+                    final_risk = "MEDIUM"
+                    routing = "Urgent Care"
+                    print(f"⚠️  Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
+                    app.logger.info(f"Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
+                elif final_risk == "MEDIUM":
+                    # Already MEDIUM, but note the chronic nature
+                    print(f"⚠️  Chronic condition (2+ weeks) - requires specialty follow-up")
+                    app.logger.info(f"Prolonged symptom duration (2+ weeks) noted with MEDIUM risk")
 
-            # Risk level adjustment (max 20 points)
-            if 'HIGH' in risk_level:
-                score += 20
-            elif 'MEDIUM' in risk_level:
-                score += 10
-            else:
-                score += 3
+            # Calculate score for non-override cases
+            score = None  # Will be calculated below
 
-            return min(100, score)
+        def recommend_specialist(symptom_text, risk_level):
+            text = (symptom_text or '').lower()
+            risk_upper = (risk_level or '').upper()
 
-        score = calculate_score(final_risk, sys_bp, dia_bp, hr, temp_fahrenheit, history)
+            if 'HIGH' not in risk_upper and 'MEDIUM' not in risk_upper:
+                return 'General Medicine'
 
-    # 6. Store result in session for patient view
-    if current_user.role == 'patient':
-        session['last_checkup_result'] = {
-            'risk_level': final_risk,
-            'routing': routing,
-            'vitals': {
-                'bp': f"{sys_bp}/{dia_bp}",
-                'hr': str(hr),
-                'temp': str(temp_fahrenheit),
-                'respiration_rate': str(respiration_rate),
-                'spo2': str(spo2)
-            },
-            'symptoms': symptom,
-            'age': age,
-            'gender': gender,
-            'history': history,
-            'pain_intensity': pain_intensity,  # NEW: Include pain level
-            'symptom_duration': duration,      # NEW: Include symptom duration
-            'recommended_specialist': recommended_specialist,
-            'score': score,
-            'timestamp': datetime.now().isoformat(),
-            'log_id': log_id
-        }
-        flash(f'Health assessment completed! Risk Level: {final_risk}')
-        return redirect(url_for('checkup_result'))
+            rules = [
+                (['chest pain', 'palpitation', 'cardiac', 'heart attack'], 'Cardiology'),
+                (['hemorrhage', 'bleeding', 'trauma', 'injury'], 'Trauma/Surgery'),
+                (['speech', 'stroke', 'seizure', 'paralysis', 'neurologic'], 'Neurology'),
+                (['breath', 'asthma', 'wheezing', 'respiratory'], 'Pulmonology')
+            ]
 
-    return redirect(url_for('doctor_dashboard'))
+            for keys, specialist in rules:
+                if any(key in text for key in keys):
+                    return specialist
+
+            return 'Emergency Medicine' if 'HIGH' in risk_upper else 'General Medicine'
+
+        recommended_specialist = recommend_specialist(symptom, final_risk)
+        phc_id = request.form.get('phc_id') or current_user.phc_id
+        if phc_id == '':
+            phc_id = None
+
+        # 5. SAVE TO DB with user_id (including pain intensity and duration)
+        conn = get_db_connection()
+        conn.execute('''INSERT INTO patient_logs
+                          (user_id, phc_id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, respiration_rate, spo2, history, xgb_risk, dual_brain_risk, routing, recommended_specialist, pain_intensity, symptom_duration)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                      (current_user.id, phc_id, age, gender, symptom, sys_bp, dia_bp, hr, temp_fahrenheit, respiration_rate, spo2, history, xgb_risk, final_risk, routing, recommended_specialist, pain_intensity, duration))
+        conn.commit()
+        log_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+        conn.close()
+
+        # 6. Calculate dynamic score based on risk factors (if not already set by override)
+        if score is None:
+            def calculate_score(risk_level, sys_bp, dia_bp, hr, temp, history):
+                """Calculate risk score (0-100) based on vitals and health history"""
+                score = 0
+
+                # Blood pressure contribution (max 25 points)
+                if sys_bp > 140 or dia_bp > 90:
+                    score += 20
+                elif sys_bp > 130 or dia_bp > 80:
+                    score += 12
+                elif sys_bp < 90 or dia_bp < 60:
+                    score += 18
+                else:
+                    score += 5
+
+                # Heart rate contribution (max 20 points)
+                if hr < 60 or hr > 100:
+                    score += 15
+                elif hr < 40 or hr > 120:
+                    score += 18
+                else:
+                    score += 5
+
+                # Temperature contribution (max 20 points)
+                if temp > 100.4 or temp < 95:
+                    score += 18
+                elif temp > 99 or temp < 97:
+                    score += 10
+                else:
+                    score += 3
+
+                # Medical history contribution (max 15 points)
+                if history and history.lower() != 'none':
+                    score += 12
+                else:
+                    score += 2
+
+                # Risk level adjustment (max 20 points)
+                if 'HIGH' in risk_level:
+                    score += 20
+                elif 'MEDIUM' in risk_level:
+                    score += 10
+                else:
+                    score += 3
+
+                return min(100, score)
+
+            score = calculate_score(final_risk, sys_bp, dia_bp, hr, temp_fahrenheit, history)
+
+        # 7. Store result in session for patient view
+        if current_user.role == 'patient':
+            session['last_checkup_result'] = {
+                'risk_level': final_risk,
+                'routing': routing,
+                'vitals': {
+                    'bp': f"{sys_bp}/{dia_bp}",
+                    'hr': str(hr),
+                    'temp': str(temp_fahrenheit),
+                    'respiration_rate': str(respiration_rate),
+                    'spo2': str(spo2)
+                },
+                'symptoms': symptom,
+                'age': age,
+                'gender': gender,
+                'history': history,
+                'pain_intensity': int(pain_intensity) if pain_intensity else 0,
+                'symptom_duration': duration,
+                'recommended_specialist': recommended_specialist,
+                'score': score,
+                'timestamp': datetime.now().isoformat(),
+                'log_id': log_id,
+                'news2_score': score
+            }
+            print(f"[DEBUG] Session data stored: pain_intensity={pain_intensity}, duration={duration}, risk={final_risk}")
+            app.logger.info(f"Session data: pain_intensity={pain_intensity}, duration={duration}, risk={final_risk}")
+            flash(f'Health assessment completed! Risk Level: {final_risk}')
+            return redirect(url_for('checkup_result'))
+
+        return redirect(get_role_dashboard_redirect())
+
+    except Exception as e:
+        error_msg = str(e)[:200]
+        app.logger.error(f"[TRIAGE ERROR] {type(e).__name__}: {error_msg}")
+        flash(f'Error processing triage data: {error_msg}', 'error')
+        return redirect(url_for('checkup'))
 
 # --- 8. APPOINTMENTS ROUTES ---
 @app.route('/appointments', methods=['GET'])
@@ -1958,7 +3043,7 @@ def appointments():
     conn = get_db_connection()
 
     if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
-        # Doctors see appointments assigned to them or pending requests
+        # Doctor/PHC staff see appointments assigned to them or pending requests
         appointments_list = conn.execute('''
             SELECT a.*, u.fullname as patient_fullname, u.phone as patient_phone
             FROM appointments a
@@ -2086,29 +3171,86 @@ def doctors_directory():
 @app.route('/patients', methods=['GET'])
 @login_required
 def patients_directory():
-    # Only doctors can access patient directory
-    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
-        flash('Access denied. Only doctors can view patient directory.')
+    # Only medical staff can access patient directory
+    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse', 'ddhs_admin'):
+        flash('Access denied. Only medical staff can view patient directory.')
         return redirect(url_for('patient_dashboard'))
 
     conn = get_db_connection()
 
-    # Get all patients with their appointment statistics
-    patients = conn.execute('''
-        SELECT
-            u.id,
-            u.email,
-            u.fullname,
-            u.phone,
-            COUNT(DISTINCT a.id) as total_appointments,
-            COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
-            COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
-        FROM users u
-        LEFT JOIN appointments a ON u.id = a.patient_id
-        WHERE u.role = 'patient'
-        GROUP BY u.id
-        ORDER BY u.fullname ASC
-    ''').fetchall()
+    # Get patients based on user role
+    if current_user.role == 'doctor':
+        # Regular doctor sees ONLY their own patients
+        patients = conn.execute('''
+            SELECT DISTINCT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
+            FROM users u
+            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.id,)).fetchall()
+
+    elif current_user.role == 'phc_doctor':
+        # PHC Doctor sees ALL patients from their facility
+        patients = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.patient_id
+            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient' AND pl.phc_id = ?
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
+
+    elif current_user.role == 'phc_nurse':
+        # PHC Nurse sees ALL patients from their facility
+        patients = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.patient_id
+            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient' AND pl.phc_id = ?
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
+
+    else:  # DDHS Admin sees ALL patients
+        patients = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.patient_id
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''').fetchall()
 
     patients = [dict(row) for row in patients]
 
@@ -2186,40 +3328,70 @@ def create_appointment():
         symptoms = request.form.get('symptoms', '')
         notes = request.form.get('notes', '')
 
-        # Get doctor info
-        doctor = conn.execute('SELECT fullname, specialization FROM users WHERE id = ?', (doctor_id,)).fetchone()
+        # Get doctor info with safe defaults
+        doctor = None
+        doctor_name = 'Doctor'
+        department = 'General Medicine'  # Default department
+
+        if doctor_id:
+            doctor = conn.execute('SELECT fullname, specialization FROM users WHERE id = ?', (doctor_id,)).fetchone()
+            if doctor:
+                doctor_name = doctor['fullname'] or 'Doctor'
+                department = doctor['specialization'] or 'General Medicine'  # Use specialization if available
+            else:
+                doctor_id = None  # Invalid doctor, clear ID
+
+        # Ensure all required fields have values
+        doctor_id = doctor_id or current_user.id
+        symptoms = str(symptoms or '').strip()
+        notes = str(notes or '').strip()
 
         conn.execute('''
             INSERT INTO appointments
             (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
-        ''', (current_user.id, current_user.fullname, doctor_id, doctor['fullname'],
-              doctor['specialization'], appointment_date, appointment_time, symptoms, notes))
+        ''', (current_user.id, current_user.fullname, doctor_id, doctor_name,
+              department, appointment_date, appointment_time, symptoms, notes))
 
         flash('Appointment request sent! Waiting for doctor approval.')
 
     else:
         # Doctor creates appointment (auto-approved)
         patient_id = request.form.get('patient_id')
-        patient_name = request.form['patient_name']
-        doctor_name = request.form.get('doctor_name', current_user.fullname)
-        department = request.form['department']
+        patient_name = request.form.get('patient_name', 'Patient')
+        doctor_name = request.form.get('doctor_name', current_user.fullname or 'Doctor')
+        department = request.form.get('department', current_user.specialization or 'General Medicine')  # Safe default
         appointment_date = request.form['appointment_date']
         appointment_time = request.form['appointment_time']
         symptoms = request.form.get('symptoms', '')
         notes = request.form.get('notes', '')
 
+        # Ensure required fields are not empty
+        patient_id = patient_id or current_user.id
+        patient_name = str(patient_name).strip() or 'Patient'
+        doctor_name = str(doctor_name).strip() or 'Doctor'
+        department = str(department).strip() or 'General Medicine'
+        symptoms = str(symptoms).strip()
+        notes = str(notes).strip()
+
         conn.execute('''
             INSERT INTO appointments
             (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
-        ''', (patient_id or current_user.id, patient_name, current_user.id, doctor_name,
+        ''', (patient_id, patient_name, current_user.id, doctor_name,
               department, appointment_date, appointment_time, symptoms, notes))
 
         flash('Appointment created successfully!')
 
-    conn.commit()
-    conn.close()
+    try:
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        app.logger.error(f"Appointment creation failed: {e}")
+        flash(f'Error creating appointment: {str(e)}', 'error')
+        return redirect(url_for('appointments'))
+    finally:
+        conn.close()
 
     return redirect(url_for('appointments'))
 
@@ -2306,7 +3478,7 @@ def health_report():
     """Patient's personal health progress report"""
     if current_user.role != 'patient':
         flash('This page is only accessible to patients')
-        return redirect(url_for('doctor_dashboard'))
+        return redirect(get_role_dashboard_redirect())
 
     conn = get_db_connection()
 
@@ -2365,24 +3537,11 @@ def health_report():
         # Calculate health score
         score_data['overall_score'] = 75  # Base score
 
-        # Adjust based on risk
-        high_risk_count = sum(1 for r in health_records if 'HIGH' in r['dual_brain_risk'])
-        low_risk_count = sum(1 for r in health_records if 'LOW' in r['dual_brain_risk'])
+        # Risk improvement
+        score_data['risk_improvement'] = 'Yes' if summary['risk_improvement'] else 'No'
 
-        if low_risk_count > high_risk_count:
-            score_data['overall_score'] = 85
-        elif high_risk_count > len(health_records) * 0.5:
-            score_data['overall_score'] = 55
-
-        # Risk improvement percentage
-        if summary['risk_improvement']:
-            score_data['risk_improvement'] = '+15'
-        else:
-            score_data['risk_improvement'] = '0'
-
-        # Vitals stability (lower standard deviation = more stable)
-        bp_std = np.std([r['sys_bp'] for r in health_records])
-        score_data['vitals_stability'] = int(max(0, 100 - bp_std))
+        # Vitals stability
+        score_data['vitals_stability'] = 80
 
         # Checkup frequency
         score_data['checkup_frequency'] = f"{len(health_records)}"
@@ -2412,36 +3571,126 @@ def health_report():
 
     conn.close()
 
-    return render_template('health_report.html',
+    # Prepare JSON data for charts
+    import json
+    chart_data = {
+        'labels': [],
+        'bp_sys': [],
+        'bp_dia': [],
+        'hr': [],
+        'temp': [],
+        'risk': []
+    }
+
+    if health_records:
+        # Reverse to show chronological order (oldest first)
+        for record in reversed(health_records[-30:]):  # Last 30 records
+            # Format date
+            date_str = record['timestamp'][:10] if record['timestamp'] else 'N/A'
+            chart_data['labels'].append(date_str)
+            chart_data['bp_sys'].append(record.get('sys_bp', 0) or 0)
+            chart_data['bp_dia'].append(record.get('dia_bp', 0) or 0)
+            chart_data['hr'].append(record.get('hr', 0) or 0)
+            chart_data['temp'].append(record.get('temp', 0) or 0)
+            risk = 'HIGH' if 'HIGH' in record.get('dual_brain_risk', '') else ('MEDIUM' if 'MEDIUM' in record.get('dual_brain_risk', '') else 'LOW')
+            chart_data['risk'].append(risk)
+
+    chart_data_json = json.dumps(chart_data)
+
+    html = render_template('health_report.html',
                          health_records=health_records,
                          summary=summary,
                          score_data=score_data,
+                         chart_data=chart_data_json,
                          user=current_user)
 
-@app.route('/reports')
+    # Fix CDN URLs - replace jsdelivr with cdnjs if needed
+    if 'cdn.jsdelivr.net' in html:
+        html = html.replace('cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js',
+                           'cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js')
+
+    resp = make_response(html)
+    # Aggressive cache busting
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, max-age=0'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    resp.headers['ETag'] = ''
+    resp.headers['Last-Modified'] = ''
+    return resp
+
+
+@app.route('/patients')
 @login_required
-def reports():
-    """Doctor's view of all patient reports"""
-    if current_user.role not in ('doctor', 'phc_doctor', 'phc_nurse'):
-        flash('This page is only accessible to doctors')
-        return redirect(url_for('patient_dashboard'))
+def patients():
+    """Patients list - doctors/nurses/admins can view patients"""
+    if current_user.role not in ['doctor', 'nurse', 'admin']:
+        flash('This page is only accessible to medical staff')
 
     conn = get_db_connection()
 
-    # Get all patients with their health statistics
-    patients = conn.execute('''
-        SELECT
-            u.id,
-            u.email,
-            u.fullname,
-            u.phone,
-            COUNT(DISTINCT a.id) as appointments_count
-        FROM users u
-        LEFT JOIN appointments a ON u.id = a.patient_id
-        WHERE u.role = 'patient'
-        GROUP BY u.id
-        ORDER BY u.fullname ASC
-    ''').fetchall()
+    # Get patients based on user role
+    if current_user.role == 'doctor':
+        # Regular doctor sees ONLY their own patients (via appointments)
+        patients = conn.execute('''
+            SELECT DISTINCT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as appointments_count
+            FROM users u
+            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.id,)).fetchall()
+
+    elif current_user.role == 'phc_doctor':
+        # PHC Doctor sees ALL patients from their facility
+        patients = conn.execute('''
+            SELECT DISTINCT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT pl.id) as appointments_count
+            FROM users u
+            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient' AND pl.phc_id = ?
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
+
+    elif current_user.role == 'phc_nurse':
+        # PHC Nurse sees ALL patients from their facility
+        patients = conn.execute('''
+            SELECT DISTINCT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT pl.id) as appointments_count
+            FROM users u
+            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient' AND pl.phc_id = ?
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
+
+    else:  # DDHS Admin sees ALL patients
+        patients = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                COUNT(DISTINCT a.id) as appointments_count
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.patient_id
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''').fetchall()
 
     patient_reports = []
     patient_details = {}
@@ -2524,6 +3773,10 @@ def reports():
 
     conn.close()
 
+    # DEBUG: Verify patient_details has records
+    for pid, details in patient_details.items():
+        print(f"[DEBUG] Patient {pid}: {len(details.get('records', []))} records")
+
     return render_template('reports.html',
                          patient_reports=patient_reports,
                          patient_details=patient_details,
@@ -2537,7 +3790,7 @@ def checkup():
     """AI health checkup page for patients"""
     if current_user.role != 'patient':
         flash('AI checkup is only available for patients')
-        return redirect(url_for('doctor_dashboard'))
+        return redirect(get_role_dashboard_redirect())
 
     return render_template('checkup.html', user=current_user)
 
@@ -2547,7 +3800,7 @@ def checkup_result():
     """Show AI checkup results to patient"""
     if current_user.role != 'patient':
         flash('Access denied')
-        return redirect(url_for('doctor_dashboard'))
+        return redirect(url_for('index'))
 
     result = session.get('last_checkup_result')
 
@@ -2565,30 +3818,76 @@ def messages():
     conn = get_db_connection()
 
     # Get list of contacts based on user role
-    if current_user.role in ('doctor', 'phc_doctor', 'phc_nurse'):
-        # Doctors see all their patients
+    if current_user.role == 'doctor':
+        # Regular doctor sees ONLY their own patients
         contacts = conn.execute('''
             SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
                    (SELECT COUNT(*) FROM messages
                     WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
             FROM users u
-            WHERE u.role = 'patient' AND u.id IN (
-                SELECT DISTINCT patient_id FROM appointments WHERE doctor_id = ?
-                UNION
-                SELECT DISTINCT sender_id FROM messages WHERE receiver_id = ?
-                UNION
-                SELECT DISTINCT receiver_id FROM messages WHERE sender_id = ?
-            )
+            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
+            WHERE u.role = 'patient'
             ORDER BY u.fullname ASC
-        ''', (current_user.id, current_user.id, current_user.id, current_user.id)).fetchall()
-    else:
-        # Patients see all doctors
+        ''', (current_user.id, current_user.id)).fetchall()
+
+    elif current_user.role == 'phc_nurse':
+        # PHC Nurse sees patients from their facility
         contacts = conn.execute('''
             SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
                    (SELECT COUNT(*) FROM messages
                     WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
             FROM users u
-            WHERE u.role = 'doctor'
+            INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.id, current_user.phc_id)).fetchall()
+
+    elif current_user.role == 'phc_doctor':
+        # PHC Doctor sees patients from their facility AND all doctors
+        patients = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                   (SELECT COUNT(*) FROM messages
+                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+            FROM users u
+            INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+            WHERE u.role = 'patient'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''', (current_user.id, current_user.phc_id)).fetchall()
+
+        # Also get all doctors (regular and PHC)
+        doctors = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                   (SELECT COUNT(*) FROM messages
+                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+            FROM users u
+            WHERE u.role IN ('doctor', 'phc_doctor', 'ddhs_admin') AND u.id != ?
+            ORDER BY u.fullname ASC
+        ''', (current_user.id, current_user.id)).fetchall()
+
+        # Combine both lists
+        contacts = list(patients) + list(doctors)
+
+    elif current_user.role == 'ddhs_admin':
+        # DDHS Admin sees all contacts
+        contacts = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                   (SELECT COUNT(*) FROM messages
+                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+            FROM users u
+            WHERE u.role IN ('patient', 'doctor', 'phc_doctor', 'phc_nurse')
+            ORDER BY u.fullname ASC
+        ''', (current_user.id,)).fetchall()
+
+    else:
+        # Patients see all doctors (regular, PHC, and admin)
+        contacts = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                   (SELECT COUNT(*) FROM messages
+                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+            FROM users u
+            WHERE u.role IN ('doctor', 'phc_doctor', 'ddhs_admin')
             ORDER BY u.fullname ASC
         ''', (current_user.id,)).fetchall()
 
@@ -3283,6 +4582,378 @@ def parse_medical_text(text):
         parsed['medical_history'] = ', '.join(found_history[:5])
 
     return parsed
+
+@app.route('/api/patient-records/<int:patient_id>')
+@login_required
+def get_patient_records(patient_id):
+    """
+    Fetch patient health records for doctor review before appointment approval
+    """
+    try:
+        # Verify user is a doctor
+        if current_user.role not in ('doctor', 'phc_doctor'):
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+        conn = get_db_connection()
+
+        # Get patient info
+        patient = conn.execute(
+            'SELECT id, fullname FROM users WHERE id = ? AND role = "patient"',
+            (patient_id,)
+        ).fetchone()
+
+        if not patient:
+            return jsonify({'success': False, 'error': 'Patient not found'}), 404
+
+        # Get patient health records (from triage_logs table)
+        records = conn.execute('''
+            SELECT
+                id,
+                datetime(timestamp) as timestamp,
+                sys_bp,
+                dia_bp,
+                hr,
+                temp,
+                symptoms,
+                dual_brain_risk,
+                routing
+            FROM triage_logs
+            WHERE user_id = ?
+            ORDER BY timestamp DESC
+            LIMIT 10
+        ''', (patient_id,)).fetchall()
+
+        conn.close()
+
+        # Convert records to list of dicts
+        records_list = []
+        for record in records:
+            records_list.append({
+                'id': record['id'],
+                'timestamp': record['timestamp'],
+                'sys_bp': record['sys_bp'] or '—',
+                'dia_bp': record['dia_bp'] or '—',
+                'hr': record['hr'] or '—',
+                'temp': record['temp'] or '—',
+                'symptoms': record['symptoms'] or 'None reported',
+                'dual_brain_risk': record['dual_brain_risk'] or 'LOW',
+                'routing': record['routing'] or '—'
+            })
+
+        return jsonify({
+            'success': True,
+            'patient_name': patient['fullname'],
+            'records': records_list
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching patient records: {str(e)}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+# ===== DDHS ADMIN ROUTES =====
+@app.route('/admin/dashboard')
+@login_required
+def admin_dashboard():
+    """DDHS Admin Dashboard - Emergency Management System"""
+    if current_user.role not in ['admin', 'ddhs_admin']:
+        flash('Access denied - this page is for admin only')
+        return redirect(url_for('index'))
+
+    return render_template('admin_dashboard.html', user=current_user)
+
+
+@app.route('/api/emergency/cases', methods=['GET'])
+@login_required
+def get_emergency_cases():
+    """Get all high-risk emergency cases from checkup results"""
+    try:
+        conn = get_db_connection()
+
+        # Get high-risk checkup results (risk score >= 70 or risk_level = 'URGENT')
+        cases = conn.execute("""
+            SELECT
+                cr.id,
+                cr.user_id,
+                p.fullname as patient_name,
+                cr.symptoms,
+                cr.dual_brain_risk as risk_level,
+                CAST(COALESCE(cr.overall_risk_score, 0) as INTEGER) as risk_score,
+                cr.location,
+                COALESCE(cr.status, 'pending') as status,
+                datetime(cr.timestamp, 'localtime') as timestamp
+            FROM checkup_results cr
+            LEFT JOIN patients p ON cr.user_id = p.user_id
+            WHERE CAST(COALESCE(cr.overall_risk_score, 0) as INTEGER) >= 70
+                OR cr.dual_brain_risk = 'HIGH'
+                OR cr.dual_brain_risk = 'CRITICAL'
+            ORDER BY cr.timestamp DESC
+            LIMIT 50
+        """).fetchall()
+
+        conn.close()
+
+        cases_list = []
+        for case in cases:
+            cases_list.append({
+                'id': case['id'],
+                'user_id': case['user_id'],
+                'patient_name': case['patient_name'] or 'Unknown',
+                'symptoms': case['symptoms'] or 'None reported',
+                'risk_level': case['risk_level'] or 'high',
+                'risk_score': case['risk_score'],
+                'location': case['location'] or 'Not provided',
+                'status': case['status'],
+                'timestamp': case['timestamp']
+            })
+
+        return jsonify(cases_list)
+
+    except Exception as e:
+        app.logger.error(f"Error fetching emergency cases: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/emergency/dispatch', methods=['POST'])
+@login_required
+def dispatch_ambulance():
+    """Dispatch an ambulance for an emergency case"""
+    try:
+        if current_user.role not in ['admin', 'ddhs_admin']:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+        data = request.get_json()
+
+        # Validate required fields
+        required_fields = ['case_id', 'ambulance_id', 'hospital_id', 'priority']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'success': False, 'message': f'Missing field: {field}'}), 400
+
+        conn = get_db_connection()
+
+        # Create dispatch record
+        conn.execute("""
+            INSERT INTO ambulance_dispatch (case_id, ambulance_id, paramedic_id, hospital_id, priority, status, notes, dispatched_by, dispatched_at)
+            VALUES (?, ?, ?, ?, ?, 'dispatched', ?, ?, datetime('now'))
+        """, (
+            data['case_id'],
+            data['ambulance_id'],
+            data.get('paramedic_id'),
+            data['hospital_id'],
+            data['priority'],
+            data.get('notes', ''),
+            current_user.id
+        ))
+
+        # Update case status
+        conn.execute("""
+            UPDATE checkup_results
+            SET status = 'dispatched'
+            WHERE id = ?
+        """, (data['case_id'],))
+
+        conn.commit()
+        conn.close()
+
+        app.logger.info(f"Ambulance dispatched for case {data['case_id']} by admin {current_user.id}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Ambulance dispatched successfully',
+            'dispatch_id': conn.lastrowid
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error dispatching ambulance: {str(e)}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/emergency/case/<int:case_id>', methods=['GET'])
+@login_required
+def get_case_details(case_id):
+    """Get details of a specific emergency case"""
+    try:
+        conn = get_db_connection()
+
+        case = conn.execute("""
+            SELECT
+                cr.id,
+                cr.user_id,
+                p.fullname as patient_name,
+                p.age,
+                p.gender,
+                p.blood_type,
+                cr.symptoms,
+                cr.sys_bp,
+                cr.dia_bp,
+                cr.hr,
+                cr.temp,
+                cr.respiration,
+                cr.spo2,
+                cr.dual_brain_risk,
+                CAST(COALESCE(cr.overall_risk_score, 0) as INTEGER) as risk_score,
+                cr.location,
+                cr.status,
+                datetime(cr.timestamp, 'localtime') as timestamp
+            FROM checkup_results cr
+            LEFT JOIN patients p ON cr.user_id = p.user_id
+            WHERE cr.id = ?
+        """, (case_id,)).fetchone()
+
+        if not case:
+            return jsonify({'error': 'Case not found'}), 404
+
+        # Get dispatch info if exists
+        dispatch = conn.execute("""
+            SELECT * FROM ambulance_dispatch
+            WHERE case_id = ?
+            ORDER BY dispatched_at DESC
+            LIMIT 1
+        """, (case_id,)).fetchone()
+
+        conn.close()
+
+        return jsonify({
+            'id': case['id'],
+            'patient_name': case['patient_name'],
+            'age': case['age'],
+            'gender': case['gender'],
+            'blood_type': case['blood_type'],
+            'symptoms': case['symptoms'],
+            'vitals': {
+                'bp': f"{case['sys_bp']}/{case['dia_bp']}",
+                'hr': case['hr'],
+                'temp': case['temp'],
+                'respiration': case['respiration'],
+                'spo2': case['spo2']
+            },
+            'risk_level': case['dual_brain_risk'],
+            'risk_score': case['risk_score'],
+            'location': case['location'],
+            'status': case['status'],
+            'timestamp': case['timestamp'],
+            'dispatch': dict(dispatch) if dispatch else None
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error fetching case details: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/emergency/case/<int:case_id>/timeline', methods=['GET'])
+@login_required
+def get_case_timeline(case_id):
+    """Get timeline of a specific emergency case"""
+    try:
+        conn = get_db_connection()
+
+        # Get case timeline events
+        timeline = conn.execute("""
+            SELECT
+                event_type,
+                timestamp,
+                description,
+                status
+            FROM case_timeline
+            WHERE case_id = ?
+            ORDER BY timestamp ASC
+        """, (case_id,)).fetchall()
+
+        conn.close()
+
+        timeline_list = []
+        for event in timeline:
+            timeline_list.append({
+                'event': event['event_type'],
+                'timestamp': event['timestamp'],
+                'description': event['description'],
+                'status': event['status']
+            })
+
+        return jsonify(timeline_list)
+
+    except Exception as e:
+        app.logger.error(f"Error fetching case timeline: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@app.route('/api/emergency/case/<int:case_id>/update-status', methods=['POST'])
+@login_required
+def update_case_status(case_id):
+    """Update the status of an emergency case"""
+    try:
+        if current_user.role not in ['admin', 'ddhs_admin']:
+            return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+
+        data = request.get_json()
+        new_status = data.get('status')
+
+        if not new_status:
+            return jsonify({'success': False, 'message': 'Status not provided'}), 400
+
+        conn = get_db_connection()
+
+        # Update case status
+        conn.execute("""
+            UPDATE checkup_results
+            SET status = ?
+            WHERE id = ?
+        """, (new_status, case_id))
+
+        # Add timeline event
+        conn.execute("""
+            INSERT INTO case_timeline (case_id, event_type, description, status, timestamp)
+            VALUES (?, ?, ?, ?, datetime('now'))
+        """, (case_id, 'status_update', f'Status changed to {new_status}', new_status))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({'success': True, 'message': f'Case status updated to {new_status}'})
+
+    except Exception as e:
+        app.logger.error(f"Error updating case status: {str(e)}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@app.route('/api/admin/analytics', methods=['GET'])
+@login_required
+def get_admin_analytics():
+    """Get admin analytics and metrics"""
+    try:
+        if current_user.role not in ['admin', 'ddhs_admin']:
+            return jsonify({'error': 'Unauthorized'}), 403
+
+        conn = get_db_connection()
+
+        # Get statistics
+        stats = {
+            'total_emergencies': conn.execute(
+                "SELECT COUNT(*) as count FROM checkup_results WHERE overall_risk_score >= 70"
+            ).fetchone()['count'],
+
+            'dispatched': conn.execute(
+                "SELECT COUNT(*) as count FROM checkup_results WHERE status = 'dispatched'"
+            ).fetchone()['count'],
+
+            'completed': conn.execute(
+                "SELECT COUNT(*) as count FROM checkup_results WHERE status = 'completed'"
+            ).fetchone()['count'],
+
+            'response_rate': 95,  # Placeholder
+            'success_rate': 88,   # Placeholder
+            'ambulance_availability': 92  # Placeholder
+        }
+
+        conn.close()
+
+        return jsonify(stats)
+
+    except Exception as e:
+        app.logger.error(f"Error fetching admin analytics: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 
 if __name__ == '__main__':
     # Use configuration settings (respects production environment)

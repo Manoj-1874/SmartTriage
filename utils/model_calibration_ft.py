@@ -26,10 +26,21 @@ def classify_xgb_risk_with_fine_tuning(xgb_probs, symptom_text='', age=0, sys_bp
 
     # === CRITICAL SYMPTOM DETECTION ===
     critical_symptoms = [
-        'crushing', 'chest pain', 'cannot breathe', 'unconscious',
-        'hemorrhage', 'bleeding', 'stroke', 'seizure', 'anaphylaxis',
-        'throat swelling', 'altered mental status', 'disoriented', 'distress',
-        'unresponsive'
+        # Cardiac/Respiratory
+        'crushing', 'chest pain', 'cannot breathe', 'shortness of breath', 'difficulty breathing',
+        # Neurological
+        'unconscious', 'seizure', 'stroke', 'altered mental status', 'disoriented', 'distress', 'unresponsive',
+        # Bleeding/Hemorrhage
+        'hemorrhage', 'bleeding', 'blood vomiting', 'vomiting blood', 'hematemesis',
+        'blood in urine', 'hematuria', 'coughing blood',
+        # Allergic/Shock
+        'anaphylaxis', 'throat swelling', 'severe allergic',
+        # Neurological/Sensory
+        'complete vision loss', 'sudden blindness', 'severe eye pain',
+        # Urinary/GI
+        'kidney pain', 'acute kidney', 'renal failure',
+        # General critical indicators
+        'severe', 'uncontrollable bleeding', 'loss of consciousness'
     ]
     has_critical_symptom = any(s in text for s in critical_symptoms)
 

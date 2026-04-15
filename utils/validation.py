@@ -249,7 +249,47 @@ class VitalSignsValidator:
                 "medical_history"
             )
 
-        return history.title()
+        return history
+
+    @staticmethod
+    def validate_pain_level(pain_level):
+        """Validate pain intensity level (1-10)"""
+        if pain_level is None or pain_level == '':
+            return 0  # Default to 0 if not provided
+
+        try:
+            pain = int(pain_level)
+        except (ValueError, TypeError):
+            raise ValidationError("Pain level must be a valid number", "pain_level")
+
+        if pain < 0 or pain > 10:
+            raise ValidationError(
+                "Pain level must be between 0 and 10",
+                "pain_level"
+            )
+
+        return pain
+
+    @staticmethod
+    def validate_duration(duration):
+        """Validate symptom duration"""
+        print(f"[VALIDATE_DURATION] Input: {repr(duration)} (type: {type(duration).__name__})")
+
+        if duration is None or duration == '':
+            print(f"[VALIDATE_DURATION] Empty/None, returning 'Unknown'")
+            return 'Unknown'  # Default to Unknown if not provided
+
+        valid_durations = ['Today', '2-3 days', '1 week', '2+ weeks', 'Unknown']
+
+        if duration not in valid_durations:
+            print(f"[VALIDATE_DURATION] '{duration}' not in valid list: {valid_durations}")
+            raise ValidationError(
+                f"Duration must be one of: {', '.join(valid_durations)}",
+                "duration"
+            )
+
+        print(f"[VALIDATE_DURATION] Valid, returning: {repr(duration)}")
+        return duration  # Return exact format, don't modify case
 
     @classmethod
     def validate_triage_data(cls, data):
@@ -291,6 +331,10 @@ class VitalSignsValidator:
 
             # Validate medical history
             validated['history'] = cls.validate_medical_history(data.get('history'))
+
+            # Validate pain level and duration
+            validated['pain_level'] = cls.validate_pain_level(data.get('pain_level'))
+            validated['duration'] = cls.validate_duration(data.get('duration'))
 
             return validated
 

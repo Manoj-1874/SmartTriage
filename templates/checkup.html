@@ -2133,7 +2133,7 @@
           <div class="s-ava-dot"></div>
         </div>
         <div class="s-user-text">
-          <div class="s-uname">Kiran Sekar</div>
+          <div class="s-uname">{{ user.fullname if user else 'Patient' }}</div>
           <div class="s-urole">Patient Account</div>
         </div>
       </div>
@@ -2272,13 +2272,16 @@
           <!-- FORM CARD -->
           <div class="form-card">
 
+            <!-- ONLY SHOW ERROR/VALIDATION MESSAGES ON CHECKUP FORM -->
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             {% for category, message in messages %}
+            {% if category == 'error' %}
             <div class="triage-alert">
               <i class="fas fa-exclamation-circle"></i>
               <div class="triage-alert-text">{{ message }}</div>
             </div>
+            {% endif %}
             {% endfor %}
             {% endif %}
             {% endwith %}
@@ -2906,9 +2909,9 @@
         if (!file) return;
         const banner = document.getElementById('uploadBanner');
         const grid = document.getElementById('ubGrid');
-        // Simulate extracted data
+        // Simulate extracted data with current user
         const mockData = {
-          'Name': 'Kiran Sekar',
+          'Name': '{{ user.fullname if user else "Patient" }}',
           'Age': '34',
           'Blood Pressure': '122/78',
           'Heart Rate': '74 bpm',

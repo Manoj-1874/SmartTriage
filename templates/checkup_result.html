@@ -148,15 +148,18 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
   animation:fadeUp .5s var(--ease) both;
 }
 .result-hero.risk-high{background:linear-gradient(135deg, #7F1D1D, #991B1B, #B91C1C, #DC2626);}
+.result-hero.risk-critical{background:linear-gradient(135deg, #450a0a, #7f1d1d, #991b1b, #dc2626, #ef4444);}
 .result-hero.risk-medium{background:linear-gradient(135deg, #78350F, #92400E, #B45309, #D97706);}
 .result-hero.risk-low{background:linear-gradient(135deg, #064E3B, #065F46, #047857, #059669);}
 
 .rh-bg{position:absolute;inset:0;background:radial-gradient(ellipse at 85% 15%, rgba(255,255,255,.1) 0%, transparent 55%),radial-gradient(ellipse at 15% 85%, rgba(0,0,0,.1) 0%, transparent 45%);pointer-events:none;}
 .rh-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:40px 40px;mask-image:radial-gradient(ellipse at 50% 50%,black 20%,transparent 70%);pointer-events:none;}
 .rh-orb{position:absolute;right:-80px;top:-80px;width:360px;height:360px;border-radius:50%;animation:orbFloat 8s ease-in-out infinite;pointer-events:none;}
+.risk-critical .rh-orb{background:radial-gradient(circle,rgba(239,68,68,.35) 0%,rgba(220,38,38,.2) 40%,transparent 65%);animation:orbPulse 1.2s ease-in-out infinite;}
 .risk-high .rh-orb{background:radial-gradient(circle,rgba(239,68,68,.2) 0%,transparent 65%);}
 .risk-medium .rh-orb{background:radial-gradient(circle,rgba(245,158,11,.2) 0%,transparent 65%);}
 .risk-low .rh-orb{background:radial-gradient(circle,rgba(16,185,129,.2) 0%,transparent 65%);}
+@keyframes orbPulse{0%,100%{transform:scale(.95)}50%{transform:scale(1.05)}}
 @keyframes orbFloat{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-18px) scale(1.06)}}
 .rh-rings{position:absolute;right:60px;top:50%;transform:translateY(-50%);width:220px;height:220px;pointer-events:none;}
 .rh-ring{position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.1);}
@@ -233,15 +236,18 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
   transition:background var(--t-base),border-color var(--t-base);
 }
 .ab-high{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);}
+.ab-critical{background:rgba(239,68,68,.12);border:2px solid rgba(239,68,68,.4);}
 .ab-medium{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);}
 .ab-low{background:rgba(22,163,74,.06);border:1px solid rgba(22,163,74,.2);}
 .ab-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
 .ab-high .ab-icon{background:rgba(239,68,68,.1);color:#DC2626;}
+.ab-critical .ab-icon{background:rgba(239,68,68,.2);color:#EF4444;}
 .ab-medium .ab-icon{background:rgba(245,158,11,.1);color:#D97706;}
 .ab-low .ab-icon{background:rgba(22,163,74,.1);color:#16A34A;}
 .ab-body{flex:1;}
 .ab-title{font-size:15px;font-weight:800;color:var(--t-head);margin-bottom:4px;}
 .ab-high .ab-title{color:#DC2626;}
+.ab-critical .ab-title{color:#EF4444;}
 .ab-medium .ab-title{color:#D97706;}
 .ab-low .ab-title{color:#16A34A;}
 .ab-text{font-size:13px;color:var(--t-body);line-height:1.55;}
@@ -538,17 +544,20 @@ setInterval(tick,1000); tick();
 /* BUILD RESULT UI */
 function buildResult(result) {
   const risk = (result.risk_level||'').toUpperCase();
-  const isHigh   = risk.includes('HIGH');
+  const isCritical = risk.includes('CRITICAL');
+  const isHigh   = risk.includes('HIGH') || isCritical;
   const isMedium = risk.includes('MEDIUM');
-  const isLow    = !isHigh && !isMedium;
-  const riskClass = isHigh ? 'risk-high' : isMedium ? 'risk-medium' : 'risk-low';
-  const score = result.score || (isHigh ? 78 : isMedium ? 54 : 22);
+  const isLow    = !isCritical && !isHigh && !isMedium;
+  const riskClass = isCritical ? 'risk-critical' : isHigh ? 'risk-high' : isMedium ? 'risk-medium' : 'risk-low';
+  const score = result.score || (isCritical ? 95 : isHigh ? 78 : isMedium ? 54 : 22);
   const scoreOffset = 346 - (346 * score / 100);
 
-  const alertClass  = isHigh ? 'ab-high'   : isMedium ? 'ab-medium'   : 'ab-low';
-  const alertIcon   = isHigh ? 'fa-triangle-exclamation' : isMedium ? 'fa-circle-exclamation' : 'fa-circle-check';
-  const alertTitle  = isHigh ? '⚠ Immediate Medical Attention Required' : isMedium ? 'Medical Consultation Advised' : 'Your Vitals Appear Normal';
-  const alertText   = isHigh
+  const alertClass  = isCritical ? 'ab-critical' : isHigh ? 'ab-high'   : isMedium ? 'ab-medium'   : 'ab-low';
+  const alertIcon   = isCritical ? 'fa-skull-crossbones' : isHigh ? 'fa-triangle-exclamation' : isMedium ? 'fa-circle-exclamation' : 'fa-circle-check';
+  const alertTitle  = isCritical ? '🚨 CRITICAL - Emergency Medical Attention Required IMMEDIATELY' : isHigh ? '⚠ Immediate Medical Attention Required' : isMedium ? 'Medical Consultation Advised' : 'Your Vitals Appear Normal';
+  const alertText   = isCritical
+    ? 'Your assessment indicates a CRITICAL health condition. CALL EMERGENCY SERVICES (911/Ambulance) IMMEDIATELY. Do not wait. Do not drive yourself. This requires emergency intervention now.'
+    : isHigh
     ? 'Your assessment indicates high-risk health indicators. Please seek emergency or urgent medical care as soon as possible. Do not delay — call your doctor or visit an emergency department.'
     : isMedium
     ? 'Your symptoms and vitals suggest a condition that warrants professional evaluation. We recommend booking an appointment with a doctor within 24–48 hours.'
@@ -582,7 +591,12 @@ function buildResult(result) {
 
   function gaugeColor(st){ return st==='normal'?'#22C55E':st==='low'?'#3B82F6':st==='elevated'?'#F59E0B':'#EF4444'; }
 
-  const recommendations = isHigh ? [
+  const recommendations = isCritical ? [
+    {title:'🚨 CALL 911 OR EMERGENCY SERVICES IMMEDIATELY', sub:'Do not wait. Do not self-treat. Emergency transport required now.'},
+    {title:'Do Not Drive Yourself', sub:'Call an ambulance. Ask emergency responders for immediate transport to nearest hospital with ICU capability.'},
+    {title:'Inform Family/Emergency Contact', sub:'Let someone know what is happening and where you are being taken.'},
+    {title:'Bring All Medical Records', sub:'If conscious, bring insurance card, medication list, and any recent test results.'},
+  ] : isHigh ? [
     {title:'Call Emergency Services or Go to ED', sub:'Conditions rated HIGH require immediate in-person evaluation.'},
     {title:'Do Not Drive Yourself', sub:'Ask someone to accompany you or call an ambulance.'},
     {title:'Keep a Vitals Log', sub:'Record your BP, HR and temperature every 30 minutes until care is received.'},
@@ -600,10 +614,10 @@ function buildResult(result) {
   ];
 
   const scoreFactors = [
-    {name:'Vital Signs',pct:isHigh?78:isMedium?55:20,cls:isHigh?'red':isMedium?'amber':'green'},
-    {name:'Symptom Severity',pct:isHigh?82:isMedium?60:15,cls:isHigh?'red':isMedium?'amber':'green'},
-    {name:'Medical History Risk',pct:isHigh?65:isMedium?45:25,cls:isHigh?'amber':isMedium?'amber':'green'},
-    {name:'Duration & Onset',pct:isHigh?70:isMedium?50:10,cls:isHigh?'red':isMedium?'amber':'green'},
+    {name:'Vital Signs',pct:isCritical?95:isHigh?78:isMedium?55:20,cls:isCritical?'critical':isHigh?'red':isMedium?'amber':'green'},
+    {name:'Symptom Severity',pct:isCritical?98:isHigh?82:isMedium?60:15,cls:isCritical?'critical':isHigh?'red':isMedium?'amber':'green'},
+    {name:'Medical History Risk',pct:isCritical?88:isHigh?65:isMedium?45:25,cls:isCritical?'critical':isHigh?'amber':isMedium?'amber':'green'},
+    {name:'Duration & Onset',pct:isCritical?92:isHigh?70:isMedium?50:10,cls:isCritical?'critical':isHigh?'red':isMedium?'amber':'green'},
   ];
 
   const nextSteps = [

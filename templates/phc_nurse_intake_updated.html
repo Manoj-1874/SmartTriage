@@ -1,0 +1,624 @@
+<!--
+UPDATED PHC NURSE INTAKE FORM
+Includes new disease input field + all vital signs for integrated dual-brain assessment
+
+This form sends disease_name to the new /api/patient-assessment endpoint
+which runs full disease recognition + BERT + XGBoost analysis
+-->
+
+<div class="intake-form-container">
+    <h2>Patient Initial Assessment</h2>
+
+    <form id="patientIntakeForm" class="intake-form">
+
+        <!-- ===== PATIENT INFORMATION ===== -->
+        <fieldset>
+            <legend>Patient Information</legend>
+
+            <div class="form-group">
+                <label for="patientName">Patient Name *</label>
+                <input type="text" id="patientName" name="patientName" required placeholder="Enter full name">
+            </div>
+
+            <div class="form-group">
+                <label for="age">Age *</label>
+                <input type="number" id="age" name="age" min="1" max="120" required placeholder="Age in years">
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Gender *</label>
+                <select id="gender" name="gender" required>
+                    <option value="">Select Gender</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+        </fieldset>
+
+        <!-- ===== CHIEF COMPLAINT (NEW) ===== -->
+        <fieldset>
+            <legend>Chief Complaint & Diagnosis</legend>
+
+            <div class="form-group">
+                <label for="diseaseName">Disease/Diagnosis *
+                    <span class="info-tooltip" title="The system recognizes misspellings via SNOMED-CT fuzzy matching">ℹ</span>
+                </label>
+                <div class="disease-input-help">
+                    <input type="text" id="diseaseName" name="disease_name"
+                           placeholder="e.g., Myocardial Infarction, Pneumonia, Sepsis, or even misspelled versions"
+                           autocomplete="off">
+                    <small>System handles typos & spell errors automatically via SNOMED-CT</small>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="symptoms">Detailed Symptoms *</label>
+                <textarea id="symptoms" name="symptoms" rows="4" required
+                          placeholder="Describe patient symptoms in detail. E.g., 'Crushing chest pain, shortness of breath, sweating, dizzy'"></textarea>
+            </div>
+        </fieldset>
+
+        <!-- ===== VITAL SIGNS ===== -->
+        <fieldset>
+            <legend>Vital Signs</legend>
+
+            <div class="vital-signs-grid">
+                <div class="form-group">
+                    <label for="bp">Blood Pressure (mmHg) *
+                        <span class="unit">sys/dia</span>
+                    </label>
+                    <input type="text" id="bp" name="bp" required
+                           placeholder="e.g., 120/80" pattern="[0-9]{2,3}/[0-9]{2,3}">
+                </div>
+
+                <div class="form-group">
+                    <label for="hr">Heart Rate (bpm) *</label>
+                    <input type="number" id="hr" name="hr" min="20" max="200" required placeholder="e.g., 75">
+                </div>
+
+                <div class="form-group">
+                    <label for="temp">Temperature (°C) *</label>
+                    <input type="number" id="temp" name="temp" step="0.1" min="32" max="44" required placeholder="e.g., 37.5">
+                </div>
+
+                <div class="form-group">
+                    <label for="spo2">SpO2 (%) *</label>
+                    <input type="number" id="spo2" name="spo2" min="50" max="100" required placeholder="e.g., 98">
+                </div>
+
+                <div class="form-group">
+                    <label for="rr">Respiration Rate *</label>
+                    <input type="number" id="rr" name="rr" min="6" max="60" required placeholder="e.g., 16">
+                </div>
+            </div>
+        </fieldset>
+
+        <!-- ===== ASSESSMENT PARAMETERS (NEW) ===== -->
+        <fieldset>
+            <legend>Assessment Parameters</legend>
+
+            <div class="form-group">
+                <label for="painIntensity">Pain Intensity (0-10)
+                    <span class="unit">scale: 0=None, 10=Worst</span>
+                </label>
+                <div class="pain-slider-container">
+                    <input type="range" id="painIntensity" name="pain_intensity"
+                           min="0" max="10" value="5" class="pain-slider">
+                    <span id="painValue" class="pain-value">5</span>/10
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="symptomDuration">Symptom Duration (hours)</label>
+                <input type="number" id="symptomDuration" name="symptom_duration_hours"
+                       min="0" value="24" placeholder="Hours since symptom onset">
+            </div>
+
+            <div class="form-group">
+                <label for="comorbidities">Comorbidities (comma-separated)</label>
+                <input type="text" id="comorbidities" name="comorbidities"
+                       placeholder="e.g., Diabetes, Hypertension, COPD">
+                <small>Leave empty if none. Comma-separated if multiple.</small>
+            </div>
+        </fieldset>
+
+        <!-- ===== SUBMISSION ===== -->
+        <div class="form-actions">
+            <button type="button" class="btn-primary" onclick="submitIntakeForm()">
+                <span id="submitText">Assess Risk & Create Log</span>
+                <span id="submitLoader" style="display:none;">Analyzing...</span>
+            </button>
+            <button type="reset" class="btn-secondary">Clear Form</button>
+        </div>
+
+    </form>
+</div>
+
+<!-- ===== RESULT DISPLAY AREA ===== -->
+<div id="resultContainer" class="result-container" style="display:none;">
+    <div class="result-card">
+        <h3>Risk Assessment Results</h3>
+
+        <div class="disease-recognition-box" id="diseaseBox"></div>
+
+        <div class="dual-brain-analysis" id="analysisBox"></div>
+
+        <div class="risk-summary" id="summaryBox"></div>
+
+        <div class="routing-decision" id="routingBox"></div>
+
+        <div class="action-buttons">
+            <button class="btn-primary" onclick="printAssessment()">Print Report</button>
+            <button class="btn-secondary" onclick="resetForm()">New Assessment</button>
+        </div>
+    </div>
+</div>
+
+<style>
+.intake-form-container {
+    max-width: 900px;
+    margin: 20px auto;
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.intake-form fieldset {
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 20px;
+    background: #f9f9f9;
+}
+
+.intake-form legend {
+    font-weight: bold;
+    color: #333;
+    padding: 0 10px;
+    font-size: 16px;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #333;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.form-group textarea {
+    resize: vertical;
+    font-family: Arial, sans-serif;
+}
+
+.info-tooltip {
+    cursor: help;
+    color: #0066cc;
+    margin-left: 5px;
+}
+
+.disease-input-help small {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-style: italic;
+    background: #e8f4f8;
+    padding: 8px;
+    border-radius: 4px;
+    border-left: 3px solid #0066cc;
+}
+
+.vital-signs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+@media (max-width: 768px) {
+    .vital-signs-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.unit {
+    font-size: 12px;
+    color: #666;
+    font-weight: normal;
+    margin-left: 5px;
+}
+
+.pain-slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pain-slider {
+    flex: 1;
+    height: 6px;
+    cursor: pointer;
+}
+
+.pain-value {
+    font-weight: bold;
+    color: #d32f2f;
+    min-width: 30px;
+    text-align: right;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 30px;
+}
+
+.btn-primary {
+    flex: 1;
+    padding: 12px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.btn-primary:hover {
+    background: #0052a3;
+}
+
+.btn-primary:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.btn-secondary {
+    flex: 1;
+    padding: 12px;
+    background: #f5f5f5;
+    color: #333;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.btn-secondary:hover {
+    background: #e8e8e8;
+}
+
+/* ===== RESULT DISPLAY ===== */
+
+.result-container {
+    margin-top: 30px;
+}
+
+.result-card {
+    background: white;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.result-card h3 {
+    color: #333;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #0066cc;
+    padding-bottom: 10px;
+}
+
+.disease-recognition-box {
+    background: #e3f2fd;
+    border-left: 4px solid #0066cc;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.disease-recognition-box h4 {
+    color: #0066cc;
+    margin: 0 0 10px 0;
+}
+
+.disease-recognition-box p {
+    margin: 5px 0;
+    color: #333;
+}
+
+.dual-brain-analysis {
+    background: #f5f5f5;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.dual-brain-analysis table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.dual-brain-analysis td,
+.dual-brain-analysis th {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}
+
+.dual-brain-analysis th {
+    background: #ddd;
+    font-weight: bold;
+}
+
+.score-high {
+    color: #d32f2f;
+    font-weight: bold;
+}
+
+.score-medium {
+    color: #f57c00;
+    font-weight: bold;
+}
+
+.score-low {
+    color: #2e7d32;
+    font-weight: bold;
+}
+
+.risk-summary {
+    background: white;
+    border: 2px solid;
+    padding: 20px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+    text-align: center;
+}
+
+.risk-summary.critical {
+    border-color: #d32f2f;
+    background: #ffebee;
+}
+
+.risk-summary.high {
+    border-color: #f57c00;
+    background: #fff3e0;
+}
+
+.risk-summary.medium {
+    border-color: #fbc02d;
+    background: #fffde7;
+}
+
+.risk-summary.low {
+    border-color: #2e7d32;
+    background: #e8f5e9;
+}
+
+.risk-summary h2 {
+    margin: 0 0 10px 0;
+    font-size: 32px;
+}
+
+.risk-summary p {
+    margin: 5px 0;
+    font-weight: 500;
+}
+
+.routing-decision {
+    background: #f0f4f8;
+    border-left: 4px solid #0066cc;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+.routing-decision h4 {
+    color: #0066cc;
+    margin: 0 0 10px 0;
+}
+
+.routing-decision p {
+    margin: 8px 0;
+    color: #333;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.action-buttons button {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+@media print {
+    .intake-form,
+    .form-actions,
+    .action-buttons {
+        display: none;
+    }
+
+    .result-card {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+}
+</style>
+
+<script>
+// ===== PAIN SLIDER SYNC =====
+document.getElementById('painIntensity').addEventListener('input', function() {
+    document.getElementById('painValue').textContent = this.value;
+});
+
+// ===== FORM SUBMISSION =====
+async function submitIntakeForm() {
+    const form = document.getElementById('patientIntakeForm');
+
+    // Validate form
+    if (!form.checkValidity()) {
+        alert('Please fill all required fields');
+        return;
+    }
+
+    // Get form data
+    const data = {
+        patientName: document.getElementById('patientName').value,
+        age: parseInt(document.getElementById('age').value),
+        gender: document.getElementById('gender').value,
+        disease_name: document.getElementById('diseaseName').value,
+        symptoms: document.getElementById('symptoms').value,
+        bp: document.getElementById('bp').value,
+        hr: parseInt(document.getElementById('hr').value),
+        temp: parseFloat(document.getElementById('temp').value),
+        spo2: parseInt(document.getElementById('spo2').value),
+        rr: parseInt(document.getElementById('rr').value),
+        pain_intensity: parseInt(document.getElementById('painIntensity').value),
+        symptom_duration_hours: parseInt(document.getElementById('symptomDuration').value),
+        comorbidities: document.getElementById('comorbidities').value
+            .split(',')
+            .map(c => c.trim())
+            .filter(c => c.length > 0)
+    };
+
+    // Show loading
+    document.getElementById('submitText').style.display = 'none';
+    document.getElementById('submitLoader').style.display = 'inline';
+
+    try {
+        const response = await fetch('/api/patient-assessment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name="csrf_token"]')?.value || ''
+            },
+            body: JSON.stringify(data)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            displayAssessmentResults(result);
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+
+    } catch (error) {
+        alert('Request failed: ' + error.message);
+        console.error('Error:', error);
+    } finally {
+        document.getElementById('submitText').style.display = 'inline';
+        document.getElementById('submitLoader').style.display = 'none';
+    }
+}
+
+// ===== DISPLAY RESULTS =====
+function displayAssessmentResults(result) {
+    const data = result.data;
+    const assessment = result.assessment || {};
+
+    // Disease recognition box
+    let diseaseBox = `<h4>Disease Recognition</h4>`;
+    if (data.diseaseRecognized) {
+        diseaseBox += `<p><strong>Recognized:</strong> ${data.diseaseRecognized}</p>`;
+    } else {
+        diseaseBox += `<p><strong>Status:</strong> Unable to recognize disease, assessing based on symptoms</p>`;
+    }
+    document.getElementById('diseaseBox').innerHTML = diseaseBox;
+
+    // Dual-brain analysis box
+    let analysisBox = `<h4>Dual-Brain Analysis</h4>`;
+    if (assessment.bert_analysis) {
+        analysisBox += `
+            <table>
+                <tr>
+                    <th>Component</th>
+                    <th>Score</th>
+                    <th>Level</th>
+                    <th>Confidence</th>
+                </tr>
+                <tr>
+                    <td>BERT (Symptom Analysis)</td>
+                    <td><span class="score-${getLevelClass(assessment.bert_analysis.score)}">${(assessment.bert_analysis.score * 100).toFixed(1)}%</span></td>
+                    <td>${assessment.bert_analysis.label || 'N/A'}</td>
+                    <td>${assessment.bert_analysis.confidence ? (assessment.bert_analysis.confidence * 100).toFixed(0) + '%' : 'N/A'}</td>
+                </tr>
+                <tr>
+                    <td>XGBoost (Vital Signs)</td>
+                    <td><span class="score-${getLevelClass(assessment.xgboost_analysis.score)}">${(assessment.xgboost_analysis.score * 100).toFixed(1)}%</span></td>
+                    <td>${assessment.xgboost_analysis.label || 'N/A'}</td>
+                    <td>Combined</td>
+                </tr>
+            </table>
+        `;
+    }
+    document.getElementById('analysisBox').innerHTML = analysisBox;
+
+    // Risk summary
+    const riskClass = getLevelClass(data.riskLevel);
+    let summaryBox = `<div class="risk-summary ${riskClass}">
+        <h2>${data.riskLevel}</h2>
+        <p><strong>Risk Score:</strong></p>
+        <p style="font-size: 24px;">Final: (${(data.riskLevel === 'CRITICAL' ? 0.95 : data.riskLevel === 'HIGH' ? 0.75 : data.riskLevel === 'MEDIUM' ? 0.55 : 0.3).toFixed(2)})</p>
+    </div>`;
+    document.getElementById('summaryBox').innerHTML = summaryBox;
+
+    // Routing decision
+    let routingBox = `<h4>Routing Decision</h4>
+        <p><strong>Destination:</strong> ${data.routing}</p>
+        <p><strong>Urgency:</strong> ${data.urgency}</p>`;
+    if (data.diseaseRecognized) {
+        routingBox += `<p><strong>Specialist:</strong> Refer to appropriate specialist</p>`;
+    }
+    document.getElementById('routingBox').innerHTML = routingBox;
+
+    // Show results
+    document.getElementById('resultContainer').style.display = 'block';
+    document.getElementById('patientIntakeForm').style.display = 'none';
+}
+
+function getLevelClass(level) {
+    const text = String(level).toLowerCase();
+    if (text.includes('critical')) return 'critical';
+    if (text.includes('high')) return 'high';
+    if (text.includes('medium')) return 'medium';
+    return 'low';
+}
+
+function printAssessment() {
+    window.print();
+}
+
+function resetForm() {
+    document.getElementById('patientIntakeForm').style.display = 'block';
+    document.getElementById('resultContainer').style.display = 'none';
+    document.getElementById('patientIntakeForm').reset();
+    document.getElementById('painValue').textContent = '5';
+}
+</script>
