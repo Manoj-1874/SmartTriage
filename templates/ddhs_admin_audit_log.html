@@ -1,0 +1,299 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block content %}
+<div class="page-content">
+    <!-- Header -->
+    <div class="page-header">
+        <h2>System Audit Log</h2>
+        <p>Track all system activities and administrative actions</p>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card-number">{{ total_events or 0 }}</div>
+            <div class="stat-card-label">Total Events</div>
+            <div class="stat-card-change">Today</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ active_users or 0 }}</div>
+            <div class="stat-card-label">Active Users</div>
+            <div class="stat-card-change" style="color: #28a745;">● Online</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ critical_events or 0 }}</div>
+            <div class="stat-card-label">Critical Actions</div>
+            <div class="stat-card-change" style="color: #dc3545;">⚠️</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ security_events or 0 }}</div>
+            <div class="stat-card-label">Security Events</div>
+            <div class="stat-card-change" style="color: #0B9B7A;">🔒</div>
+        </div>
+    </div>
+
+    <!-- Activity Timeline -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px;">
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>📊 Event Distribution</h3>
+            </div>
+            <div style="position: relative; height: 250px; width: 100%;">
+                <canvas id="eventChart" width="600" height="300" style="display: block; width: 100%; height: 100%;"></canvas>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>🕐 Activity by Hour</h3>
+            </div>
+            <div style="position: relative; height: 250px; width: 100%;">
+                <canvas id="activityChart" width="600" height="300" style="display: block; width: 100%; height: 100%;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🔍 Search & Filter</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 15px; padding: 20px;">
+            <div>
+                <input type="text" placeholder="Search user..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div>
+                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option>All Actions</option>
+                    <option>Login</option>
+                    <option>Data Access</option>
+                    <option>Data Modify</option>
+                    <option>Admin Changes</option>
+                </select>
+            </div>
+            <div>
+                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option>All Severity</option>
+                    <option>Critical</option>
+                    <option>High</option>
+                    <option>Medium</option>
+                    <option>Low</option>
+                </select>
+            </div>
+            <div>
+                <input type="date" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <button style="background: #0B9B7A; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">Search</button>
+        </div>
+    </div>
+
+    <!-- Audit Log Table -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📋 Recent Activities</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Resource</th>
+                    <th>Details</th>
+                    <th>Severity</th>
+                    <th>IP Address</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in audit_logs or [] %}
+                <tr>
+                    <td>{{ log.timestamp }}</td>
+                    <td><strong>{{ log.user }}</strong></td>
+                    <td>{{ log.action }}</td>
+                    <td>{{ log.resource }}</td>
+                    <td>{{ log.details }}</td>
+                    <td>
+                        {% if log.severity == 'Critical' %}
+                            <span class="status-badge absent">Critical</span>
+                        {% elif log.severity == 'High' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
+                        {% elif log.severity == 'Medium' %}
+                            <span class="status-badge">Medium</span>
+                        {% else %}
+                            <span class="status-badge active">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ log.ip_address }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- User Activity Summary -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>👥 User Activity Summary</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Total Actions</th>
+                    <th>Last Login</th>
+                    <th>Status</th>
+                    <th>Risk Level</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in user_activities or [] %}
+                <tr>
+                    <td><strong>{{ user.name }}</strong></td>
+                    <td>{{ user.role }}</td>
+                    <td>{{ user.total_actions }}</td>
+                    <td>{{ user.last_login }}</td>
+                    <td>
+                        {% if user.status == 'Online' %}
+                            <span class="status-badge active">● Online</span>
+                        {% else %}
+                            <span class="status-badge">Offline</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if user.risk_level == 'High' %}
+                            <span class="status-badge absent">High</span>
+                        {% elif user.risk_level == 'Medium' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">Medium</span>
+                        {% else %}
+                            <span class="status-badge active">Low</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Critical Events Alert -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🚨 Critical Events & Alerts</h3>
+        </div>
+        <div style="display: grid; gap: 15px; padding: 20px;">
+            {% for alert in critical_alerts or [] %}
+            <div style="border-left: 4px solid #dc3545; background: #fff5f5; padding: 15px; border-radius: 8px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <strong style="color: #dc3545;">{{ alert.title }}</strong>
+                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">{{ alert.description }}</p>
+                        <p style="margin: 5px 0 0 0; font-size: 11px; color: #999;">{{ alert.timestamp }}</p>
+                    </div>
+                    <span class="status-badge absent">{{ alert.status }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+    function initializeCharts() {
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js not loaded');
+            return;
+        }
+
+        // Destroy existing charts if they exist
+        if (window.eventChartInstance) {
+            window.eventChartInstance.destroy();
+        }
+        if (window.activityChartInstance) {
+            window.activityChartInstance.destroy();
+        }
+
+        // Event Distribution Chart (Bar)
+        const eventCtx = document.getElementById('eventChart');
+        if (eventCtx && typeof Chart !== 'undefined') {
+            try {
+                window.eventChartInstance = new Chart(eventCtx.getContext('2d'), {
+                    type: 'bar',
+                    data: {
+                        labels: ['Login', 'Data Access', 'Data Modify', 'Admin Changes', 'Reports', 'Settings'],
+                        datasets: [{
+                            label: 'Events',
+                            data: [45, 38, 22, 15, 18, 12],
+                            backgroundColor: [
+                                '#0B9B7A',
+                                '#34C9A5',
+                                '#087A60',
+                                '#28a745',
+                                '#ffc107',
+                                '#dc3545'
+                            ],
+                            borderRadius: 8,
+                            borderSkipped: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } catch(e) { console.error('Error creating event chart:', e); }
+        }
+
+        // Activity by Hour Chart (Line)
+        const activityCtx = document.getElementById('activityChart');
+        if (activityCtx && typeof Chart !== 'undefined') {
+            try {
+                window.activityChartInstance = new Chart(activityCtx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '23:59'],
+                        datasets: [{
+                            label: 'Activities',
+                            data: [8, 5, 35, 52, 48, 42, 15],
+                            borderColor: '#0B9B7A',
+                            backgroundColor: 'rgba(11, 155, 122, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            pointRadius: 5,
+                            pointBackgroundColor: '#0B9B7A',
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'top' } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
+            } catch(e) { console.error('Error creating activity chart:', e); }
+        }
+    }
+
+    // Initialize when DOM is ready or after a brief delay
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeCharts);
+    } else {
+        initializeCharts();
+    }
+
+    // Also initialize after a small delay to catch any timing issues
+    window.addEventListener('load', initializeCharts);
+</script>
+{% endblock %}

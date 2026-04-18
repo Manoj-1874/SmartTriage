@@ -1,29 +1,13 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriorityMed — Patient Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <title>PriorityMed — PHC Nurse Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <!-- Fallback: If Chart.js doesn't load, inject from cdnjs -->
-    <script>
-    setTimeout(() => {
-      if (typeof Chart === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
-        script.onload = () => {
-          if (typeof renderCharts === 'function') {
-            renderCharts();
-          }
-        };
-        document.head.appendChild(script);
-      }
-    }, 500);
-    </script>
-    <script>window.chtlConfig = { chatbotId: "6396798553" }</script>
-    <script async data-id="6396798553" id="chtl-script" type="text/javascript" src="https://chatling.ai/js/embed.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
     <style>
     :root {
@@ -427,50 +411,49 @@
 <!-- ══════════ SIDEBAR ══════════ -->
 <aside class="sidebar" id="sidebar">
     <div class="s-brand">
-        <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
+        <div class="s-logo-box"><i class="fas fa-hospital"></i></div>
         <div class="s-brand-text">
             <div class="s-brand-name">PriorityMed</div>
-            <div class="s-brand-tag">Patient Portal</div>
+            <div class="s-brand-tag">PHC Nurse Center</div>
         </div>
     </div>
     <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
     <div class="s-user">
-        <div class="s-ava">
-            <i class="fas fa-user"></i>
+        <div class="s-ava" style="background:linear-gradient(135deg, #DC2626, #F87171);">
+            <i class="fas fa-nurse"></i>
             <div class="s-ava-dot"></div>
         </div>
         <div class="s-user-text">
             <div class="s-uname">{{ user.fullname }}</div>
-            <div class="s-urole">Patient Account</div>
+            <div class="s-urole">PHC Nurse</div>
         </div>
     </div>
     <nav class="s-nav">
-        <div class="s-group">Overview</div>
-        <a href="/patient/dashboard" class="s-link active">
+        <div class="s-group">Center Management</div>
+        <a href="/phc/nurse/dashboard" class="s-link active">
             <div class="s-icon"><i class="fas fa-th-large"></i></div>
             <span class="s-label">Dashboard</span>
         </a>
-        <a href="/health-report" class="s-link">
-            <div class="s-icon"><i class="fas fa-chart-line"></i></div>
-            <span class="s-label">Health Progress</span>
+        <a href="/phc/nurse/patients" class="s-link">
+            <div class="s-icon"><i class="fas fa-users"></i></div>
+            <span class="s-label">Patients</span>
         </a>
-        <div class="s-group">My Care</div>
-        <a href="/checkup" class="s-link">
-            <div class="s-icon"><i class="fas fa-robot"></i></div>
-            <span class="s-label">AI Checkup</span>
-            <span class="s-chip">NEW</span>
-        </a>
-        <a href="/appointments" class="s-link">
+        <a href="/phc/nurse/appointments" class="s-link">
             <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
             <span class="s-label">Appointments</span>
-            <span class="s-chip" id="pendingChip" style="display:none;">0</span>
+            {% if dashboard_data.system_alerts|length > 0 %}<span class="s-chip">{{ dashboard_data.system_alerts|length }}</span>{% endif %}
         </a>
-        <a href="/doctors" class="s-link">
-            <div class="s-icon"><i class="fas fa-user-md"></i></div>
-            <span class="s-label">Find Doctors</span>
+        <div class="s-group">Operations</div>
+        <a href="/phc/nurse/intake" class="s-link">
+            <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
+            <span class="s-label">Patient Intake</span>
         </a>
-        <div class="s-group">Support</div>
-        <a href="/messages" class="s-link">
+        <a href="/phc/nurse/reports" class="s-link">
+            <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
+            <span class="s-label">Reports</span>
+        </a>
+        <div class="s-group">Communication</div>
+        <a href="/phc/nurse/messages" class="s-link">
             <div class="s-icon"><i class="fas fa-comments"></i></div>
             <span class="s-label">Messages</span>
         </a>
@@ -494,7 +477,7 @@
         <div class="t-breadcrumb">
             <span>PriorityMed</span>
             <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
-            <span class="t-breadcrumb-active">Dashboard</span>
+            <span class="t-breadcrumb-active">PHC Nurse Dashboard</span>
         </div>
         <div class="t-right">
             <div class="t-clock" id="liveClock">--:-- --</div>
@@ -504,7 +487,7 @@
             </div>
             <button class="t-btn" title="Notifications">
                 <i class="fas fa-bell"></i>
-                <div class="t-badge"></div>
+                {% if dashboard_data.system_alerts|length > 0 %}<div class="t-badge"></div>{% endif %}
             </button>
             <button class="t-btn" title="Settings">
                 <i class="fas fa-cog"></i>
@@ -513,50 +496,50 @@
     </header>
 
     <div class="page">
-
+        {% if dashboard_data.system_alerts %}
         <div class="notif" id="notifStrip">
-            <div class="notif-ico"><i class="fas fa-bell"></i></div>
+            <div class="notif-ico"><i class="fas fa-exclamation-triangle"></i></div>
             <div class="notif-txt">
-                <strong>Health Reminder:</strong> Stay hydrated — drink at least 8 glasses of water today. Your wellbeing is our priority.
+                <strong>Active Alerts:</strong> {{ dashboard_data.system_alerts|length }} critical event{% if dashboard_data.system_alerts|length != 1 %}s{% endif %} requiring attention.
             </div>
             <button class="notif-x" onclick="document.getElementById('notifStrip').style.display='none'">
                 <i class="fas fa-times"></i>
             </button>
         </div>
+        {% endif %}
 
         <div class="banner">
             <div class="banner-ring"></div>
             <div class="banner-left">
                 <div class="banner-eyebrow">
-                    <i class="fas fa-circle-dot" style="font-size:9px;"></i>
-                    <span id="bannerDate">—</span>
+                    <i class="fas fa-hospital-alt" style="font-size:9px;"></i>
+                    <span id="bannerDate">{{ dashboard_data.center_name }}</span>
                 </div>
                 <div class="banner-name" id="bannerGreet">Welcome back, {{ user.fullname }} 👋</div>
                 <p class="banner-sub">
-                    Your health overview is up to date. You have
-                    <strong style="color:#fff;">{{ patient_stats.pending }}</strong>
-                    pending appointment{% if patient_stats.pending != 1 %}s{% endif %} awaiting confirmation.
+                    <strong>{{ dashboard_data.patients_registered_today }}</strong> new patients registered today.
+                    <strong>{{ dashboard_data.total_patients }}</strong> total under your care.
                 </p>
                 <div class="banner-actions">
-                    <a href="/appointments" class="btn-white"><i class="fas fa-plus"></i> Book Appointment</a>
-                    <a href="/checkup" class="btn-outline-white"><i class="fas fa-stethoscope"></i> AI Checkup</a>
+                    <a href="/phc/nurse/intake" class="btn-white"><i class="fas fa-plus"></i> New Patient Intake</a>
+                    <a href="/phc/nurse/appointments" class="btn-outline-white"><i class="fas fa-calendar"></i> View Appointments</a>
                 </div>
             </div>
             <div class="banner-vitals">
                 <div class="vital">
-                    <div class="vital-ico"><i class="fas fa-heart"></i></div>
-                    <div class="vital-val">72</div>
-                    <div class="vital-lbl">Heart Rate</div>
+                    <div class="vital-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-user-md"></i></div>
+                    <div class="vital-val">{{ dashboard_data.doctors_available }}</div>
+                    <div class="vital-lbl">Doctors Available</div>
                 </div>
                 <div class="vital">
-                    <div class="vital-ico"><i class="fas fa-lungs"></i></div>
-                    <div class="vital-val">98%</div>
-                    <div class="vital-lbl">SpO₂ Level</div>
+                    <div class="vital-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-nurse"></i></div>
+                    <div class="vital-val">{{ dashboard_data.nurses_available }}</div>
+                    <div class="vital-lbl">Nurses Available</div>
                 </div>
                 <div class="vital">
-                    <div class="vital-ico"><i class="fas fa-thermometer-half"></i></div>
-                    <div class="vital-val">98.6°</div>
-                    <div class="vital-lbl">Body Temp</div>
+                    <div class="vital-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-bed"></i></div>
+                    <div class="vital-val">{{ dashboard_data.checkins_today }}</div>
+                    <div class="vital-lbl">Check-ins Today</div>
                 </div>
             </div>
         </div>
@@ -566,217 +549,158 @@
             <div class="stat-card">
                 <div class="stat-accent" style="background:var(--brand);"></div>
                 <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-calendar-check"></i></div>
-                    <span class="stat-trend t-up"><i class="fas fa-arrow-up"></i> 12%</span>
+                    <div class="stat-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-users"></i></div>
+                    <span class="stat-trend t-up"><i class="fas fa-arrow-up"></i> Today</span>
                 </div>
-                <div class="stat-val" id="svTotal">{{ patient_stats.total }}</div>
-                <div class="stat-lbl">Total Appointments</div>
+                <div class="stat-val">{{ dashboard_data.patients_registered_today }}</div>
+                <div class="stat-lbl">New Patients Registered</div>
                 <div class="stat-div"></div>
-                <div class="stat-sub">All-time visits recorded</div>
+                <div class="stat-sub">This reporting period</div>
             </div>
             <div class="stat-card">
                 <div class="stat-accent" style="background:var(--clr-green);"></div>
                 <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-circle-check"></i></div>
-                    <span class="stat-trend t-up">98% rate</span>
+                    <div class="stat-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-users-alt"></i></div>
+                    <span class="stat-trend t-info">Total</span>
                 </div>
-                <div class="stat-val" id="svDone">{{ patient_stats.completed }}</div>
-                <div class="stat-lbl">Completed</div>
+                <div class="stat-val">{{ dashboard_data.total_patients }}</div>
+                <div class="stat-lbl">Total Patients</div>
                 <div class="stat-div"></div>
-                <div class="stat-sub">Successfully attended</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-accent" style="background:var(--clr-amber);"></div>
-                <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-hourglass-half"></i></div>
-                    <span class="stat-trend t-warn">Awaiting</span>
-                </div>
-                <div class="stat-val" id="svPend">{{ patient_stats.pending }}</div>
-                <div class="stat-lbl">Pending Requests</div>
-                <div class="stat-div"></div>
-                <div class="stat-sub">Please respond within 24 hrs</div>
+                <div class="stat-sub">Under your PHC center care</div>
             </div>
             <div class="stat-card">
                 <div class="stat-accent" style="background:var(--clr-blue);"></div>
                 <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-shield-heart"></i></div>
-                    <span class="stat-trend t-info">Active</span>
+                    <div class="stat-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-calendar-check"></i></div>
+                    <span class="stat-trend t-info">{{ dashboard_data.center_completion_rate }}%</span>
                 </div>
-                <div class="stat-val" style="font-size:24px;">Good</div>
-                <div class="stat-lbl">Health Status</div>
+                <div class="stat-val">{{ dashboard_data.total_appointments }}</div>
+                <div class="stat-lbl">Total Appointments</div>
                 <div class="stat-div"></div>
-                <div class="stat-sub">Based on recent visits</div>
+                <div class="stat-sub">Center completion rate</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-accent" style="background:var(--clr-red);"></div>
+                <div class="stat-top">
+                    <div class="stat-ico" style="background:var(--clr-red-bg);color:var(--clr-red);"><i class="fas fa-exclamation-circle"></i></div>
+                    <span class="stat-trend t-warn" id="criticalAlertCount">{{ dashboard_data.system_alerts|length }}</span>
+                </div>
+                <div class="stat-val" id="criticalCasesCount">-</div>
+                <div class="stat-lbl">Critical Cases</div>
+                <div class="stat-div"></div>
+                <div class="stat-sub">Requiring immediate attention</div>
             </div>
         </div>
 
         <div class="sec-head"><div class="sec-label">Quick Actions</div></div>
         <div class="quick-grid">
-            <a href="/appointments" class="quick-btn">
-                <div class="q-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-calendar-plus"></i></div>
-                <span class="q-lbl">Book Appointment</span>
+            <a href="/phc/nurse/intake" class="quick-btn">
+                <div class="q-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-user-plus"></i></div>
+                <span class="q-lbl">Register Patient</span>
             </a>
-            <a href="/checkup" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-stethoscope"></i></div>
-                <span class="q-lbl">AI Health Scan</span>
+            <a href="/phc/nurse/appointments" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-calendar-check"></i></div>
+                <span class="q-lbl">View Appointments</span>
             </a>
-            <a href="/doctors" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-purple-bg);color:var(--clr-purple);"><i class="fas fa-user-md"></i></div>
-                <span class="q-lbl">Find a Doctor</span>
+            <a href="/phc/nurse/patients" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-list"></i></div>
+                <span class="q-lbl">Manage Patients</span>
             </a>
-            <a href="/messages" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-comment-medical"></i></div>
-                <span class="q-lbl">Message Doctor</span>
+            <a href="/phc/nurse/reports" class="quick-btn">
+                <div class="q-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-chart-bar"></i></div>
+                <span class="q-lbl">Generate Report</span>
             </a>
         </div>
 
-        <div class="sec-head"><div class="sec-label">Analytics</div></div>
+        <div class="sec-head"><div class="sec-label">Analytics & Trends</div></div>
         <div class="charts-row">
             <div class="card">
                 <div class="card-head">
                     <div>
-                        <div class="card-title">Appointment Timeline</div>
-                        <div class="card-sub">Monthly history at a glance</div>
+                        <div class="card-title">7-Day Admission Trend</div>
+                        <div class="card-sub">Patient registration over the week</div>
                     </div>
                     <div class="card-pill"><i class="fas fa-chart-line"></i> Live</div>
                 </div>
                 <div class="card-body">
-                    <div class="chart-wrap"><canvas id="timelineChart"></canvas></div>
+                    <div class="chart-wrap"><canvas id="admissionChart"></canvas></div>
                 </div>
             </div>
             <div class="card">
                 <div class="card-head">
                     <div>
-                        <div class="card-title">Status Breakdown</div>
-                        <div class="card-sub">Appointment distribution</div>
+                        <div class="card-title">Risk Distribution</div>
+                        <div class="card-sub">Disease severity breakdown</div>
                     </div>
                 </div>
                 <div class="card-body">
                     <div class="chart-wrap" style="position:relative;">
-                        <canvas id="statusChart"></canvas>
+                        <canvas id="riskChart"></canvas>
                         <div class="donut-ctr">
-                            <div class="donut-n" id="donutN">—</div>
-                            <div class="donut-l">Total</div>
+                            <div class="donut-n" id="riskDonutN">—</div>
+                            <div class="donut-l">Cases</div>
                         </div>
                     </div>
                 </div>
-                <div class="chart-legend" id="chartLegend"></div>
+                <div class="chart-legend" id="riskChartLegend"></div>
             </div>
         </div>
 
-        <div class="sec-head"><div class="sec-label">Wellness Hub</div></div>
-        <div class="tips-card">
-            <div class="tips-head">
-                <div>
-                    <div class="card-title">Health Tips</div>
-                    <div class="card-sub">Personalised wellness guidance</div>
-                </div>
-                <div class="tips-nav-btns">
-                    <button class="tips-nav-btn" id="tipsPrev"><i class="fas fa-chevron-left"></i></button>
-                    <button class="tips-nav-btn" id="tipsNext"><i class="fas fa-chevron-right"></i></button>
-                </div>
-            </div>
-            <div class="tips-track-outer">
-                <div class="tips-track" id="tipsTrack"></div>
-            </div>
-        </div>
-
-        <div class="sec-head">
-            <div class="sec-label">Appointments</div>
-            <a href="/appointments" class="sec-link">View All <i class="fas fa-arrow-right"></i></a>
-        </div>
+        <div class="sec-head"><div class="sec-label">System Alerts & Incidents</div></div>
         <div class="appt-card">
             <div class="appt-head">
                 <div>
-                    <div class="card-title">Recent Appointments</div>
-                    <div class="card-sub">Your latest medical consultations</div>
+                    <div class="card-title">{% if dashboard_data.system_alerts|length > 0 %}Active Alerts ({{ dashboard_data.system_alerts|length }}){% else %}No Critical Alerts{% endif %}</div>
+                    <div class="card-sub">Critical cases and pending confirmations</div>
                 </div>
-                <a href="/appointments" class="btn-primary"><i class="fas fa-plus"></i> New Appointment</a>
             </div>
-            <div class="appt-tabs">
-                <button class="tab active" onclick="filterTab('all',this)">All</button>
-                <button class="tab" onclick="filterTab('completed',this)">Completed</button>
-                <button class="tab" onclick="filterTab('pending',this)">Pending</button>
-                <button class="tab" onclick="filterTab('scheduled',this)">Scheduled</button>
-                <button class="tab" onclick="filterTab('approved',this)">Approved</button>
-            </div>
-            <div class="appt-list" id="apptList">
-                {% if appointments %}
-                    {% for apt in appointments[:7] %}
-                    <div class="appt-row" data-status="{{ apt.status.lower() }}">
-                        <div class="appt-bar" style="{% if apt.status.lower()=='completed' %}background:var(--clr-green){% elif apt.status.lower()=='approved' %}background:var(--clr-purple){% elif apt.status.lower()=='scheduled' %}background:var(--clr-blue){% elif apt.status.lower()=='pending' %}background:var(--clr-amber){% else %}background:var(--clr-red){% endif %};"></div>
-                        <div class="appt-ava" style="{% if apt.status.lower()=='completed' %}background:linear-gradient(135deg,#16A34A,#22C55E){% elif apt.status.lower()=='approved' %}background:linear-gradient(135deg,#7C3AED,#A855F7){% elif apt.status.lower()=='scheduled' %}background:linear-gradient(135deg,#2563EB,#60A5FA){% elif apt.status.lower()=='pending' %}background:linear-gradient(135deg,#D97706,#FBBF24){% else %}background:linear-gradient(135deg,#DC2626,#F87171){% endif %};"><i class="fas fa-user-md"></i></div>
+            <div class="appt-list" id="alertsList">
+                {% if dashboard_data.system_alerts %}
+                    {% for alert in dashboard_data.system_alerts %}
+                    <div class="appt-row">
+                        <div class="appt-bar" style="background:{% if alert.status == 'CRITICAL' %}var(--clr-red){% elif alert.status == 'WARNING' %}var(--clr-amber){% else %}var(--clr-blue){% endif %};"></div>
+                        <div class="appt-ava" style="background:{% if alert.status == 'CRITICAL' %}linear-gradient(135deg,#DC2626,#F87171){% elif alert.status == 'WARNING' %}linear-gradient(135deg,#D97706,#FBBF24){% else %}linear-gradient(135deg,#2563EB,#60A5FA){% endif %};"><i class="{{ alert.icon }}"></i></div>
                         <div class="appt-info">
-                            <div class="appt-doc">{% if apt.doctor_name %}Dr. {{ apt.doctor_name }}{% else %}Scheduled Appointment{% endif %}</div>
+                            <div class="appt-doc">{{ alert.message }}</div>
                             <div class="appt-meta">
-                                <span class="appt-meta-i"><i class="far fa-calendar"></i> {{ apt.appointment_date }}</span>
-                                <span class="appt-meta-i"><i class="far fa-clock"></i> {{ apt.appointment_time }}</span>
-                                {% if apt.specialization %}<span class="appt-meta-i"><i class="fas fa-briefcase-medical"></i> {{ apt.specialization }}</span>{% endif %}
+                                <span class="appt-meta-i"><i class="far fa-clock"></i> {{ alert.timestamp }}</span>
+                                <span class="appt-meta-i"><i class="fas fa-info-circle"></i> {{ alert.type|replace('_', ' ')|title }}</span>
                             </div>
-                            {% if apt.reason %}<div class="appt-reason"><i class="fas fa-notes-medical"></i> {{ apt.reason[:65] }}{% if apt.reason|length > 65 %}…{% endif %}</div>{% endif %}
                         </div>
-                        <span class="badge b-{{ apt.status.lower() }}">{{ apt.status }}</span>
+                        <span class="badge" style="background:{% if alert.status == 'CRITICAL' %}var(--clr-red-bg);color:var(--clr-red){% elif alert.status == 'WARNING' %}var(--clr-amber-bg);color:var(--clr-amber){% else %}var(--clr-blue-bg);color:var(--clr-blue){% endif %};">{{ alert.status }}</span>
                     </div>
                     {% endfor %}
                 {% else %}
                 <div class="empty">
-                    <div class="empty-ico"><i class="far fa-calendar-times"></i></div>
-                    <div class="empty-title">No Appointments Yet</div>
-                    <p class="empty-sub">Start your healthcare journey by booking a consultation with one of our specialists.</p>
-                    <a href="/appointments" class="btn-primary"><i class="fas fa-plus"></i> Book First Appointment</a>
+                    <div class="empty-ico"><i class="fas fa-check-circle"></i></div>
+                    <div class="empty-title">All Systems Normal</div>
+                    <p class="empty-sub">No critical alerts or pending actions. Your PHC center is operating normally.</p>
                 </div>
                 {% endif %}
             </div>
         </div>
 
-        <div class="sec-head"><div class="sec-label">Health Tools</div></div>
-        <div class="tools-grid">
-            <div class="tool-card">
-                <div class="tool-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-brain"></i></div>
-                <div class="tool-title">AI Health Analysis</div>
-                <p class="tool-text">Our AI monitors your appointment patterns and health data to provide personalised care recommendations.</p>
-                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,17 30,17 44,6 58,28 72,5 86,30 100,17 135,17 149,10 163,24 177,17 240,17" stroke="var(--brand)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.2s" repeatCount="indefinite"/></polyline></svg></div>
-            </div>
-            <div class="tool-card">
-                <div class="tool-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-chart-area"></i></div>
-                <div class="tool-title">Progress Tracking</div>
-                <p class="tool-text">Detailed health reports that track your treatment outcomes and wellness improvements over time.</p>
-                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,24 36,24 52,10 76,24 96,14 116,24 156,24 178,8 198,24 240,24" stroke="var(--clr-blue)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.6s" begin=".5s" repeatCount="indefinite"/></polyline></svg></div>
-            </div>
-            <div class="tool-card">
-                <div class="tool-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-pills"></i></div>
-                <div class="tool-title">Medication Reminders</div>
-                <p class="tool-text">Smart medication tracking with automated reminders synced with your personalised care plan.</p>
-                <div class="ecg-line"><svg viewBox="0 0 240 34" fill="none"><polyline points="0,17 18,17 32,8 46,26 60,17 90,17 104,5 118,29 132,17 166,17 182,11 198,23 240,17" stroke="var(--clr-amber)" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2.4s" begin="1s" repeatCount="indefinite"/></polyline></svg></div>
-            </div>
-        </div>
-
-        {% if appointments %}
-        <div class="sec-head">
-            <div class="sec-label">Your Care Team</div>
-            <a href="/doctors" class="sec-link">All Doctors <i class="fas fa-arrow-right"></i></a>
-        </div>
-        <div class="doctors-grid" id="doctorsGrid"></div>
-        {% endif %}
-
-        <div class="sec-head"><div class="sec-label">Recent Activity</div></div>
-        <div class="tl-card">
-            <div class="card-title">Activity Log</div>
-            <div class="card-sub" style="margin-top:2px;">Your latest interactions and updates</div>
-            <div class="tl-list" id="tlList"></div>
-        </div>
-
-        <div class="page-footer">© 2024 PriorityMed &nbsp;·&nbsp; Secure Patient Portal &nbsp;·&nbsp; All rights reserved</div>
+        <div class="page-footer">© 2024 PriorityMed — PHC Nurse Operations Center &nbsp;·&nbsp; Powered by AI &nbsp;·&nbsp; All rights reserved</div>
 
     </div>
 </div>
 </div>
 
 <script>
-const appointments = {{ appointments | tojson if appointments else '[]' | safe }};
-const patientStats = {
-    total:     {{ patient_stats.total }},
-    completed: {{ patient_stats.completed }},
-    pending:   {{ patient_stats.pending }}
+const dashboardData = {
+    center_name: '{{ dashboard_data.center_name }}',
+    patients_registered_today: {{ dashboard_data.patients_registered_today }},
+    total_patients: {{ dashboard_data.total_patients }},
+    checkins_today: {{ dashboard_data.checkins_today }},
+    center_completion_rate: {{ dashboard_data.center_completion_rate }},
+    total_appointments: {{ dashboard_data.total_appointments }},
+    doctors_available: {{ dashboard_data.doctors_available }},
+    nurses_available: {{ dashboard_data.nurses_available }},
+    admission_dates: {{ dashboard_data.admission_dates | tojson }},
+    admission_counts: {{ dashboard_data.admission_counts | tojson }},
+    disease_labels: {{ dashboard_data.disease_labels | tojson }},
+    disease_counts: {{ dashboard_data.disease_counts | tojson }},
+    system_alerts: {{ dashboard_data.system_alerts | tojson if dashboard_data.system_alerts else '[]' | safe }}
 };
 
 /* THEME */
@@ -814,104 +738,72 @@ setInterval(tick,1000); tick();
     const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
     const el=document.getElementById('bannerGreet');
     if(el) el.textContent=`${g}, {{ user.fullname }} 👋`;
+    const d=new Date();
     const de=document.getElementById('bannerDate');
-    if(de) de.textContent=new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+    if(de) de.textContent=dashboardData.center_name;
 })();
-
-if(patientStats.pending>0){ const c=document.getElementById('pendingChip'); if(c){c.style.display='inline-flex';c.textContent=patientStats.pending;} }
-
-/* PARSE */
-function parseData(){
-    const sc={Completed:0,Approved:0,Scheduled:0,Pending:0,Cancelled:0,Rejected:0};
-    const mo={},dr={};
-    appointments.forEach(a=>{
-        if(sc.hasOwnProperty(a.status)) sc[a.status]++;
-        const d=new Date(a.appointment_date);
-        if(!isNaN(d)){const k=d.toLocaleDateString('en-US',{month:'short',year:'2-digit'});mo[k]=(mo[k]||0)+1;}
-        if(a.doctor_name){
-            if(!dr[a.doctor_name]) dr[a.doctor_name]={count:0,spec:a.specialization||'General Practice',done:0,pend:0};
-            dr[a.doctor_name].count++;
-            if(a.status==='Completed') dr[a.doctor_name].done++;
-            if(a.status==='Pending') dr[a.doctor_name].pend++;
-        }
-    });
-    return {sc,mo,dr};
-}
 
 /* CHARTS */
 function renderCharts(){
-    window._activeCharts.forEach(c=>c.destroy()); window._activeCharts=[];
-    const d=parseData(),dark=isDark();
+    window._activeCharts.forEach(c=>c.destroy());
+    window._activeCharts=[];
+    const dark=isDark();
     const gridC=dark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
     const tickC=dark?'#527A65':'#9DC0B2';
     const tt={backgroundColor:dark?'#152A20':'#fff',borderColor:dark?'rgba(11,155,122,.25)':'rgba(11,155,122,.2)',borderWidth:1,titleColor:dark?'#E4F2EB':'#0A2218',bodyColor:dark?'#9ABFAE':'#4A6B60',padding:12,cornerRadius:8,titleFont:{family:'Outfit',weight:'700',size:13},bodyFont:{family:'Outfit',size:12}};
 
-    const mlabels=Object.keys(d.mo).sort((a,b)=>new Date('01 '+a)-new Date('01 '+b));
-    const mvals=mlabels.map(k=>d.mo[k]);
-    const tl=document.getElementById('timelineChart');
-    if(tl){
-        const c=new Chart(tl.getContext('2d'),{type:'line',data:{labels:mlabels.length?mlabels:['Jan','Feb','Mar','Apr','May','Jun'],datasets:[{label:'Appointments',data:mvals.length?mvals:[0,1,0,2,1,3],borderColor:'#0B9B7A',backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,220);g.addColorStop(0,dark?'rgba(11,155,122,.18)':'rgba(11,155,122,.1)');g.addColorStop(1,'rgba(11,155,122,0)');return g;},borderWidth:2.5,fill:true,tension:.4,pointBackgroundColor:'#0B9B7A',pointBorderColor:dark?'#152A20':'#fff',pointBorderWidth:2.5,pointRadius:4,pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt},scales:{y:{beginAtZero:true,ticks:{stepSize:1,color:tickC,font:{size:11,family:'Outfit'}},grid:{color:gridC,drawBorder:false},border:{display:false}},x:{ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{display:false},border:{display:false}}}}});
+    // 7-Day Admission Trend
+    const adm=document.getElementById('admissionChart');
+    if(adm && dashboardData.admission_dates.length){
+        const c=new Chart(adm.getContext('2d'),{type:'line',data:{labels:dashboardData.admission_dates,datasets:[{label:'New Admissions',data:dashboardData.admission_counts,borderColor:'#0B9B7A',backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,220);g.addColorStop(0,dark?'rgba(11,155,122,.18)':'rgba(11,155,122,.1)');g.addColorStop(1,'rgba(11,155,122,0)');return g;},borderWidth:2.5,fill:true,tension:.4,pointBackgroundColor:'#0B9B7A',pointBorderColor:dark?'#152A20':'#fff',pointBorderWidth:2.5,pointRadius:4,pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt},scales:{y:{beginAtZero:true,ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{color:gridC,drawBorder:false},border:{display:false}},x:{ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{display:false},border:{display:false}}}}});
         window._activeCharts.push(c);
     }
 
-    const statusColors={Completed:'#16A34A',Approved:'#7C3AED',Scheduled:'#2563EB',Pending:'#D97706',Cancelled:'#DC2626',Rejected:'#E11D48'};
-    const slabels=Object.keys(d.sc).filter(k=>d.sc[k]>0);
-    const svals=slabels.map(k=>d.sc[k]),scolors=slabels.map(k=>statusColors[k]);
-    const tot=svals.reduce((a,b)=>a+b,0);
-    const dn=document.getElementById('donutN'); if(dn) dn.textContent=tot||patientStats.total;
-    const st=document.getElementById('statusChart');
-    if(st){
-        const c=new Chart(st.getContext('2d'),{type:'doughnut',data:{labels:slabels.length?slabels:['No Data'],datasets:[{data:svals.length?svals:[1],backgroundColor:scolors.length?scolors:[dark?'#1A3328':'#D9EDE5'],borderColor:dark?'#152A20':'#fff',borderWidth:3,borderRadius:3,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:tt}}});
+    // Risk Distribution
+    const riskColors={'CRITICAL':'#DC2626','HIGH':'#D97706','MEDIUM':'#2563EB','LOW':'#16A34A'};
+    const riskLabels=dashboardData.disease_labels.filter((l,i)=>dashboardData.disease_counts[i]>0);
+    const riskVals=dashboardData.disease_counts.filter(v=>v>0);
+    const riskCols=riskLabels.map(l=>riskColors[l]||'#ccc');
+    const riskTot=riskVals.reduce((a,b)=>a+b,0);
+    const riskDonutN=document.getElementById('riskDonutN');
+    if(riskDonutN) riskDonutN.textContent=riskTot||'—';
+    const risk=document.getElementById('riskChart');
+    if(risk && riskLabels.length){
+        const c=new Chart(risk.getContext('2d'),{type:'doughnut',data:{labels:riskLabels,datasets:[{data:riskVals,backgroundColor:riskCols,borderColor:dark?'#152A20':'#fff',borderWidth:3,borderRadius:3,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:tt}}});
         window._activeCharts.push(c);
     }
-    const leg=document.getElementById('chartLegend');
-    if(leg){leg.innerHTML='';(slabels.length?slabels:['No Data']).forEach((l,i)=>{const el=document.createElement('div');el.className='leg-item';el.innerHTML=`<div class="leg-dot" style="background:${scolors[i]||'#ccc'}"></div>${l} (${svals[i]||0})`;leg.appendChild(el);});}
-
-    const dg=document.getElementById('doctorsGrid');
-    if(dg){dg.innerHTML='';Object.entries(d.dr).forEach(([name,s])=>{const card=document.createElement('div');card.className='doc-card';card.innerHTML=`<div class="doc-top"><div class="doc-ava"><i class="fas fa-user-md"></i></div><div><div class="doc-name">Dr. ${name}</div><div class="doc-spec">${s.spec}</div><div class="doc-stars">${'<i class="fas fa-star"></i>'.repeat(4)}<i class="far fa-star"></i><span>4.8</span></div></div></div><div class="doc-stats"><div class="doc-stat"><div class="doc-stat-v">${s.count}</div><div class="doc-stat-l">Visits</div></div><div class="doc-stat"><div class="doc-stat-v" style="color:var(--clr-green)">${s.done}</div><div class="doc-stat-l">Done</div></div><div class="doc-stat"><div class="doc-stat-v" style="color:var(--clr-amber)">${s.pend}</div><div class="doc-stat-l">Pending</div></div></div>`;dg.appendChild(card);});}
+    const riskLeg=document.getElementById('riskChartLegend');
+    if(riskLeg){riskLeg.innerHTML='';riskLabels.forEach((l,i)=>{const el=document.createElement('div');el.className='leg-item';el.innerHTML=`<div class="leg-dot" style="background:${riskCols[i]||'#ccc'}"></div>${l} (${riskVals[i]||0})`;riskLeg.appendChild(el);});}
 }
 renderCharts();
 
-/* TABS */
-function filterTab(status,btn){
-    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    btn.classList.add('active');
-    document.querySelectorAll('.appt-row').forEach(row=>{row.style.display=(status==='all'||row.dataset.status===status)?'flex':'none';});
-}
-
-/* TIPS */
-const tips=[
-    {e:'💧',bg:'#EFF6FF',cat:'Hydration',title:'Stay Hydrated Daily',txt:'Drink 8+ glasses of water daily to maintain optimal organ function and steady energy.'},
-    {e:'🏃',bg:'#F0FAF7',cat:'Fitness',title:'Regular Exercise',txt:'30 minutes of moderate exercise daily reduces cardiovascular disease risk by up to 35%.'},
-    {e:'😴',bg:'#F9FAFB',cat:'Sleep',title:'Quality Sleep',txt:'Adults need 7–9 hours of quality sleep for immune resilience and cognitive performance.'},
-    {e:'🥗',bg:'#FFF7ED',cat:'Nutrition',title:'Balanced Diet',txt:'A diet rich in vegetables, whole grains, and omega-3s significantly reduces chronic disease risk.'},
-    {e:'🧘',bg:'#F5F3FF',cat:'Mental Health',title:'Mindfulness',txt:'Just 10 minutes of daily meditation reduces cortisol and improves emotional wellbeing.'},
-    {e:'🩺',bg:'#FFF1F2',cat:'Prevention',title:'Annual Checkups',txt:'Regular screenings detect conditions early when treatment is most effective.'},
-];
-(function(){
-    const track=document.getElementById('tipsTrack'); if(!track) return;
-    tips.forEach(t=>{const el=document.createElement('div');el.className='tip-item';el.innerHTML=`<div class="tip-visual" style="background:${t.bg};">${t.e}</div><div class="tip-body"><div class="tip-cat">${t.cat}</div><div class="tip-ttl">${t.title}</div><p class="tip-txt">${t.txt}</p></div>`;track.appendChild(el);});
-})();
-let tOff=0;
-document.getElementById('tipsNext')?.addEventListener('click',()=>{if(tOff<tips.length-3){tOff++;document.getElementById('tipsTrack').style.transform=`translateX(calc(-${tOff} * (33.333% + 14px)))`;} });
-document.getElementById('tipsPrev')?.addEventListener('click',()=>{if(tOff>0){tOff--;document.getElementById('tipsTrack').style.transform=`translateX(calc(-${tOff} * (33.333% + 14px)))`;} });
-
-/* TIMELINE */
-(function(){
-    const events=[
-        {ico:'fas fa-calendar-plus',bg:'var(--brand-faint)',bc:'rgba(11,155,122,.25)',clr:'var(--brand)',ev:'Appointment Booked',tm:'2 hours ago'},
-        {ico:'fas fa-robot',bg:'var(--clr-blue-bg)',bc:'rgba(37,99,235,.25)',clr:'var(--clr-blue)',ev:'AI Checkup Completed',tm:'Yesterday, 2:30 PM'},
-        {ico:'fas fa-circle-check',bg:'var(--clr-green-bg)',bc:'rgba(22,163,74,.25)',clr:'var(--clr-green)',ev:'Consultation Completed',tm:'3 days ago'},
-        {ico:'fas fa-file-medical-alt',bg:'var(--clr-purple-bg)',bc:'rgba(124,58,237,.25)',clr:'var(--clr-purple)',ev:'Lab Results Updated',tm:'1 week ago'},
-        {ico:'fas fa-user-check',bg:'var(--clr-amber-bg)',bc:'rgba(217,119,6,.25)',clr:'var(--clr-amber)',ev:'Account Verified',tm:'2 weeks ago'},
-    ];
-    const list=document.getElementById('tlList'); if(!list) return;
-    events.forEach(ev=>{const item=document.createElement('div');item.className='tl-item';item.innerHTML=`<div class="tl-dot" style="background:${ev.bg};border-color:${ev.bc};color:${ev.clr};"><i class="${ev.ico}"></i></div><div class="tl-body"><div class="tl-ev">${ev.ev}</div><div class="tl-tm">${ev.tm}</div></div>`;list.appendChild(item);});
-})();
-
 /* COUNTERS */
-function animCount(el,target,dur=1000){const start=performance.now();const run=now=>{const p=Math.min((now-start)/dur,1);const ease=1-Math.pow(1-p,3);el.textContent=Math.round(ease*target);if(p<1)requestAnimationFrame(run);else el.textContent=target;};requestAnimationFrame(run);}
-setTimeout(()=>{[['svTotal',patientStats.total],['svDone',patientStats.completed],['svPend',patientStats.pending]].forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!isNaN(val))animCount(el,val);});},300);
+function animCount(el,target,dur=800){const start=performance.now();const run=now=>{const p=Math.min((now-start)/dur,1);const ease=1-Math.pow(1-p,3);el.textContent=Math.round(ease*target);if(p<1)requestAnimationFrame(run);else el.textContent=target;};requestAnimationFrame(run);}
+setTimeout(()=>{
+    [['criticalCasesCount', dashboardData.system_alerts.filter(a=>a.status==='CRITICAL').length]].forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!isNaN(val))animCount(el,val);});
+},300);
+
+// Populate alerts list
+(function(){
+    const list = document.getElementById('alertsList');
+    if(!list || !dashboardData.system_alerts.length) return;
+    dashboardData.system_alerts.forEach(alert => {
+        const row = document.createElement('div');
+        row.className = 'appt-row';
+        row.innerHTML = `<div class="appt-bar" style="background:${alert.status === 'CRITICAL' ? 'var(--clr-red)' : 'var(--clr-amber)'}"></div>
+            <div class="appt-ava" style="background:${alert.status === 'CRITICAL' ? 'linear-gradient(135deg,#DC2626,#F87171)' : 'linear-gradient(135deg,#D97706,#FBBF24)'}"><i class="${alert.icon}"></i></div>
+            <div class="appt-info">
+                <div class="appt-doc">${alert.message}</div>
+                <div class="appt-meta">
+                    <span class="appt-meta-i"><i class="far fa-clock"></i> ${alert.timestamp}</span>
+                    <span class="appt-meta-i"><i class="fas fa-tag"></i> ${alert.type.replace(/_/g, ' ')}</span>
+                </div>
+            </div>
+            <span class="badge" style="background:${alert.status === 'CRITICAL' ? 'var(--clr-red-bg);color:var(--clr-red)' : 'var(--clr-amber-bg);color:var(--clr-amber)'};">${alert.status}</span>`;
+        list.appendChild(row);
+    });
+})();
+
 </script>
 </body>
 </html>

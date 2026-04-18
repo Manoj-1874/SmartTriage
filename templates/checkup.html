@@ -2198,10 +2198,20 @@
               <div class="t-thumb"></div>
             </div>
           </div>
-          <button class="t-btn"><i class="fas fa-bell"></i>
-            <div class="t-badge"></div>
-          </button>
-          <button class="t-btn"><i class="fas fa-cog"></i></button>
+          <div style="position:relative;">
+            <button class="t-btn" id="notifBtn"><i class="fas fa-bell"></i>
+              <div class="t-badge"></div>
+            </button>
+            <div id="notifDropdown" style="display:none;position:absolute;top:48px;right:-8px;width:340px;background:var(--base);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1000;overflow:hidden;">
+              <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-weight:700;color:var(--t-head);">Notifications</div>
+                <button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--t-muted);cursor:pointer;font-size:14px;padding:0;"><i class="fas fa-times"></i></button>
+              </div>
+              <div id="notifList" style="max-height:400px;overflow-y:auto;">
+                <div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Loading notifications...</div>
+              </div>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -2948,6 +2958,78 @@
           setTimeout(() => { bar.style.width = w; }, 100);
         });
       }, 500);
+
+      /* NOTIFICATIONS DROPDOWN */
+      const notifBtn = document.getElementById('notifBtn');
+      const notifDropdown = document.getElementById('notifDropdown');
+
+      function closeNotifDropdown() {
+        if (notifDropdown) notifDropdown.style.display = 'none';
+      }
+
+      function openNotifDropdown() {
+        if (!notifDropdown) return;
+        notifDropdown.style.display = 'block';
+        loadNotifications();
+      }
+
+      if (notifBtn) {
+        notifBtn.addEventListener('click', () => {
+          if (notifDropdown.style.display === 'none') {
+            openNotifDropdown();
+          } else {
+            closeNotifDropdown();
+          }
+        });
+      }
+
+      function loadNotifications() {
+        const list = document.getElementById('notifList');
+        if (!list) return;
+        list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Loading...</div>';
+
+        fetch('/appointments/notifications')
+          .then(res => res.json())
+          .then(data => {
+            if (!data.notifications || data.notifications.length === 0) {
+              list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">No notifications yet</div>';
+              return;
+            }
+
+            let html = '';
+            data.notifications.forEach(notif => {
+              const date = new Date(notif.created_at);
+              const timeStr = date.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+              html += `
+                <div style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+                  <div style="display:flex;gap:10px;align-items:flex-start;">
+                    <div style="width:28px;height:28px;border-radius:8px;background:var(--brand-faint);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">
+                      <i class="fas fa-bell"></i>
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-weight:600;color:var(--t-head);font-size:13px;">${notif.title}</div>
+                      <div style="color:var(--t-muted);font-size:12px;margin-top:2px;">${notif.message}</div>
+                      <div style="color:var(--t-faint);font-size:11px;margin-top:4px;">${timeStr}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            });
+            list.innerHTML = html;
+          })
+          .catch(err => {
+            console.error('Error loading notifications:', err);
+            list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--clr-red);font-size:13px;">Error loading notifications</div>';
+          });
+      }
+
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!notifBtn || !notifDropdown) return;
+        if (!notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) {
+          closeNotifDropdown();
+        }
+      });
     </script>
 
 </body>

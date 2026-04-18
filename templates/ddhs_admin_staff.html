@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff — DDHS Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; }
+        .sidebar { width: 250px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px 0; position: fixed; left: 0; top: 0; z-index: 1000; overflow-y: auto; }
+        .sidebar-header { padding: 20px; color: white; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2); margin-bottom: 20px; }
+        .sidebar-header h3 { font-size: 18px; margin-bottom: 5px; }
+        .sidebar-header p { font-size: 12px; opacity: 0.9; }
+        .sidebar-menu { list-style: none; padding: 0; }
+        .sidebar-menu a { display: block; padding: 12px 20px; color: white; text-decoration: none; transition: all 0.3s; border-left: 3px solid transparent; }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.1); border-left-color: white; }
+        .sidebar-menu a.active { background: rgba(255,255,255,0.2); border-left-color: white; font-weight: 600; }
+        .sidebar-menu i { width: 20px; margin-right: 10px; text-align: center; }
+        .sidebar-footer { position: absolute; bottom: 20px; left: 0; right: 0; padding: 20px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .sidebar-footer a { color: white; text-decoration: none; font-size: 12px; display: block; padding: 8px 0; }
+        .main-content { margin-left: 250px; flex: 1; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+        .section { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .resource-table { width: 100%; border-collapse: collapse; }
+        .resource-table th { background: #f5f5f5; padding: 12px; text-align: left; font-weight: 600; font-size: 12px; color: #666; border-bottom: 2px solid #e0e0e0; text-transform: uppercase; }
+        .resource-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; }
+        .resource-table tbody tr:hover { background: #f9f9f9; }
+        .badge { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-doctor { background: #d4edda; color: #155724; }
+        .badge-nurse { background: #cfe2ff; color: #084298; }
+        .badge-admin { background: #f8d7da; color: #721c24; }
+        .no-data { text-align: center; padding: 40px 20px; color: #999; }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h3>PriorityMed</h3>
+        <p>DDHS Admin</p>
+    </div>
+    <ul class="sidebar-menu">
+        <li><a href="/ddhs-admin/dashboard"><i class="fas fa-chart-line"></i>Dashboard</a></li>
+        <li><a href="/ddhs-admin/health-centers"><i class="fas fa-hospital"></i>Health Centers</a></li>
+        <li><a href="/ddhs-admin/staff" class="active"><i class="fas fa-users"></i>Staff</a></li>
+        <li><a href="/ddhs-admin/attendance"><i class="fas fa-clock"></i>Attendance</a></li>
+        <li><a href="/ddhs-admin/ambulances"><i class="fas fa-ambulance"></i>Ambulances</a></li>
+        <li><a href="/ddhs-admin/resources"><i class="fas fa-boxes"></i>Resources</a></li>
+        <li><a href="/ddhs-admin/reports"><i class="fas fa-file-chart"></i>Reports</a></li>
+        <li><a href="/ddhs-admin/disease-surveillance"><i class="fas fa-virus"></i>Disease</a></li>
+        <li><a href="/ddhs-admin/budget"><i class="fas fa-wallet"></i>Budget</a></li>
+        <li><a href="/ddhs-admin/campaigns"><i class="fas fa-bullhorn"></i>Campaigns</a></li>
+        <li><a href="/ddhs-admin/audit-log"><i class="fas fa-history"></i>Audit</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <a href="/patient_dashboard">← Back to Main</a>
+        <a href="/logout" style="color: #ff6b6b;">↪ Logout</a>
+    </div>
+</div>
+
+<div class="main-content">
+<div class="container">
+    <h1 class="page-title">Staff Directory</h1>
+    <div class="section">
+    {% if staff_members %}
+    <table class="resource-table">
+        <thead><tr><th>Name</th><th>Role</th><th>Center</th><th>Phone</th></tr></thead>
+        <tbody>
+        {% for staff in staff_members %}
+        <tr>
+            <td>{{ staff.name }}</td>
+            <td><span class="badge {% if staff.role == 'doctor' %}badge-doctor{% elif staff.role == 'phc_nurse' %}badge-nurse{% else %}badge-admin{% endif %}">{{ staff.role_display }}</span></td>
+            <td>{{ staff.phc_name or 'N/A' }}</td>
+            <td>{{ staff.contact_phone or 'N/A' }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="no-data">No staff found</div>
+    {% endif %}
+    </div>
+</div>
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Staff Directory</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: #666; }
+        .staff-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .staff-table th { background: #f9f9f9; padding: 14px; text-align: left; font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase; border-bottom: 1px solid #e0e0e0; }
+        .staff-table td { padding: 14px; border-bottom: 1px solid #e0e0e0; }
+        .staff-table tbody tr:hover { background: #f9f9f9; }
+        .staff-name { font-weight: 600; color: #1a1a1a; }
+        .staff-role { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .staff-role.doctor { background: #e3f2fd; color: #1976d2; }
+        .staff-role.phc_nurse { background: #f3e5f5; color: #7b1fa2; }
+        .staff-role.ddhs_admin { background: #ffebee; color: #c62828; }
+        .badge-phc { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">Staff Directory</h1>
+        <p class="page-subtitle">View all healthcare workers across the district</p>
+    </div>
+
+    {% if staff_members %}
+        <table class="staff-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>PHC</th>
+                    <th>Specialization</th>
+                    <th>Contact</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for staff in staff_members %}
+                <tr>
+                    <td class="staff-name">{{ staff.name }}</td>
+                    <td><span class="staff-role {{ staff.role }}">{{ staff.role_display }}</span></td>
+                    <td class="badge-phc">{{ staff.phc_name or 'N/A' }}</td>
+                    <td>{{ staff.specialization or 'General' }}</td>
+                    <td>{{ staff.contact_phone or 'N/A' }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div style="padding: 20px; background: white; border-radius: 12px; text-align: center; color: #999;">
+            No staff members found
+        </div>
+    {% endif %}
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Staff Directory</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    .staff-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .staff-table th { background: #f9f9f9; padding: 14px; text-align: left; font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase; border-bottom: 1px solid #e0e0e0; }
+    .staff-table td { padding: 14px; border-bottom: 1px solid #e0e0e0; }
+    .staff-table tbody tr:hover { background: #f9f9f9; }
+    .staff-name { font-weight: 600; color: #1a1a1a; }
+    .staff-role { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .staff-role.doctor { background: #e3f2fd; color: #1976d2; }
+    .staff-role.phc_nurse { background: #f3e5f5; color: #7b1fa2; }
+    .staff-role.ddhs_admin { background: #ffebee; color: #c62828; }
+    .badge-phc { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Staff Directory</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    .staff-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .staff-table th { background: #f9f9f9; padding: 14px; text-align: left; font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase; border-bottom: 1px solid #e0e0e0; }
+    .staff-table td { padding: 14px; border-bottom: 1px solid #e0e0e0; }
+    .staff-table tbody tr:hover { background: #f9f9f9; }
+    .staff-name { font-weight: 600; color: #1a1a1a; }
+    .staff-role { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .staff-role.doctor { background: #e3f2fd; color: #1976d2; }
+    .staff-role.phc_nurse { background: #f3e5f5; color: #7b1fa2; }
+    .staff-role.ddhs_admin { background: #ffebee; color: #c62828; }
+    .badge-phc { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+<div class="ddhs-admin-page">
+    <style>
+        .ddhs-admin-page { padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: var(--t-head); margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: var(--t-muted); }
+        .staff-table { width: 100%; border-collapse: collapse; background: var(--base); border-radius: 12px; overflow: hidden; }
+        .staff-table th { background: var(--surface); padding: 14px; text-align: left; font-weight: 600; font-size: 12px; color: var(--t-muted); text-transform: uppercase; border-bottom: 1px solid var(--border); }
+        .staff-table td { padding: 14px; border-bottom: 1px solid var(--border); }
+        .staff-table tbody tr:hover { background: var(--hover); }
+        .staff-name { font-weight: 600; color: var(--t-head); }
+        .staff-role { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .staff-role.doctor { background: var(--clr-blue-bg); color: var(--clr-blue); }
+        .staff-role.phc_nurse { background: var(--clr-purple-bg); color: var(--clr-purple); }
+        .staff-role.ddhs_admin { background: var(--clr-red-bg); color: var(--clr-red); }
+        .badge-phc { font-size: 12px; color: var(--t-muted); }
+    </style>
+
+    <div class="page-header">
+        <h1 class="page-title">Staff Directory</h1>
+        <p class="page-subtitle">Manage all healthcare staff members across the district</p>
+    </div>
+
+    {% if staff %}
+        <div style="overflow-x: auto;">
+            <table class="staff-table">
+                <thead>
+                    <tr>
+</div>
+</body>
+</html>          <th>Name</th>
+                        <th>Role</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>Assigned PHC</th>
+                        <th>Joined</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for member in staff %}
+                    <tr>
+                        <td><span class="staff-name">{{ member.fullname }}</span></td>
+                        <td><span class="staff-role {{ member.role }}">{{ member.role|replace('_', ' ')|title }}</span></td>
+                        <td>{{ member.email }}</td>
+                        <td>{{ member.phone or '-' }}</td>
+                        <td><span class="badge-phc">{% if member.phc_id %}PHC #{{ member.phc_id }}{% else %}<em>Unassigned</em>{% endif %}</span></td>
+                        <td style="font-size: 12px; color: var(--t-muted);">{{ member.created_at[:10] if member.created_at else '-' }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: var(--t-muted);">
+            <p>No staff members found</p>
+        </div>
+    {% endif %}
+</div>
+</div>
+</body>
+</html>

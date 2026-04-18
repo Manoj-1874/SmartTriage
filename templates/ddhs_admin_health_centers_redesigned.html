@@ -1,0 +1,164 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Health Centers - DDHS Admin - PriorityMed{% endblock %}
+
+{% block content %}
+<div class="ddhs-main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h2>🏥 Health Centers</h2>
+            <p>Manage all primary health centers across the district</p>
+        </div>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ centers|length }}</div>
+            <div class="stat-label">Total Centers</div>
+            <div class="stat-subtitle">Active facilities</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ centers|map(attribute='staff_count')|sum }}</div>
+            <div class="stat-label">Total Staff</div>
+            <div class="stat-subtitle">Doctors & Nurses</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ centers|map(attribute='doctor_count')|sum }}</div>
+            <div class="stat-label">Doctors</div>
+            <div class="stat-subtitle">Total count</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ centers|map(attribute='nurse_count')|sum }}</div>
+            <div class="stat-label">Nurses</div>
+            <div class="stat-subtitle">Total count</div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🔍 Search & Filter</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; padding: 20px;">
+            <div>
+                <input type="text" id="searchInput" placeholder="Search by center name or location..."
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div>
+                <select id="staffFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="">All Centers</option>
+                    <option value="has_doctors">Has Doctors</option>
+                    <option value="has_nurses">Has Nurses</option>
+                </select>
+            </div>
+            <button style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Search
+            </button>
+        </div>
+    </div>
+
+    <!-- Health Centers Grid -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📍 All Health Centers</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 20px;">
+            {% if centers %}
+                {% for center in centers %}
+                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <h4 style="color: #0B9B7A; font-size: 16px; margin: 0;">{{ center.name }}</h4>
+                        <span style="background: #F0FAF7; color: #0B9B7A; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                            Active
+                        </span>
+                    </div>
+
+                    <!-- Center Info -->
+                    <div style="border-top: 1px solid #f0f0f0; padding-top: 15px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 12px;">
+                            <div>
+                                <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Location</div>
+                                <div style="font-size: 14px; color: #333; font-weight: 500;">{{ center.location or 'N/A' }}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 12px; color: #999; margin-bottom: 4px;">Phone</div>
+                                <div style="font-size: 14px; color: #333; font-weight: 500;">{{ center.contact_phone or 'N/A' }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Staff Stats -->
+                    <div style="background: #F0FAF7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; text-align: center;">
+                            <div>
+                                <div style="font-size: 18px; font-weight: 700; color: #0B9B7A;">{{ center.staff_count }}</div>
+                                <div style="font-size: 11px; color: #666;">Total Staff</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 700; color: #087A60;">{{ center.doctor_count }}</div>
+                                <div style="font-size: 11px; color: #666;">Doctors</div>
+                            </div>
+                            <div>
+                                <div style="font-size: 18px; font-weight: 700; color: #34C9A5;">{{ center.nurse_count }}</div>
+                                <div style="font-size: 11px; color: #666;">Nurses</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999;">
+                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 15px;"></i>
+                    <p>No health centers found</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Centers Table View -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📋 Detailed Center List</h3>
+        </div>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #F0FAF7; border-bottom: 2px solid #0B9B7A;">
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Center Name</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Location</th>
+                        <th style="padding: 15px; text-align: center; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Total Staff</th>
+                        <th style="padding: 15px; text-align: center; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Doctors</th>
+                        <th style="padding: 15px; text-align: center; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Nurses</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Contact</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for center in centers %}
+                    <tr style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
+                        <td style="padding: 15px; color: #333; font-weight: 500;">{{ center.name }}</td>
+                        <td style="padding: 15px; color: #666;">{{ center.location or 'N/A' }}</td>
+                        <td style="padding: 15px; text-align: center; color: #0B9B7A; font-weight: 600;">{{ center.staff_count }}</td>
+                        <td style="padding: 15px; text-align: center; color: #087A60; font-weight: 600;">{{ center.doctor_count }}</td>
+                        <td style="padding: 15px; text-align: center; color: #34C9A5; font-weight: 600;">{{ center.nurse_count }}</td>
+                        <td style="padding: 15px; color: #666;">{{ center.contact_phone or 'N/A' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

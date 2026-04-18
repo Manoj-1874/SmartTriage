@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disease Surveillance — DDHS Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; }
+        .sidebar { width: 250px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px 0; position: fixed; left: 0; top: 0; z-index: 1000; overflow-y: auto; }
+        .sidebar-header { padding: 20px; color: white; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2); margin-bottom: 20px; }
+        .sidebar-header h3 { font-size: 18px; margin-bottom: 5px; }
+        .sidebar-header p { font-size: 12px; opacity: 0.9; }
+        .sidebar-menu { list-style: none; padding: 0; }
+        .sidebar-menu a { display: block; padding: 12px 20px; color: white; text-decoration: none; transition: all 0.3s; border-left: 3px solid transparent; }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.1); border-left-color: white; }
+        .sidebar-menu a.active { background: rgba(255,255,255,0.2); border-left-color: white; font-weight: 600; }
+        .sidebar-menu i { width: 20px; margin-right: 10px; text-align: center; }
+        .sidebar-footer { position: absolute; bottom: 20px; left: 0; right: 0; padding: 20px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .sidebar-footer a { color: white; text-decoration: none; font-size: 12px; display: block; padding: 8px 0; }
+        .main-content { margin-left: 250px; flex: 1; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+        .section { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .resource-table { width: 100%; border-collapse: collapse; }
+        .resource-table th { background: #f5f5f5; padding: 12px; text-align: left; font-weight: 600; font-size: 12px; color: #666; border-bottom: 2px solid #e0e0e0; text-transform: uppercase; }
+        .resource-table td { padding: 12px; border-bottom: 1px solid #e0e0e0; }
+        .resource-table tbody tr:hover { background: #f9f9f9; }
+        .alert-badge { background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .safe-badge { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .no-data { text-align: center; padding: 40px 20px; color: #999; }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h3>PriorityMed</h3>
+        <p>DDHS Admin</p>
+    </div>
+    <ul class="sidebar-menu">
+        <li><a href="/ddhs-admin/dashboard"><i class="fas fa-chart-line"></i>Dashboard</a></li>
+        <li><a href="/ddhs-admin/health-centers"><i class="fas fa-hospital"></i>Health Centers</a></li>
+        <li><a href="/ddhs-admin/staff"><i class="fas fa-users"></i>Staff</a></li>
+        <li><a href="/ddhs-admin/attendance"><i class="fas fa-clock"></i>Attendance</a></li>
+        <li><a href="/ddhs-admin/ambulances"><i class="fas fa-ambulance"></i>Ambulances</a></li>
+        <li><a href="/ddhs-admin/resources"><i class="fas fa-boxes"></i>Resources</a></li>
+        <li><a href="/ddhs-admin/reports"><i class="fas fa-file-chart"></i>Reports</a></li>
+        <li><a href="/ddhs-admin/disease-surveillance" class="active"><i class="fas fa-virus"></i>Disease</a></li>
+        <li><a href="/ddhs-admin/budget"><i class="fas fa-wallet"></i>Budget</a></li>
+        <li><a href="/ddhs-admin/campaigns"><i class="fas fa-bullhorn"></i>Campaigns</a></li>
+        <li><a href="/ddhs-admin/audit-log"><i class="fas fa-history"></i>Audit</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <a href="/patient_dashboard">← Back to Main</a>
+        <a href="/logout" style="color: #ff6b6b;">↪ Logout</a>
+    </div>
+</div>
+
+<div class="main-content">
+<div class="container">
+    <h1 class="page-title">Disease Surveillance</h1>
+    <div class="section">
+    {% if diseases %}
+    <table class="resource-table">
+        <thead><tr><th>Disease</th><th>This Month</th><th>Year to Date</th><th>Alert</th></tr></thead>
+        <tbody>
+        {% for disease in diseases %}
+        <tr>
+            <td>{{ disease.name }}</td>
+            <td>{{ disease.cases_month }}</td>
+            <td>{{ disease.cases_ytd }}</td>
+            <td>
+            {% if disease.alert_status %}
+            <span class="alert-badge">Alert</span>
+            {% else %}
+            <span class="safe-badge">Safe</span>
+            {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="no-data">No disease data available</div>
+    {% endif %}
+    </div>
+</div>
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Disease Surveillance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: #666; }
+        .disease-table { width: 100%; border-collapse: collapse; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .disease-table th { background: #f9f9f9; padding: 14px; text-align: left; font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase; border-bottom: 1px solid #e0e0e0; }
+        .disease-table td { padding: 14px; border-bottom: 1px solid #e0e0e0; }
+        .disease-table tbody tr:hover { background: #f9f9f9; }
+        .disease-name { font-weight: 600; color: #1a1a1a; }
+        .case-count { font-weight: 600; color: #0b9b7a; }
+        .alert-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; background: #ffcdd2; color: #c62828; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">Disease Surveillance</h1>
+        <p class="page-subtitle">Track communicable diseases and outbreak alerts</p>
+    </div>
+
+    {% if diseases %}
+        <table class="disease-table">
+            <thead>
+                <tr>
+                    <th>Disease</th>
+                    <th>Cases This Month</th>
+                    <th>Cases YTD</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for disease in diseases %}
+                <tr>
+                    <td class="disease-name">{{ disease.name }}</td>
+                    <td class="case-count">{{ disease.cases_month or 0 }}</td>
+                    <td>{{ disease.cases_ytd or 0 }}</td>
+                    <td>
+                        {% if disease.alert_status %}
+                            <span class="alert-badge">ALERT</span>
+                        {% else %}
+                            <span>Normal</span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div style="padding: 20px; background: white; border-radius: 12px; text-align: center; color: #999;">
+            No surveillance data available
+        </div>
+    {% endif %}
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Disease Surveillance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Disease Surveillance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    </style>
+</head>
+<body>
+<div class="container">
+<div class="ddhs-admin-page">
+    <style>
+        .ddhs-admin-page { padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: var(--t-head); margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: var(--t-muted); }
+        .surveillance-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .disease-card { background: var(--base); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .disease-name { font-size: 16px; font-weight: 600; color: var(--t-head); margin-bottom: 12px; }
+        .disease-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .disease-stat-label { color: var(--t-muted); }
+</div>
+</body>
+</html>se-stat-value { font-weight: 600; color: var(--brand); }
+        .disease-stat:last-child { border-bottom: none; }
+        .severity-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .severity-critical { background: var(--clr-red-bg); color: var(--clr-red); }
+        .severity-high { background: var(--clr-amber-bg); color: var(--clr-amber); }
+        .severity-medium { background: var(--clr-blue-bg); color: var(--clr-blue); }
+        .severity-low { background: var(--clr-green-bg); color: var(--clr-green); }
+    </style>
+
+    <div class="page-header">
+        <h1 class="page-title">Disease Surveillance</h1>
+        <p class="page-subtitle">Monitor disease outbreaks and trends across the district</p>
+    </div>
+
+    <div style="text-align: center; padding: 40px; color: var(--t-muted); background: var(--base); border-radius: 12px;">
+        <p>Disease surveillance data will be populated as patient checkups are recorded in the system</p>
+    </div>
+</div>
+</div>
+</body>
+</html>

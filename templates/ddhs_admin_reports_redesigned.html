@@ -1,0 +1,231 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Reports - DDHS Admin - PriorityMed{% endblock %}
+
+{% block page_title %}Analytics & Reports{% endblock %}
+
+{% block extra_css %}
+<style>
+    .chart-container {
+        background: var(--base);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 24px;
+        margin-bottom: 24px;
+    }
+
+    .chart-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+        margin-bottom: 24px;
+    }
+
+    .chart-header {
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 2px solid var(--border);
+    }
+
+    .chart-header h3 {
+        margin: 0;
+        color: var(--text-head);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Search & Filters -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-search"></i> Search & Filter</h3>
+    </div>
+    <div class="section-body">
+        <div class="filter-bar">
+            <div class="filter-group search-box" style="flex: 1; min-width: 250px;">
+                <label for="report-search">Search Reports</label>
+                <i class="fas fa-search"></i>
+                <input type="text" id="report-search" placeholder="Disease, center, date...">
+            </div>
+            <div class="filter-group">
+                <label for="report-date">Date Range</label>
+                <input type="date" id="report-date">
+            </div>
+            <div class="filter-group">
+                <label for="report-center">Health Center</label>
+                <select id="report-center">
+                    <option selected>All Centers</option>
+                    {% for center in centers %}
+                        <option value="{{ center.id }}">{{ center.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display: flex; align-items: flex-end; gap: 8px;">
+                <button class="btn btn-primary">
+                    <i class="fas fa-sync"></i> Generate
+                </button>
+                <button class="btn btn-secondary">
+                    <i class="fas fa-download"></i> Export
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Key Metrics -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_patients_month }}</div>
+        <div class="stat-label">Patients This Month</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_appointments }}</div>
+        <div class="stat-label">Total Appointments</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ completed_rate }}%</div>
+        <div class="stat-label">Completion Rate</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ avg_wait_time }}</div>
+        <div class="stat-label">Avg Wait Time</div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="chart-grid">
+    <!-- Monthly Patients Chart -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h3><i class="fas fa-chart-line"></i> Monthly Patient Trends</h3>
+        </div>
+        <canvas id="monthly-chart" style="max-height: 300px;"></canvas>
+    </div>
+
+    <!-- Disease Distribution Chart -->
+    <div class="chart-container">
+        <div class="chart-header">
+            <h3><i class="fas fa-chart-pie"></i> Disease Distribution</h3>
+        </div>
+        <canvas id="disease-chart" style="max-height: 300px;"></canvas>
+    </div>
+</div>
+
+<!-- Center-wise Reports -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-hospital"></i> Center-wise Performance</h3>
+    </div>
+    <div class="section-body">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Center Name</th>
+                        <th>Patients</th>
+                        <th>Appointments</th>
+                        <th>Completed</th>
+                        <th>Completion %</th>
+                        <th>Avg Rating</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for report in center_reports %}
+                    <tr>
+                        <td><strong>{{ report.center }}</strong></td>
+                        <td>{{ report.patients }}</td>
+                        <td>{{ report.appointments }}</td>
+                        <td>{{ report.completed }}</td>
+                        <td>
+                            <strong style="color: {% if report.completion_rate >= 80 %}var(--success){% elif report.completion_rate >= 50 %}var(--warning){% else %}var(--danger){% endif %}">
+                                {{ report.completion_rate }}%
+                            </strong>
+                        </td>
+                        <td>
+                            <i class="fas fa-star" style="color: #FFB800;"></i> {{ report.rating }}/5
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// Monthly Trends Chart
+const monthlyCtx = document.getElementById('monthly-chart');
+if (monthlyCtx) {
+    new Chart(monthlyCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [{
+                label: 'Patients',
+                data: {{ monthly_data|default([120, 140, 160, 150, 180, 200, 220, 240, 230, 250, 270, 290])|safe }},
+                borderColor: 'var(--brand)',
+                backgroundColor: 'rgba(11, 155, 122, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: 'var(--brand)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: {
+                        color: 'rgba(0,0,0,0.05)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Disease Distribution Chart
+const diseaseCtx = document.getElementById('disease-chart');
+if (diseaseCtx) {
+    new Chart(diseaseCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Hypertension', 'Diabetes', 'Fever', 'Cold', 'Others'],
+            datasets: [{
+                data: [30, 25, 20, 15, 10],
+                backgroundColor: [
+                    '#0B9B7A',
+                    '#34C9A5',
+                    '#16A34A',
+                    '#D97706',
+                    '#9DC0B2'
+                ],
+                borderColor: '#fff',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+</script>
+
+{% endblock %}

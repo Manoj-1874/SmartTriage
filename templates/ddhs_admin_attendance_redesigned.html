@@ -1,0 +1,241 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Attendance - DDHS Admin - PriorityMed{% endblock %}
+
+{% block page_title %}Staff Attendance{% endblock %}
+
+{% block extra_css %}
+<style>
+    .attendance-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 16px;
+        margin-bottom: 24px;
+    }
+
+    .attendance-stat {
+        background: var(--base);
+        padding: 16px;
+        border-radius: var(--radius-md);
+        border-left: 4px solid var(--brand);
+        text-align: center;
+    }
+
+    .attendance-stat-value {
+        font-size: 24px;
+        font-weight: 700;
+        color: var(--brand);
+        margin-bottom: 4px;
+    }
+
+    .attendance-stat-label {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .attendance-stat.present .attendance-stat-value { color: var(--success); }
+    .attendance-stat.present { border-left-color: var(--success); }
+
+    .attendance-stat.absent .attendance-stat-value { color: var(--danger); }
+    .attendance-stat.absent { border-left-color: var(--danger); }
+
+    .attendance-stat.late .attendance-stat-value { color: var(--warning); }
+    .attendance-stat.late { border-left-color: var(--warning); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Summary Stats -->
+<div class="attendance-stats">
+    <div class="attendance-stat present">
+        <div class="attendance-stat-value">{{ present_count }}</div>
+        <div class="attendance-stat-label">Present</div>
+    </div>
+    <div class="attendance-stat absent">
+        <div class="attendance-stat-value">{{ absent_count }}</div>
+        <div class="attendance-stat-label">Absent</div>
+    </div>
+    <div class="attendance-stat late">
+        <div class="attendance-stat-value">{{ late_count }}</div>
+        <div class="attendance-stat-label">Late</div>
+    </div>
+    <div class="attendance-stat">
+        <div class="attendance-stat-value">{{ attendance_percentage }}%</div>
+        <div class="attendance-stat-label">Attendance Rate</div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-filter"></i> Filter & Search</h3>
+    </div>
+    <div class="section-body">
+        <div class="filter-bar">
+            <div class="filter-group">
+                <label for="center-filter">Health Center</label>
+                <select id="center-filter" onchange="filterAttendance()">
+                    <option value="">All Centers</option>
+                    {% for center in centers %}
+                        <option value="{{ center.id }}">{{ center.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="status-filter">Attendance Status</label>
+                <select id="status-filter" onchange="filterAttendance()">
+                    <option value="">All Status</option>
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="late">Late</option>
+                </select>
+            </div>
+            <div class="filter-group search-box" style="min-width: 200px;">
+                <label for="staff-search">Search Staff</label>
+                <i class="fas fa-search"></i>
+                <input type="text" id="staff-search" placeholder="Name or phone..." onkeyup="filterAttendance()">
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Table -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-list"></i> Staff Attendance</h3>
+        <div class="section-header-actions">
+            <button class="btn btn-primary btn-sm" onclick="exportAttendance()">
+                <i class="fas fa-download"></i> Export
+            </button>
+        </div>
+    </div>
+    <div class="section-body">
+        <div class="table-responsive">
+            <table id="attendance-table">
+                <thead>
+                    <tr>
+                        <th>Staff Name</th>
+                        <th>Role</th>
+                        <th>Health Center</th>
+                        <th>Phone</th>
+                        <th>Check-in Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if staff_list %}
+                        {% for staff in staff_list %}
+                        <tr class="staff-row" data-center="{{ staff.center_id }}" data-status="{{ staff.status }}">
+                            <td>
+                                <strong>{{ staff.name }}</strong>
+                            </td>
+                            <td>
+                                <span style="font-size: 12px; color: var(--text-muted);">
+                                    {% if staff.role == 'doctor' %}
+                                        <i class="fas fa-user-md"></i> Doctor
+                                    {% elif staff.role == 'phc_nurse' %}
+                                        <i class="fas fa-user-nurse"></i> PHC Nurse
+                                    {% else %}
+                                        {{ staff.role }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>{{ staff.center_name or 'Not Assigned' }}</td>
+                            <td>{{ staff.phone or '—' }}</td>
+                            <td>
+                                {% if staff.checkin_time %}
+                                    {{ staff.checkin_time|strftime('%I:%M %p') }}
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if staff.status == 'present' %}
+                                    <span class="status-badge present">
+                                        <i class="fas fa-check-circle"></i> Present
+                                    </span>
+                                {% elif staff.status == 'absent' %}
+                                    <span class="status-badge absent">
+                                        <i class="fas fa-times-circle"></i> Absent
+                                    </span>
+                                {% elif staff.status == 'late' %}
+                                    <span class="status-badge late">
+                                        <i class="fas fa-clock"></i> Late
+                                    </span>
+                                {% else %}
+                                    <span class="status-badge" style="background: var(--info-bg); color: var(--info);">
+                                        <i class="fas fa-question-circle"></i> Not Marked
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-secondary btn-sm" onclick="editAttendance({{ staff.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center" style="padding: 40px;">
+                                <p style="color: var(--text-muted);">No staff members found</p>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Script -->
+<script>
+function filterAttendance() {
+    const centerFilter = document.getElementById('center-filter').value;
+    const statusFilter = document.getElementById('status-filter').value;
+    const searchFilter = document.getElementById('staff-search').value.toLowerCase();
+
+    document.querySelectorAll('.staff-row').forEach(row => {
+        let show = true;
+
+        // Center filter
+        if (centerFilter && row.dataset.center !== centerFilter) {
+            show = false;
+        }
+
+        // Status filter
+        if (statusFilter && row.dataset.status !== statusFilter) {
+            show = false;
+        }
+
+        // Search filter
+        if (searchFilter) {
+            const name = row.cells[0].textContent.toLowerCase();
+            const phone = row.cells[3].textContent.toLowerCase();
+            if (!name.includes(searchFilter) && !phone.includes(searchFilter)) {
+                show = false;
+            }
+        }
+
+        row.style.display = show ? '' : 'none';
+    });
+}
+
+function editAttendance(staffId) {
+    // Open modal to edit attendance
+    alert('Edit attendance for staff ID: ' + staffId);
+    // TODO: Implement modal to edit attendance status
+}
+
+function exportAttendance() {
+    // Export to CSV
+    alert('Exporting attendance data...');
+    // TODO: Implement CSV export
+}
+</script>
+
+{% endblock %}

@@ -462,6 +462,243 @@ class DatabaseManager:
 
             cursor.execute(messages_table)
 
+            # Notifications table (for real-time appointment notifications)
+            notifications_table = """
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                recipient_id INTEGER NOT NULL,
+                notification_type TEXT,
+                title TEXT,
+                message TEXT,
+                related_id INTEGER,
+                is_read INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (recipient_id) REFERENCES users (id)
+            )
+            """
+
+            if self.db_type == 'postgresql':
+                notifications_table = """
+                CREATE TABLE IF NOT EXISTS notifications (
+                    id SERIAL PRIMARY KEY,
+                    recipient_id INTEGER NOT NULL,
+                    notification_type TEXT,
+                    title TEXT,
+                    message TEXT,
+                    related_id INTEGER,
+                    is_read INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (recipient_id) REFERENCES users (id)
+                )
+                """
+
+            cursor.execute(notifications_table)
+
+            # Appointment Reminders table (for scheduled reminders)
+            reminders_table = """
+            CREATE TABLE IF NOT EXISTS appointment_reminders (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                appointment_id INTEGER NOT NULL,
+                reminder_type TEXT,
+                scheduled_time TIMESTAMP,
+                status TEXT DEFAULT 'pending',
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+            )
+            """
+
+            if self.db_type == 'postgresql':
+                reminders_table = """
+                CREATE TABLE IF NOT EXISTS appointment_reminders (
+                    id SERIAL PRIMARY KEY,
+                    appointment_id INTEGER NOT NULL,
+                    reminder_type TEXT,
+                    scheduled_time TIMESTAMP,
+                    status TEXT DEFAULT 'pending',
+                    sent_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+                )
+                """
+
+            cursor.execute(reminders_table)
+
+            # Appointment Feedback table (for post-appointment ratings)
+            feedback_table = """
+            CREATE TABLE IF NOT EXISTS appointment_feedback (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                appointment_id INTEGER NOT NULL,
+                rating INTEGER,
+                comments TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+            )
+            """
+
+            if self.db_type == 'postgresql':
+                feedback_table = """
+                CREATE TABLE IF NOT EXISTS appointment_feedback (
+                    id SERIAL PRIMARY KEY,
+                    appointment_id INTEGER NOT NULL,
+                    rating INTEGER,
+                    comments TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+                )
+                """
+
+            cursor.execute(feedback_table)
+
+            # Ambulance Management tables
+            ambulances_table = """
+            CREATE TABLE IF NOT EXISTS ambulances (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                ambulance_number TEXT UNIQUE NOT NULL,
+                vehicle_type TEXT,
+                status TEXT DEFAULT 'available' CHECK(status IN ('available', 'in_transit', 'at_facility', 'maintenance')),
+                location_lat REAL,
+                location_lon REAL,
+                phc_id INTEGER,
+                current_driver_id INTEGER,
+                capacity INTEGER DEFAULT 4,
+                equipment TEXT,
+                last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities (id),
+                FOREIGN KEY (current_driver_id) REFERENCES users (id)
+            )
+            """
+
+            ambulance_staff_table = """
+            CREATE TABLE IF NOT EXISTS ambulance_staff (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                ambulance_id INTEGER NOT NULL,
+                staff_id INTEGER NOT NULL,
+                role TEXT,
+                phone TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                FOREIGN KEY (staff_id) REFERENCES users (id)
+            )
+            """
+
+            ambulance_allocations_table = """
+            CREATE TABLE IF NOT EXISTS ambulance_allocations (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                ambulance_id INTEGER NOT NULL,
+                patient_id INTEGER NOT NULL,
+                source_location TEXT,
+                destination_location TEXT,
+                source_lat REAL,
+                source_lon REAL,
+                dest_lat REAL,
+                dest_lon REAL,
+                distance_km REAL,
+                estimated_time_min INTEGER,
+                status TEXT DEFAULT 'allocated' CHECK(status IN ('allocated', 'picked_up', 'in_transit', 'delivered', 'cancelled')),
+                allocation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                pickup_time TIMESTAMP,
+                delivery_time TIMESTAMP,
+                notes TEXT,
+                FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                FOREIGN KEY (patient_id) REFERENCES users (id)
+            )
+            """
+
+            ambulance_tracking_table = """
+            CREATE TABLE IF NOT EXISTS ambulance_tracking (
+                id INTEGER PRIMARY KEY """ + ("AUTOINCREMENT" if self.db_type == 'sqlite' else "") + """,
+                ambulance_id INTEGER NOT NULL,
+                allocation_id INTEGER,
+                latitude REAL NOT NULL,
+                longitude REAL NOT NULL,
+                speed_kmh REAL,
+                heading REAL,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                FOREIGN KEY (allocation_id) REFERENCES ambulance_allocations (id)
+            )
+            """
+
+            if self.db_type == 'postgresql':
+                ambulances_table = """
+                CREATE TABLE IF NOT EXISTS ambulances (
+                    id SERIAL PRIMARY KEY,
+                    ambulance_number TEXT UNIQUE NOT NULL,
+                    vehicle_type TEXT,
+                    status TEXT DEFAULT 'available' CHECK(status IN ('available', 'in_transit', 'at_facility', 'maintenance')),
+                    location_lat REAL,
+                    location_lon REAL,
+                    phc_id INTEGER,
+                    current_driver_id INTEGER,
+                    capacity INTEGER DEFAULT 4,
+                    equipment TEXT,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (phc_id) REFERENCES phc_facilities (id),
+                    FOREIGN KEY (current_driver_id) REFERENCES users (id)
+                )
+                """
+
+                ambulance_staff_table = """
+                CREATE TABLE IF NOT EXISTS ambulance_staff (
+                    id SERIAL PRIMARY KEY,
+                    ambulance_id INTEGER NOT NULL,
+                    staff_id INTEGER NOT NULL,
+                    role TEXT,
+                    phone TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                    FOREIGN KEY (staff_id) REFERENCES users (id)
+                )
+                """
+
+                ambulance_allocations_table = """
+                CREATE TABLE IF NOT EXISTS ambulance_allocations (
+                    id SERIAL PRIMARY KEY,
+                    ambulance_id INTEGER NOT NULL,
+                    patient_id INTEGER NOT NULL,
+                    source_location TEXT,
+                    destination_location TEXT,
+                    source_lat REAL,
+                    source_lon REAL,
+                    dest_lat REAL,
+                    dest_lon REAL,
+                    distance_km REAL,
+                    estimated_time_min INTEGER,
+                    status TEXT DEFAULT 'allocated' CHECK(status IN ('allocated', 'picked_up', 'in_transit', 'delivered', 'cancelled')),
+                    allocation_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    pickup_time TIMESTAMP,
+                    delivery_time TIMESTAMP,
+                    notes TEXT,
+                    FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                    FOREIGN KEY (patient_id) REFERENCES users (id)
+                )
+                """
+
+                ambulance_tracking_table = """
+                CREATE TABLE IF NOT EXISTS ambulance_tracking (
+                    id SERIAL PRIMARY KEY,
+                    ambulance_id INTEGER NOT NULL,
+                    allocation_id INTEGER,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    speed_kmh REAL,
+                    heading REAL,
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (ambulance_id) REFERENCES ambulances (id),
+                    FOREIGN KEY (allocation_id) REFERENCES ambulance_allocations (id)
+                )
+                """
+
+            cursor.execute(ambulances_table)
+            cursor.execute(ambulance_staff_table)
+            cursor.execute(ambulance_allocations_table)
+            cursor.execute(ambulance_tracking_table)
+
+            cursor.execute(feedback_table)
+
             # Backward-compatible migrations for existing SQLite databases
             if self.db_type == 'sqlite':
                 cursor.execute("PRAGMA table_info(users)")
@@ -523,3 +760,20 @@ def get_db_connection():
     # Enable WAL mode for better concurrent access
     conn.execute('PRAGMA journal_mode=WAL')
     return conn
+
+
+# ===========================
+# GLOBAL DATABASE MANAGER
+# ===========================
+# Initialize global database manager instance for use throughout the application
+# This provides thread-safe connection pooling and query execution
+
+db_manager = DatabaseManager(Config)
+logger.info(f"✅ Global database manager initialized with {Config.DATABASE_TYPE.upper()}")
+
+# Initialize database schema on module load
+try:
+    db_manager.init_database()
+    logger.info("✅ Database schema initialized")
+except Exception as e:
+    logger.warning(f"⚠️ Database initialization warning: {e}")

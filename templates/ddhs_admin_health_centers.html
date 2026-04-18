@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Health Centers — DDHS Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; min-height: 100vh; display: flex; }
+        .sidebar { width: 250px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px 0; position: fixed; left: 0; top: 0; z-index: 1000; overflow-y: auto; }
+        .sidebar-header { padding: 20px; color: white; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.2); margin-bottom: 20px; }
+        .sidebar-header h3 { font-size: 18px; margin-bottom: 5px; }
+        .sidebar-header p { font-size: 12px; opacity: 0.9; }
+        .sidebar-menu { list-style: none; padding: 0; }
+        .sidebar-menu a { display: block; padding: 12px 20px; color: white; text-decoration: none; transition: all 0.3s; border-left: 3px solid transparent; }
+        .sidebar-menu a:hover { background: rgba(255,255,255,0.1); border-left-color: white; }
+        .sidebar-menu a.active { background: rgba(255,255,255,0.2); border-left-color: white; font-weight: 600; }
+        .sidebar-menu i { width: 20px; margin-right: 10px; text-align: center; }
+        .sidebar-footer { position: absolute; bottom: 20px; left: 0; right: 0; padding: 20px; border-top: 1px solid rgba(255,255,255,0.2); }
+        .sidebar-footer a { color: white; text-decoration: none; font-size: 12px; display: block; padding: 8px 0; }
+        .main-content { margin-left: 250px; flex: 1; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 20px; }
+        .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card-title { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 10px; }
+        .card-info { font-size: 14px; color: #666; margin: 8px 0; }
+        .card-label { font-size: 12px; color: #999; text-transform: uppercase; }
+        .badge { display: inline-block; padding: 4px 8px; background: #667eea; color: white; border-radius: 4px; font-size: 11px; }
+        .no-data { text-align: center; padding: 40px 20px; color: #999; }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="sidebar-header">
+        <h3>PriorityMed</h3>
+        <p>DDHS Admin</p>
+    </div>
+    <ul class="sidebar-menu">
+        <li><a href="/ddhs-admin/dashboard"><i class="fas fa-chart-line"></i>Dashboard</a></li>
+        <li><a href="/ddhs-admin/health-centers" class="active"><i class="fas fa-hospital"></i>Health Centers</a></li>
+        <li><a href="/ddhs-admin/staff"><i class="fas fa-users"></i>Staff</a></li>
+        <li><a href="/ddhs-admin/attendance"><i class="fas fa-clock"></i>Attendance</a></li>
+        <li><a href="/ddhs-admin/ambulances"><i class="fas fa-ambulance"></i>Ambulances</a></li>
+        <li><a href="/ddhs-admin/resources"><i class="fas fa-boxes"></i>Resources</a></li>
+        <li><a href="/ddhs-admin/reports"><i class="fas fa-file-chart"></i>Reports</a></li>
+        <li><a href="/ddhs-admin/disease-surveillance"><i class="fas fa-virus"></i>Disease</a></li>
+        <li><a href="/ddhs-admin/budget"><i class="fas fa-wallet"></i>Budget</a></li>
+        <li><a href="/ddhs-admin/campaigns"><i class="fas fa-bullhorn"></i>Campaigns</a></li>
+        <li><a href="/ddhs-admin/audit-log"><i class="fas fa-history"></i>Audit</a></li>
+    </ul>
+    <div class="sidebar-footer">
+        <a href="/patient_dashboard">← Back to Main</a>
+        <a href="/logout" style="color: #ff6b6b;">↪ Logout</a>
+    </div>
+</div>
+
+<div class="main-content">
+<div class="container">
+    <h1 class="page-title">Health Centers</h1>
+    {% if centers %}
+    <div class="grid-cards">
+    {% for center in centers %}
+        <div class="card">
+            <div class="card-title">{{ center.name }}</div>
+            <div class="card-info"><strong>Location:</strong> {{ center.location }}</div>
+            <div class="card-info"><strong>Staff:</strong> {{ center.staff_count }}</div>
+            <div class="card-info"><strong>Doctors:</strong> {{ center.doctor_count }}</div>
+            <div class="card-info"><strong>Nurses:</strong> {{ center.nurse_count }}</div>
+            <div class="card-info"><strong>Phone:</strong> {{ center.contact_phone }}</div>
+        </div>
+    {% endfor %}
+    </div>
+    {% else %}
+    <div class="no-data"><i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i><p>No health centers found</p></div>
+    {% endif %}
+</div>
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Health Centers</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: #666; }
+        .centers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .center-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .center-name { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }
+        .center-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+        .center-stat-label { color: #999; }
+        .center-stat-value { font-weight: 600; color: #0b9b7a; }
+        .center-stat:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="page-header">
+        <h1 class="page-title">Health Centers</h1>
+        <p class="page-subtitle">Manage all PHC and CHC facilities across the district</p>
+    </div>
+
+    {% if centers %}
+        <div class="centers-grid">
+        {% for center in centers %}
+            <div class="center-card">
+                <div class="center-name">{{ center.name }}</div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Location</span>
+                    <span class="center-stat-value">{{ center.location or 'N/A' }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Staff</span>
+                    <span class="center-stat-value">{{ center.staff_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Doctors</span>
+                    <span class="center-stat-value">{{ center.doctor_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Nurses</span>
+                    <span class="center-stat-value">{{ center.nurse_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Contact</span>
+                    <span class="center-stat-value">{{ center.contact_phone or 'N/A' }}</span>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div style="padding: 20px; background: white; border-radius: 12px; text-align: center; color: #999;">
+            No health centers found
+        </div>
+    {% endif %}
+</div>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Health Centers</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    .centers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .center-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .center-name { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }
+    .center-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .center-stat-label { color: #999; }
+    .center-stat-value { font-weight: 600; color: #0b9b7a; }
+    .center-stat:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriorityMed — Health Centers</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Outfit', sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .page-header { margin-bottom: 30px; }
+    .page-title { font-size: 28px; font-weight: 700; color: #1a1a1a; margin-bottom: 8px; }
+    .page-subtitle { font-size: 14px; color: #666; }
+    .centers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .center-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .center-name { font-size: 16px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }
+    .center-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .center-stat-label { color: #999; }
+    .center-stat-value { font-weight: 600; color: #0b9b7a; }
+    .center-stat:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+<div class="ddhs-admin-page">
+    <style>
+        .ddhs-admin-page { padding: 20px; }
+        .page-header { margin-bottom: 30px; }
+        .page-title { font-size: 28px; font-weight: 700; color: var(--t-head); margin-bottom: 8px; }
+        .page-subtitle { font-size: 14px; color: var(--t-muted); }
+        .centers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+        .center-card { background: var(--base); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+        .center-name { font-size: 16px; font-weight: 600; color: var(--t-head); margin-bottom: 12px; }
+        .center-stat { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .center-stat-label { color: var(--t-muted); }
+        .center-stat-value { font-weight: 600; color: var(--brand); }
+        .center-stat:last-child { border-bottom: none; }
+        .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge.green { background: var(--clr-green-bg); color: var(--clr-green); }
+        .badge.orange { background: var(--clr-amber-bg); color: var(--clr-amber); }
+    </style>
+
+    <div class="page-header">
+        <h1 class="page-title">Health Centers</h1>
+        <p class="page-subtitle">Manage all PHC and CHC facilities across the district</p>
+    </div>
+
+    {% if centers %}
+        <div class="centers-grid">
+        {% for center in centers %}
+            <div class="center-card">
+                <div class="center-name">{{ center.name }}</div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Location</span>
+                    <span class="center-stat-value">{{ center.location or 'N/A' }}</span>
+                </div>
+</div>
+</body>
+</html>  <div class="center-stat">
+                    <span class="center-stat-label">Staff</span>
+                    <span class="center-stat-value">{{ center.staff_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Doctors</span>
+                    <span class="center-stat-value">{{ center.doctor_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Nurses</span>
+                    <span class="center-stat-value">{{ center.nurse_count or 0 }}</span>
+                </div>
+                <div class="center-stat">
+                    <span class="center-stat-label">Contact</span>
+                    <span class="center-stat-value">{{ center.contact_phone or 'N/A' }}</span>
+                </div>
+            </div>
+        {% endfor %}
+        </div>
+    {% else %}
+        <div style="text-align: center; padding: 40px; color: var(--t-muted);">
+            <p>No health centers found</p>
+        </div>
+    {% endif %}
+</div>
+</div>
+</body>
+</html>

@@ -502,13 +502,21 @@
                 <i class="fas fa-moon" id="themeIco" style="font-size:11px;"></i>
                 <div class="t-track"><div class="t-thumb"></div></div>
             </div>
-            <button class="t-btn" title="Notifications">
-                <i class="fas fa-bell"></i>
-                <div class="t-badge"></div>
-            </button>
-            <button class="t-btn" title="Settings">
-                <i class="fas fa-cog"></i>
-            </button>
+            <div style="position:relative;">
+                <button class="t-btn" id="notifBtn" title="Notifications">
+                    <i class="fas fa-bell"></i>
+                    <div class="t-badge"></div>
+                </button>
+                <div id="notifDropdown" style="display:none;position:absolute;top:48px;right:-8px;width:340px;background:var(--base);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1000;overflow:hidden;">
+                    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+                        <div style="font-weight:700;color:var(--t-head);">Notifications</div>
+                        <button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--t-muted);cursor:pointer;font-size:14px;padding:0;"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div id="notifList" style="max-height:400px;overflow-y:auto;">
+                        <div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Loading notifications...</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -912,6 +920,131 @@ document.getElementById('tipsPrev')?.addEventListener('click',()=>{if(tOff>0){tO
 /* COUNTERS */
 function animCount(el,target,dur=1000){const start=performance.now();const run=now=>{const p=Math.min((now-start)/dur,1);const ease=1-Math.pow(1-p,3);el.textContent=Math.round(ease*target);if(p<1)requestAnimationFrame(run);else el.textContent=target;};requestAnimationFrame(run);}
 setTimeout(()=>{[['svTotal',patientStats.total],['svDone',patientStats.completed],['svPend',patientStats.pending]].forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!isNaN(val))animCount(el,val);});},300);
+
+/* WEBSOCKET NOTIFICATIONS */
+const notifBadge = document.querySelector('.t-badge');
+let unreadCount = 0;
+
+function showNotification(title, message) {
+    const notifStrip = document.getElementById('notifStrip');
+    if (notifStrip) {
+        const div = document.createElement('div');
+        div.className = 'notif';
+        div.innerHTML = `
+            <div class="notif-ico"><i class="fas fa-bell"></i></div>
+            <div class="notif-txt">
+                <strong>${title}:</strong> ${message}
+            </div>
+            <button class="notif-x" onclick="this.parentElement.style.display='none'">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+        notifStrip.parentElement.insertBefore(div, notifStrip);
+        setTimeout(() => { div.style.display = 'none'; }, 8000);
+    }
+    unreadCount++;
+    if (notifBadge) {
+        notifBadge.style.display = unreadCount > 0 ? 'block' : 'none';
+    }
+}
+
+// Connect to WebSocket if available
+try {
+    const socket = io();
+
+    socket.on('connect', () => {
+        console.log('WebSocket connected');
+    });
+
+    socket.on('notification', (data) => {
+        console.log('Notification received:', data);
+        showNotification(data.title || 'Notification', data.message || 'New update');
+    });
+
+    socket.on('appointment_updated', (data) => {
+        console.log('Appointment updated:', data);
+        showNotification('Appointment Update', `Status changed to ${data.status}`);
+    });
+
+    socket.on('reminder', (data) => {
+        console.log('Appointment reminder:', data);
+        showNotification('Reminder', data.message || 'You have an upcoming appointment');
+    });
+} catch (e) {
+    console.log('WebSocket not available (development mode)');
+}
+
+/* NOTIFICATIONS DROPDOWN */
+const notifBtn = document.getElementById('notifBtn');
+const notifDropdown = document.getElementById('notifDropdown');
+
+function closeNotifDropdown() {
+    if (notifDropdown) notifDropdown.style.display = 'none';
+}
+
+function openNotifDropdown() {
+    if (!notifDropdown) return;
+    notifDropdown.style.display = 'block';
+    loadNotifications();
+}
+
+if (notifBtn) {
+    notifBtn.addEventListener('click', () => {
+        if (notifDropdown.style.display === 'none') {
+            openNotifDropdown();
+        } else {
+            closeNotifDropdown();
+        }
+    });
+}
+
+function loadNotifications() {
+    const list = document.getElementById('notifList');
+    if (!list) return;
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Loading...</div>';
+
+    fetch('/appointments/notifications')
+        .then(res => res.json())
+        .then(data => {
+            if (!data.notifications || data.notifications.length === 0) {
+                list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">No notifications yet</div>';
+                return;
+            }
+
+            let html = '';
+            data.notifications.forEach(notif => {
+                const date = new Date(notif.created_at);
+                const timeStr = date.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+                html += `
+                    <div style="padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.2s;" onmouseover="this.style.background='var(--hover)'" onmouseout="this.style.background='transparent'">
+                        <div style="display:flex;gap:10px;align-items:flex-start;">
+                            <div style="width:28px;height:28px;border-radius:8px;background:var(--brand-faint);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">
+                                <i class="fas fa-bell"></i>
+                            </div>
+                            <div style="flex:1;min-width:0;">
+                                <div style="font-weight:600;color:var(--t-head);font-size:13px;">${notif.title}</div>
+                                <div style="color:var(--t-muted);font-size:12px;margin-top:2px;">${notif.message}</div>
+                                <div style="color:var(--t-faint);font-size:11px;margin-top:4px;">${timeStr}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            list.innerHTML = html;
+        })
+        .catch(err => {
+            console.error('Error loading notifications:', err);
+            list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--clr-red);font-size:13px;">Error loading notifications</div>';
+        });
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', (e) => {
+    if (!notifBtn || !notifDropdown) return;
+    if (!notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) {
+        closeNotifDropdown();
+    }
+});
 </script>
 </body>
 </html>

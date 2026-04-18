@@ -1,0 +1,345 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block content %}
+<div class="page-content">
+    <!-- Header -->
+    <div class="page-header">
+        <h2>Disease Surveillance</h2>
+        <p>Monitor and track disease outbreaks across all health centers</p>
+    </div>
+
+    <!-- Key Metrics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card-number">{{ total_diseases or 0 }}</div>
+            <div class="stat-card-label">Monitored Diseases</div>
+            <div class="stat-card-change">+2.3%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ critical_cases or 0 }}</div>
+            <div class="stat-card-label">Critical Cases</div>
+            <div class="stat-card-change" style="color: #dc3545;">+1.2%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ alert_count or 0 }}</div>
+            <div class="stat-card-label">Active Alerts</div>
+            <div class="stat-card-change" style="color: #ff9800;">⚠️</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ outbreaks_detected or 0 }}</div>
+            <div class="stat-card-label">Outbreaks Detected</div>
+            <div class="stat-card-change" style="color: #0B9B7A;">Monitoring</div>
+        </div>
+    </div>
+
+    <!-- Disease Trends Section -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📊 Disease Trends (Last 12 Months)</h3>
+        </div>
+        <div style="position: relative; height: 300px; margin-bottom: 30px;">
+            <canvas id="diseaseChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Severity Distribution -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px;">
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>🎯 Severity Distribution</h3>
+            </div>
+            <div style="position: relative; height: 250px;">
+                <canvas id="severityChart"></canvas>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>⚠️ Risk Status</h3>
+            </div>
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>Critical</strong>
+                        <span style="color: #dc3545;">{{ critical_count or 0 }} cases</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #dc3545; height: 100%; width: 65%;"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>High</strong>
+                        <span style="color: #ff9800;">{{ high_count or 0 }} cases</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #ff9800; height: 100%; width: 45%;"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>Medium</strong>
+                        <span style="color: #ffc107;">{{ medium_count or 0 }} cases</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #ffc107; height: 100%; width: 55%;"></div>
+                    </div>
+                </div>
+                <div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>Low</strong>
+                        <span style="color: #28a745;">{{ low_count or 0 }} cases</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #28a745; height: 100%; width: 30%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Alerts -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🚨 Active Alerts</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Disease</th>
+                    <th>Cases This Month</th>
+                    <th>Cases YTD</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in alerts or [] %}
+                <tr>
+                    <td><strong>{{ alert.disease }}</strong></td>
+                    <td>{{ alert.cases_this_month }}</td>
+                    <td>{{ alert.cases_ytd }}</td>
+                    <td>
+                        {% if alert.severity == 'CRITICAL' %}
+                            <span class="status-badge" style="background: #dc3545; color: white;">Critical</span>
+                        {% elif alert.severity == 'HIGH' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
+                        {% elif alert.severity == 'MEDIUM' %}
+                            <span class="status-badge" style="background: #ffc107;">Medium</span>
+                        {% else %}
+                            <span class="status-badge">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if alert.status == 'ALERT' %}
+                            <span style="color: #dc3545; font-weight: bold;">⚠️ ALERT</span>
+                        {% elif alert.status == 'WARNING' %}
+                            <span style="color: #ff9800; font-weight: bold;">⚠️ WARNING</span>
+                        {% else %}
+                            <span style="color: #28a745; font-weight: bold;">✓ Normal</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="#" class="btn-small" style="background: #0B9B7A; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 12px;">Details</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Center-wise Disease Distribution -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🏥 Center-wise Distribution</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Health Center</th>
+                    <th>Total Cases</th>
+                    <th>Critical</th>
+                    <th>High Risk</th>
+                    <th>Medium</th>
+                    <th>Low Risk</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for center in center_distribution or [] %}
+                <tr>
+                    <td><strong>{{ center.name }}</strong></td>
+                    <td>{{ center.total_cases }}</td>
+                    <td>
+                        <span style="background: #ffe0e0; color: #dc3545; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            {{ center.critical }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="background: #ffe8cc; color: #ff9800; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            {{ center.high }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="background: #fff3cd; color: #ffc107; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            {{ center.medium }}
+                        </span>
+                    </td>
+                    <td>
+                        <span style="background: #e8f5e9; color: #28a745; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                            {{ center.low }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Disease Details Table -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📋 All Monitored Diseases</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Disease Name</th>
+                    <th>Severity</th>
+                    <th>This Month</th>
+                    <th>Year to Date</th>
+                    <th>Trend</th>
+                    <th>Last Updated</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for disease in diseases or [] %}
+                <tr>
+                    <td><strong>{{ disease.name }}</strong></td>
+                    <td>
+                        {% if disease.severity == 'CRITICAL' %}
+                            <span class="status-badge" style="background: #dc3545; color: white;">Critical</span>
+                        {% elif disease.severity == 'HIGH' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
+                        {% elif disease.severity == 'MEDIUM' %}
+                            <span class="status-badge" style="background: #ffc107;">Medium</span>
+                        {% else %}
+                            <span class="status-badge">Low</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ disease.this_month }}</td>
+                    <td>{{ disease.year_to_date }}</td>
+                    <td>
+                        {% if disease.trend == 'UP' %}
+                            <span style="color: #dc3545; font-weight: bold;">📈 Increasing</span>
+                        {% elif disease.trend == 'DOWN' %}
+                            <span style="color: #28a745; font-weight: bold;">📉 Decreasing</span>
+                        {% else %}
+                            <span style="color: #0B9B7A; font-weight: bold;">➡️ Stable</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ disease.last_updated or 'Today' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Chart.js Scripts -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+    // Disease Trends Chart (Line Chart)
+    const diseaseCtx = document.getElementById('diseaseChart').getContext('2d');
+    new Chart(diseaseCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [
+                {
+                    label: 'Critical Cases',
+                    data: [12, 14, 11, 16, 18, 15, 19, 21, 20, 22, 24, 26],
+                    borderColor: '#dc3545',
+                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#dc3545'
+                },
+                {
+                    label: 'High Risk Cases',
+                    data: [25, 28, 32, 35, 33, 37, 40, 38, 42, 45, 48, 50],
+                    borderColor: '#ff9800',
+                    backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#ff9800'
+                },
+                {
+                    label: 'Medium Cases',
+                    data: [45, 48, 50, 52, 55, 58, 60, 62, 65, 68, 70, 72],
+                    borderColor: '#ffc107',
+                    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    pointBackgroundColor: '#ffc107'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { font: { size: 12 }, padding: 15 }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { drawBorder: false, color: 'rgba(0,0,0,0.05)' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // Severity Distribution Chart (Doughnut)
+    const severityCtx = document.getElementById('severityChart').getContext('2d');
+    new Chart(severityCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Critical', 'High', 'Medium', 'Low'],
+            datasets: [{
+                data: [26, 50, 72, 35],
+                backgroundColor: [
+                    '#dc3545',
+                    '#ff9800',
+                    '#ffc107',
+                    '#28a745'
+                ],
+                borderColor: '#fff',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { size: 12 }, padding: 15 }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

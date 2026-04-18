@@ -1,0 +1,285 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block content %}
+<div class="page-content">
+    <!-- Header -->
+    <div class="page-header">
+        <h2>Resources & Inventory</h2>
+        <p>Monitor equipment, medicines, and supplies across all health centers</p>
+    </div>
+
+    <!-- Summary Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-card-number">{{ total_items or 0 }}</div>
+            <div class="stat-card-label">Total Items</div>
+            <div class="stat-card-change">+3.2%</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ good_stock or 0 }}</div>
+            <div class="stat-card-label">Good Stock</div>
+            <div class="stat-card-change" style="color: #28a745;">✓</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ low_stock or 0 }}</div>
+            <div class="stat-card-label">Low Stock</div>
+            <div class="stat-card-change" style="color: #ff9800;">⚠️</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card-number">{{ critical_stock or 0 }}</div>
+            <div class="stat-card-label">Critical</div>
+            <div class="stat-card-change" style="color: #dc3545;">🔴</div>
+        </div>
+    </div>
+
+    <!-- Stock Level Distribution -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px;">
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>📊 Stock Level Distribution</h3>
+            </div>
+            <div style="position: relative; height: 250px;">
+                <canvas id="stockChart"></canvas>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="section-card-header">
+                <h3>📦 Inventory Status</h3>
+            </div>
+            <div style="padding: 20px;">
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>In Stock</strong>
+                        <span>{{ in_stock or 0 }} items</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #28a745; height: 100%; width: 75%;"></div>
+                    </div>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>Low Stock</strong>
+                        <span>{{ low_items or 0 }} items</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #ff9800; height: 100%; width: 20%;"></div>
+                    </div>
+                </div>
+                <div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <strong>Out of Stock</strong>
+                        <span>{{ out_of_stock or 0 }} items</span>
+                    </div>
+                    <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
+                        <div style="background: #dc3545; height: 100%; width: 5%;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🔍 Search & Filter</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; padding: 20px;">
+            <div>
+                <input type="text" placeholder="Search items..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div>
+                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option>All Categories</option>
+                    <option>Vaccines</option>
+                    <option>Medicines</option>
+                    <option>Supplies</option>
+                    <option>Equipment</option>
+                </select>
+            </div>
+            <div>
+                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option>All Locations</option>
+                    <option>Central Store</option>
+                    <option>PHC Warehouse</option>
+                </select>
+            </div>
+            <button style="background: #0B9B7A; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">Search</button>
+        </div>
+    </div>
+
+    <!-- Inventory Table -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📋 Inventory List</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Category</th>
+                    <th>Available Qty</th>
+                    <th>Min Required</th>
+                    <th>Stock Level</th>
+                    <th>Location</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in inventory or [] %}
+                <tr>
+                    <td><strong>{{ item.name }}</strong></td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.min_required }}</td>
+                    <td>
+                        <div style="background: #f0f0f0; height: 6px; border-radius: 3px; width: 100px; overflow: hidden;">
+                            {% set raw_percentage = (item.quantity / item.min_required * 100) %}
+                            {% if raw_percentage > 100 %}
+                                {% set percentage = 100 %}
+                            {% else %}
+                                {% set percentage = raw_percentage %}
+                            {% endif %}
+                            {% if percentage >= 75 %}
+                                <div style="background: #28a745; height: 100%; width: {{ percentage }}%;"></div>
+                            {% elif percentage >= 50 %}
+                                <div style="background: #ffc107; height: 100%; width: {{ percentage }}%;"></div>
+                            {% else %}
+                                <div style="background: #dc3545; height: 100%; width: {{ percentage }}%;"></div>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td>{{ item.location }}</td>
+                    <td>
+                        {% if item.status == 'Good' %}
+                            <span class="status-badge active">Good Stock</span>
+                        {% elif item.status == 'Low' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">Low Stock</span>
+                        {% else %}
+                            <span class="status-badge absent">Critical</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="#" style="color: #0B9B7A; text-decoration: none; font-weight: 500;">Edit</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Category Breakdown -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📦 Category Breakdown</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; padding: 20px;">
+            {% for category in categories or [] %}
+            <div style="border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; background: #f9f9f9;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <strong>{{ category.name }}</strong>
+                    <span style="background: #0B9B7A; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                        {{ category.count }} items
+                    </span>
+                </div>
+                <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                    Total Value: <strong>₹{{ category.value }}</strong>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <span style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                        Good: {{ category.good }}
+                    </span>
+                    <span style="background: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                        Low: {{ category.low }}
+                    </span>
+                    <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
+                        Critical: {{ category.critical }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Low Stock Alerts -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>⚠️ Low Stock Alerts</h3>
+        </div>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Current Qty</th>
+                    <th>Min Required</th>
+                    <th>Shortage</th>
+                    <th>Priority</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for alert in low_stock_alerts or [] %}
+                <tr>
+                    <td><strong>{{ alert.item }}</strong></td>
+                    <td>{{ alert.current_qty }}</td>
+                    <td>{{ alert.min_required }}</td>
+                    <td>
+                        <span style="color: #dc3545; font-weight: bold;">
+                            -{{ alert.min_required - alert.current_qty }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if alert.priority == 'Critical' %}
+                            <span class="status-badge absent">Critical</span>
+                        {% elif alert.priority == 'High' %}
+                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
+                        {% else %}
+                            <span class="status-badge">Medium</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button style="background: #0B9B7A; color: white; padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">
+                            Order
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+<script>
+    // Stock Level Distribution Chart (Doughnut)
+    const stockCtx = document.getElementById('stockChart').getContext('2d');
+    new Chart(stockCtx, {
+        type: 'doughnut',
+        data: {
+            labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+            datasets: [{
+                data: [75, 20, 5],
+                backgroundColor: [
+                    '#28a745',
+                    '#ff9800',
+                    '#dc3545'
+                ],
+                borderColor: '#fff',
+                borderWidth: 3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { size: 12 }, padding: 15 }
+                }
+            }
+        }
+    });
+</script>
+{% endblock %}

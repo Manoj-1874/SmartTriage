@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Ambulance — DDHS Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    :root {
+        --brand: #0B9B7A;
+        --brand-dark: #087A60;
+        --brand-light: #34C9A5;
+        --radius-md: 12px;
+        --radius-lg: 16px;
+        --ease: cubic-bezier(.4,0,.2,1);
+    }
+    [data-theme="light"] {
+        --canvas: #EEF6F2;
+        --base: #FFFFFF;
+        --surface: #F5FBF8;
+        --border: #D9EDE5;
+        --t-head: #0A2218;
+        --t-body: #2C4A3C;
+        --sh-md: 0 4px 14px rgba(0,0,0,.08);
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+    body {
+        font-family: 'Outfit', sans-serif;
+        background: var(--canvas);
+        min-height: 100vh;
+        padding: 20px;
+    }
+
+    .container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 40px;
+    }
+
+    .back-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--base);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--brand);
+        font-size: 18px;
+        transition: all 0.2s var(--ease);
+    }
+
+    .back-btn:hover {
+        background: var(--surface);
+        transform: translateX(-2px);
+    }
+
+    .page-title {
+        font-size: 28px;
+        font-weight: 700;
+        color: var(--t-head);
+    }
+
+    .card {
+        background: var(--base);
+        border-radius: var(--radius-lg);
+        padding: 30px;
+        box-shadow: var(--sh-md);
+        margin-bottom: 20px;
+    }
+
+    .card-title {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--t-head);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .card-title i {
+        color: var(--brand);
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .form-group.full {
+        grid-column: 1 / -1;
+    }
+
+    .form-group label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--t-body);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-family: 'Outfit', sans-serif;
+        background: var(--surface);
+        color: var(--t-body);
+        font-size: 14px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--brand);
+        background: var(--base);
+        box-shadow: 0 0 0 3px rgba(11, 155, 122, 0.1);
+    }
+
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .info-box {
+        background: var(--surface);
+        border-left: 4px solid var(--brand);
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .info-box-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--t-body);
+        text-transform: uppercase;
+        margin-bottom: 6px;
+    }
+
+    .info-box-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: var(--t-head);
+    }
+
+    .status-box {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 15px;
+        padding: 20px;
+        background: var(--surface);
+        border-radius: 12px;
+        margin-bottom: 20px;
+    }
+
+    .status-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .status-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(11, 155, 122, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--brand);
+        font-size: 18px;
+    }
+
+    .status-text {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .status-label {
+        font-size: 11px;
+        color: var(--t-body);
+        text-transform: uppercase;
+    }
+
+    .status-value {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--t-head);
+    }
+
+    .button-group {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 12px 20px;
+        border: none;
+        border-radius: 8px;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s var(--ease);
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .btn-primary {
+        background: var(--brand);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--brand-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(11, 155, 122, 0.3);
+    }
+
+    .btn-secondary {
+        background: var(--surface);
+        color: var(--brand);
+        border: 1px solid var(--brand);
+    }
+
+    .btn-secondary:hover {
+        background: var(--brand-light);
+        color: white;
+    }
+
+    @media (max-width: 600px) {
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .button-group {
+            flex-direction: column;
+        }
+    }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <h1 class="page-title">Assign Ambulance</h1>
+    </div>
+
+    <form onsubmit="submitAssignment(event)">
+        <!-- Ambulance Information -->
+        <div class="card">
+            <h2 class="card-title">
+                <i class="fas fa-ambulance"></i>
+                Ambulance Details
+            </h2>
+            <div class="info-box">
+                <div class="info-box-label">Ambulance</div>
+                <div class="info-box-value">AMB-001</div>
+            </div>
+            <div class="status-box">
+                <div class="status-item">
+                    <div class="status-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <div class="status-text">
+                        <div class="status-label">Status</div>
+                        <div class="status-value">Available</div>
+                    </div>
+                </div>
+                <div class="status-item">
+                    <div class="status-icon">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="status-text">
+                        <div class="status-label">Capacity</div>
+                        <div class="status-value">4 Patients</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Patient Information -->
+        <div class="card">
+            <h2 class="card-title">
+                <i class="fas fa-user"></i>
+                Patient Information
+            </h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="patient-select">Select Patient *</label>
+                    <select id="patient-select" required onchange="updatePatientInfo()">
+                        <option value="">Choose a patient...</option>
+                        <option value="1">John Doe (ID: P001)</option>
+                        <option value="2">Jane Smith (ID: P002)</option>
+                        <option value="3">Michael Johnson (ID: P003)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="patient-contact">Contact Number</label>
+                    <input type="tel" id="patient-contact" placeholder="+91 98765 43210" readonly>
+                </div>
+                <div class="form-group full">
+                    <label for="medical-condition">Medical Condition/Notes</label>
+                    <textarea id="medical-condition" placeholder="Brief description of patient's condition..." readonly></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Location Information -->
+        <div class="card">
+            <h2 class="card-title">
+                <i class="fas fa-map-marker-alt"></i>
+                Location & Route
+            </h2>
+            <div class="form-grid">
+                <div class="form-group full">
+                    <label for="source-location">Pickup Location *</label>
+                    <input type="text" id="source-location" placeholder="Enter pickup address or location" required>
+                </div>
+                <div class="form-group">
+                    <label for="source-lat">Latitude</label>
+                    <input type="number" id="source-lat" placeholder="20.5956" step="0.0001">
+                </div>
+                <div class="form-group">
+                    <label for="source-lon">Longitude</label>
+                    <input type="number" id="source-lon" placeholder="78.8711" step="0.0001">
+                </div>
+                <div class="form-group full">
+                    <label for="dest-location">Destination (Hospital/Facility) *</label>
+                    <input type="text" id="dest-location" placeholder="Enter hospital or destination address" required>
+                </div>
+                <div class="form-group">
+                    <label for="dest-lat">Latitude</label>
+                    <input type="number" id="dest-lat" placeholder="20.6245" step="0.0001">
+                </div>
+                <div class="form-group">
+                    <label for="dest-lon">Longitude</label>
+                    <input type="number" id="dest-lon" placeholder="78.9450" step="0.0001">
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div class="card">
+            <h2 class="card-title">
+                <i class="fas fa-info-circle"></i>
+                Additional Information
+            </h2>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="priority">Priority Level *</label>
+                    <select id="priority" required>
+                        <option value="">Select priority...</option>
+                        <option value="routine">Routine Transfer</option>
+                        <option value="urgent">Urgent</option>
+                        <option value="emergency">Emergency</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="special-equipment">Special Equipment Needed</label>
+                    <select id="special-equipment">
+                        <option value="">None</option>
+                        <option value="oxygen">Oxygen Support</option>
+                        <option value="ventilator">Ventilator</option>
+                        <option value="cardiac">Cardiac Monitor</option>
+                    </select>
+                </div>
+                <div class="form-group full">
+                    <label for="special-notes">Special Instructions</label>
+                    <textarea id="special-notes" placeholder="Any special handling, allergies, or other important notes..."></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i>
+                Assign & Dispatch Ambulance
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="goBack()">
+                <i class="fas fa-times"></i>
+                Cancel
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+function updatePatientInfo() {
+    const patientId = document.getElementById('patient-select').value;
+    if (patientId === '1') {
+        document.getElementById('patient-contact').value = '+91 98765 43210';
+        document.getElementById('medical-condition').value = 'Fever and cough for 3 days. Moderate severity.';
+    } else if (patientId === '2') {
+        document.getElementById('patient-contact').value = '+91 87654 32109';
+        document.getElementById('medical-condition').value = 'Chest pain and shortness of breath. High priority.';
+    } else {
+        document.getElementById('patient-contact').value = '';
+        document.getElementById('medical-condition').value = '';
+    }
+}
+
+function submitAssignment(event) {
+    event.preventDefault();
+
+    const data = {
+        patient_id: document.getElementById('patient-select').value,
+        source_location: document.getElementById('source-location').value,
+        destination_location: document.getElementById('dest-location').value,
+        source_lat: parseFloat(document.getElementById('source-lat').value) || null,
+        source_lon: parseFloat(document.getElementById('source-lon').value) || null,
+        dest_lat: parseFloat(document.getElementById('dest-lat').value) || null,
+        dest_lon: parseFloat(document.getElementById('dest-lon').value) || null,
+        priority: document.getElementById('priority').value,
+        special_equipment: document.getElementById('special-equipment').value,
+        special_notes: document.getElementById('special-notes').value
+    };
+
+    const ambulanceId = new URLSearchParams(window.location.search).get('id') || 1;
+
+    fetch(`/api/ambulances/${ambulanceId}/allocate`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            alert(`✅ Ambulance assigned!\nDistance: ${result.distance_km} km\nETA: ${result.estimated_time_min} minutes`);
+            window.location.href = '/ddhs-admin/ambulances';
+        } else {
+            alert('Error: ' + result.message);
+        }
+    })
+    .catch(error => {
+        alert('Error submitting assignment: ' + error);
+    });
+}
+
+function goBack() {
+    window.history.back();
+}
+</script>
+</body>
+</html>

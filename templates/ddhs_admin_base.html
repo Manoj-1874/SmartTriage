@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}DDHS Admin - PriorityMed{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ddhs_admin.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="ddhs-container">
+        <!-- ═══════════════════════════════════════════════════════════
+             SIDEBAR NAVIGATION
+             ═══════════════════════════════════════════════════════════ -->
+        <aside class="ddhs-sidebar">
+            <!-- Branding -->
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div class="sidebar-brand-text">
+                    <h3>PriorityMed</h3>
+                    <p>DDHS Admin</p>
+                </div>
+            </div>
+
+            <!-- Main Navigation -->
+            <ul class="sidebar-nav">
+                <li>
+                    <a href="{{ url_for('ddhs_admin_dashboard') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_dashboard' %}active{% endif %}">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_health_centers') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_health_centers' %}active{% endif %}">
+                        <i class="fas fa-hospital"></i>
+                        <span>Health Centers</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_staff') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_staff' %}active{% endif %}">
+                        <i class="fas fa-users"></i>
+                        <span>Staff</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_attendance') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_attendance' %}active{% endif %}">
+                        <i class="fas fa-clock"></i>
+                        <span>Attendance</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_ambulances') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_ambulances' %}active{% endif %}">
+                        <i class="fas fa-ambulance"></i>
+                        <span>Ambulances</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_resources') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_resources' %}active{% endif %}">
+                        <i class="fas fa-boxes"></i>
+                        <span>Resources</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_reports') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_reports' %}active{% endif %}">
+                        <i class="fas fa-file-chart-line"></i>
+                        <span>Reports</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_disease_surveillance') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_disease_surveillance' %}active{% endif %}">
+                        <i class="fas fa-virus"></i>
+                        <span>Disease</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_budget') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_budget' %}active{% endif %}">
+                        <i class="fas fa-wallet"></i>
+                        <span>Budget</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_campaigns') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_campaigns' %}active{% endif %}">
+                        <i class="fas fa-bullhorn"></i>
+                        <span>Campaigns</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('ddhs_admin_audit_log') }}"
+                       class="{% if request.endpoint == 'ddhs_admin_audit_log' %}active{% endif %}">
+                        <i class="fas fa-history"></i>
+                        <span>Audit</span>
+                    </a>
+                </li>
+            </ul>
+
+            <!-- Footer Links -->
+            <div class="sidebar-footer">
+                <a href="{{ url_for('index') }}">
+                    <i class="fas fa-home"></i>
+                    <span>Back to Main</span>
+                </a>
+                <a href="{{ url_for('logout') }}">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- ═══════════════════════════════════════════════════════════
+             MAIN CONTENT
+             ═══════════════════════════════════════════════════════════ -->
+        <div class="ddhs-main">
+            <!-- Header -->
+            <header class="ddhs-header">
+                <div class="header-left">
+                    <h2>{% block page_title %}Dashboard{% endblock %}</h2>
+                </div>
+                <div class="header-right">
+                    <div class="user-info">
+                        <p>Logged in as</p>
+                        <strong>{{ current_user.fullname }}</strong>
+                    </div>
+                    <div class="user-avatar">
+                        {{ current_user.fullname[0] }}
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content -->
+            <main class="ddhs-content">
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ category }} mb-3">
+                                <i class="fas fa-{% if category == 'error' %}exclamation-circle{% elif category == 'success' %}check-circle{% else %}info-circle{% endif %}"></i>
+                                <span>{{ message }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <!-- Page Content -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // Dark mode toggle (optional feature)
+        function toggleDarkMode() {
+            document.documentElement.style.setProperty('--canvas', '#0B1812');
+        }
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,144 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Dashboard - DDHS Admin - PriorityMed{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_patients }}</div>
+        <div class="stat-label">Total Patients</div>
+        <div class="stat-change">{{ total_patients_change }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ health_centers }}</div>
+        <div class="stat-label">Health Centers</div>
+        <div class="stat-change">{{ health_centers_change }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_staff }}</div>
+        <div class="stat-label">Total Staff</div>
+        <div class="stat-change">{{ total_staff_change }}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ ambulances_active }}</div>
+        <div class="stat-label">Active Ambulances</div>
+        <div class="stat-change">{{ ambulances_change }}</div>
+    </div>
+</div>
+
+<!-- Performance Section -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-chart-bar"></i> Today's Performance</h3>
+        <div class="section-header-actions">
+            <select class="filter-group" style="flex: 0 0 auto; min-width: 150px;">
+                <option selected>All Centers</option>
+                {% for center in centers %}
+                    <option value="{{ center.id }}">{{ center.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    <div class="section-body">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Center Name</th>
+                        <th>Appointments</th>
+                        <th>Completed</th>
+                        <th>Completion Rate</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for center in center_performance %}
+                    <tr>
+                        <td><strong>{{ center.phc_id or 'PHC Center' }}</strong></td>
+                        <td>{{ center.total_appointments or 0 }}</td>
+                        <td>{{ center.completed or 0 }}</td>
+                        <td>{{ center.completion_rate or 0 }}%</td>
+                        <td>
+                            {% set rate = center.completion_rate or 0 %}
+                            {% if rate >= 75 %}
+                                <span class="status-badge active">Excellent</span>
+                            {% elif rate >= 50 %}
+                                <span class="status-badge">Good</span>
+                            {% else %}
+                                <span class="status-badge absent">Needs Attention</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity Section -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-clock"></i> Recent Activity</h3>
+    </div>
+    <div class="section-body">
+        {% if recent_activities %}
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Activity</th>
+                            <th>Type</th>
+                            <th>Details</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for activity in recent_activities %}
+                        <tr>
+                            <td>{{ activity.time }}</td>
+                            <td>{{ activity.description }}</td>
+                            <td><span class="status-badge active">{{ activity.type }}</span></td>
+                            <td class="text-muted">{{ activity.details }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="text-center" style="padding: 40px 20px; color: var(--text-muted);">
+                <i class="fas fa-inbox" style="font-size: 40px; margin-bottom: 16px; display: block; opacity: 0.5;"></i>
+                <p>No recent activities</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+    </div>
+    <div class="section-body">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+            <a href="{{ url_for('ddhs_admin_attendance') }}" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                <i class="fas fa-clipboard-check"></i> Mark Attendance
+            </a>
+            <a href="{{ url_for('ddhs_admin_ambulances') }}" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                <i class="fas fa-ambulance"></i> Manage Ambulances
+            </a>
+            <a href="{{ url_for('ddhs_admin_resources') }}" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                <i class="fas fa-boxes"></i> Check Resources
+            </a>
+            <a href="{{ url_for('ddhs_admin_reports') }}" class="btn btn-primary" style="width: 100%; justify-content: center;">
+                <i class="fas fa-file-chart-line"></i> View Reports
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

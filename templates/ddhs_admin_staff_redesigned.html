@@ -1,0 +1,187 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Staff Management - DDHS Admin - PriorityMed{% endblock %}
+
+{% block content %}
+<div class="ddhs-main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+        <div>
+            <h2>👥 Staff Management</h2>
+            <p>Manage all doctors and nurses across health centers</p>
+        </div>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ staff_members|length }}</div>
+            <div class="stat-label">Total Staff</div>
+            <div class="stat-subtitle">All roles</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ staff_members|selectattr('role', 'equalto', 'doctor')|list|length }}</div>
+            <div class="stat-label">Doctors</div>
+            <div class="stat-subtitle">Medical professionals</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ staff_members|selectattr('role', 'equalto', 'phc_nurse')|list|length }}</div>
+            <div class="stat-label">Nurses</div>
+            <div class="stat-subtitle">Nursing staff</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ staff_members|selectattr('role', 'equalto', 'ddhs_admin')|list|length }}</div>
+            <div class="stat-label">Admins</div>
+            <div class="stat-subtitle">Administrative staff</div>
+        </div>
+    </div>
+
+    <!-- Search & Filter -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>🔍 Search & Filter</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 15px; padding: 20px;">
+            <div>
+                <input type="text" id="searchInput" placeholder="Search by name or email..."
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div>
+                <select id="roleFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="">All Roles</option>
+                    <option value="doctor">Doctor</option>
+                    <option value="phc_nurse">Nurse</option>
+                    <option value="ddhs_admin">Admin</option>
+                </select>
+            </div>
+            <div>
+                <select id="centerFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="">All Centers</option>
+                    {% set centers_seen = [] %}
+                    {% for member in staff_members %}
+                        {% if member.phc_name and member.phc_name not in centers_seen %}
+                            {% set _ = centers_seen.append(member.phc_name) %}
+                            <option value="{{ member.phc_name }}">{{ member.phc_name }}</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            <button style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                Search
+            </button>
+        </div>
+    </div>
+
+    <!-- Staff Cards View -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📊 Staff Directory</h3>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 20px;">
+            {% if staff_members %}
+                {% for member in staff_members %}
+                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
+                    <!-- Role Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
+                        <div>
+                            <h4 style="color: #333; font-size: 16px; margin: 0 0 4px 0;">{{ member.name }}</h4>
+                            <p style="margin: 0; color: #999; font-size: 12px;">{{ member.specialization or 'General Staff' }}</p>
+                        </div>
+                        <span style="{% if member.role == 'doctor' %}background: #cfe2ff; color: #084298;{% elif member.role == 'phc_nurse' %}background: #d1e7dd; color: #0a3622;{% else %}background: #f8d7da; color: #721c24;{% endif %} padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;">
+                            {{ member.role_display }}
+                        </span>
+                    </div>
+
+                    <!-- Staff Info -->
+                    <div style="border-top: 1px solid #f0f0f0; padding-top: 15px; margin-bottom: 15px;">
+                        <div style="margin-bottom: 10px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 2px;">📧 Email</div>
+                            <div style="font-size: 13px; color: #333;">{{ member.email or 'N/A' }}</div>
+                        </div>
+                        <div style="margin-bottom: 10px;">
+                            <div style="font-size: 12px; color: #999; margin-bottom: 2px;">📞 Phone</div>
+                            <div style="font-size: 13px; color: #333;">{{ member.contact_phone or 'N/A' }}</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 12px; color: #999; margin-bottom: 2px;">🏥 Center</div>
+                            <div style="font-size: 13px; color: #333;">{{ member.phc_name or 'Unassigned' }}</div>
+                        </div>
+                    </div>
+
+                    <!-- Status Card -->
+                    <div style="background: #F0FAF7; border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-size: 11px; color: #666;">Status</div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0B9B7A;">Active</div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-size: 11px; color: #666;">Member Since</div>
+                                <div style="font-size: 12px; font-weight: 500; color: #333;">
+                                    {% if member.role_display %}
+                                        2026-01-15
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <button style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #999;">
+                    <i class="fas fa-inbox" style="font-size: 48px; margin-bottom: 15px;"></i>
+                    <p>No staff members found</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Staff Table View -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <h3>📋 Detailed Staff List</h3>
+        </div>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="background: #F0FAF7; border-bottom: 2px solid #0B9B7A;">
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Name</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Role</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Specialization</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Email</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Phone</th>
+                        <th style="padding: 15px; text-align: left; font-weight: 600; color: #0B9B7A; font-size: 12px; text-transform: uppercase;">Health Center</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in staff_members %}
+                    <tr style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
+                        <td style="padding: 15px; color: #333; font-weight: 500;">{{ member.name }}</td>
+                        <td style="padding: 15px;">
+                            <span style="{% if member.role == 'doctor' %}background: #cfe2ff; color: #084298;{% elif member.role == 'phc_nurse' %}background: #d1e7dd; color: #0a3622;{% else %}background: #f8d7da; color: #721c24;{% endif %} padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                                {{ member.role_display }}
+                            </span>
+                        </td>
+                        <td style="padding: 15px; color: #666;">{{ member.specialization or 'N/A' }}</td>
+                        <td style="padding: 15px; color: #666;">{{ member.email }}</td>
+                        <td style="padding: 15px; color: #666;">{{ member.contact_phone or 'N/A' }}</td>
+                        <td style="padding: 15px; color: #0B9B7A; font-weight: 600;">{{ member.phc_name or 'Unassigned' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,188 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Budget - DDHS Admin - PriorityMed{% endblock %}
+
+{% block page_title %}Budget & Finance{% endblock %}
+
+{% block content %}
+
+<!-- Budget Summary -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ total_budget|default(5000000) }}</div>
+        <div class="stat-label">Total Budget</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ total_spent|default(2800000) }}</div>
+        <div class="stat-label">Total Spent</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ budget_remaining|default(2200000) }}</div>
+        <div class="stat-label">Remaining</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ budget_percentage|default(56) }}%</div>
+        <div class="stat-label">Budget Utilization</div>
+    </div>
+</div>
+
+<!-- Budget Overview Chart -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-chart-bar"></i> Budget Allocation</h3>
+    </div>
+    <div class="section-body">
+        <canvas id="budget-chart" style="max-height: 300px;"></canvas>
+    </div>
+</div>
+
+<!-- Budget Categories -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-list-check"></i> Category Breakdown</h3>
+    </div>
+    <div class="section-body">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th>Allocated</th>
+                        <th>Spent</th>
+                        <th>Remaining</th>
+                        <th>Utilization</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in budget_items %}
+                    <tr>
+                        <td><strong>{{ item.category }}</strong></td>
+                        <td>₹ {{ '{:,.0f}'.format(item.allocated) }}</td>
+                        <td>₹ {{ '{:,.0f}'.format(item.spent) }}</td>
+                        <td>₹ {{ '{:,.0f}'.format(item.allocated - item.spent) }}</td>
+                        <td>
+                            {% set utilization = ((item.spent / item.allocated) * 100)|int %}
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <div style="flex: 1; background: var(--surface); border-radius: 10px; height: 6px; overflow: hidden;">
+                                    <div style="background: {% if utilization >= 90 %}var(--danger){% elif utilization >= 75 %}var(--warning){% else %}var(--success){% endif %}; height: 100%; width: {{ utilization }}%;"></div>
+                                </div>
+                                <span>{{ utilization }}%</span>
+                            </div>
+                        </td>
+                        <td>
+                            {% if utilization >= 90 %}
+                                <span class="status-badge absent"><i class="fas fa-exclamation-triangle"></i> Critical</span>
+                            {% elif utilization >= 75 %}
+                                <span class="status-badge late"><i class="fas fa-info-circle"></i> High</span>
+                            {% else %}
+                                <span class="status-badge active"><i class="fas fa-check-circle"></i> OK</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Spending Trends -->
+<div class="section-card">
+    <div class="section-header">
+        <h3><i class="fas fa-chart-line"></i> Monthly Spending Trends</h3>
+    </div>
+    <div class="section-body">
+        <canvas id="spending-chart" style="max-height: 300px;"></canvas>
+    </div>
+</div>
+
+<script>
+// Budget Allocation Chart
+const budgetCtx = document.getElementById('budget-chart');
+if (budgetCtx) {
+    new Chart(budgetCtx, {
+        type: 'bar',
+        data: {
+            labels: ['Vaccines', 'Medicines', 'Infrastructure', 'Staff Salaries', 'Medical Supplies'],
+            datasets: [{
+                label: 'Allocated',
+                data: [1200000, 1500000, 800000, 1500000, 600000],
+                backgroundColor: 'rgba(11, 155, 122, 0.2)',
+                borderColor: 'var(--brand)',
+                borderWidth: 1
+            }, {
+                label: 'Spent',
+                data: [950000, 1150000, 450000, 1500000, 290000],
+                backgroundColor: 'var(--brand)',
+                borderColor: 'var(--brand)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '₹ ' + (value / 100000).toFixed(1) + 'L';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Spending Trends Chart
+const spendingCtx = document.getElementById('spending-chart');
+if (spendingCtx) {
+    new Chart(spendingCtx, {
+        type: 'line',
+        data: {
+            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            datasets: [{
+                label: 'Monthly Spending',
+                data: [320000, 380000, 410000, 390000, 420000, 450000, 480000, 510000, 520000, 540000, 560000, 580000],
+                borderColor: 'var(--brand-dark)',
+                backgroundColor: 'rgba(8, 122, 96, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 4,
+                pointBackgroundColor: 'var(--brand-dark)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '₹ ' + (value / 100000).toFixed(1) + 'L';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+</script>
+
+{% endblock %}
