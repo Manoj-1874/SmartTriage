@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Assessment Reports — Doctor Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced_dashboard.css') }}">
+    <style>
+        :root {
+          --brand:        #0B9B7A;
+          --brand-dark:   #087A60;
+          --brand-light:  #34C9A5;
+          --brand-faint:  #E6F7F3;
+          --brand-pale:   #F0FAF7;
+          --brand-glow:   rgba(11,155,122,.18);
+          --sidebar-w:    272px;
+          --sidebar-col:  72px;
+          --radius-sm:    8px;
+          --radius-md:    12px;
+          --radius-lg:    18px;
+          --radius-xl:    26px;
+          --ease:         cubic-bezier(.4,0,.2,1);
+          --ease-spring:  cubic-bezier(.34,1.56,.64,1);
+          --t-fast:       .15s;
+          --t-base:       .28s;
+          --clr-green:    #16A34A;
+          --clr-green-bg: #DCFCE7;
+          --clr-amber:    #D97706;
+          --clr-amber-bg: #FEF3C7;
+          --clr-red:      #DC2626;
+          --clr-red-bg:   #FEE2E2;
+          --clr-blue:     #2563EB;
+          --clr-blue-bg:  #DBEAFE;
+          --clr-purple:   #7C3AED;
+          --clr-purple-bg:#EDE9FE;
+        }
+        [data-theme="light"] {
+          --canvas:     #EEF6F2;
+          --base:       #FFFFFF;
+          --surface:    #F5FBF8;
+          --hover:      #EBF7F2;
+          --border:     #D9EDE5;
+          --border-med: #B8D9CC;
+          --t-head:     #0A2218;
+          --t-body:     #2C4A3C;
+          --t-muted:    #5E8C7A;
+          --t-faint:    #9DC0B2;
+          --sidebar-bg: #FFFFFF;
+          --sidebar-ln: #D9EDE5;
+          --sh-sm:  0 1px 3px rgba(0,0,0,.06);
+          --sh-md:  0 4px 20px rgba(0,0,0,.09);
+          --sh-lg:  0 12px 44px rgba(0,0,0,.12);
+          --sh-card:0 1px 4px rgba(0,0,0,.06),0 0 0 1px rgba(0,0,0,.04);
+        }
+        [data-theme="dark"] {
+          --canvas:     #091510;
+          --base:       #0D1E17;
+          --surface:    #112518;
+          --hover:      #163020;
+          --border:     #1D3528;
+          --border-med: #2A4C38;
+          --t-head:     #E4F2EB;
+          --t-body:     #9ABFAE;
+          --t-muted:    #527A65;
+          --t-faint:    #2D4D3C;
+          --sidebar-bg: #0B1B13;
+          --sidebar-ln: #1D3528;
+          --sh-sm:  0 1px 3px rgba(0,0,0,.5);
+          --sh-md:  0 4px 20px rgba(0,0,0,.55);
+          --sh-lg:  0 12px 44px rgba(0,0,0,.65);
+          --sh-card:0 1px 4px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.3);
+          --brand-faint:rgba(11,155,122,.12);
+          --brand-pale: rgba(11,155,122,.07);
+          --clr-green-bg:rgba(22,163,74,.14);
+          --clr-amber-bg:rgba(217,119,6,.14);
+          --clr-red-bg:  rgba(220,38,38,.14);
+          --clr-blue-bg: rgba(37,99,235,.14);
+          --clr-purple-bg:rgba(124,58,237,.14);
+        }
+        body {
+            background: var(--canvas);
+            color: var(--t-body);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            /* padding: 20px; */
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            /* padding: 20px; */
+            background: var(--base);
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.08);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--brand);
+            margin: 0;
+        }
+
+        .back-btn {
+            padding: 10px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--t-body);
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .back-btn:hover {
+            background: var(--hover);
+        }
+
+        .patient-info {
+            background: var(--base);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.08);
+            margin-bottom: 24px;
+            border-left: 5px solid var(--brand);
+        }
+
+        .patient-info h2 {
+            font-size: 20px;
+            color: var(--brand);
+            margin-top: 0;
+            margin-bottom: 12px;
+        }
+
+        .patient-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            font-size: 14px;
+        }
+
+        .patient-details-item {
+            color: var(--t-muted);
+        }
+
+        .patient-details-item strong {
+            color: var(--t-head);
+            display: block;
+            font-weight: 600;
+        }
+
+        .section {
+            background: var(--base);
+            padding: 28px;
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(0,0,0,.08);
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--brand);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title i {
+            font-size: 22px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--t-muted);
+        }
+
+        .empty-state i {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+            color: var(--brand);
+        }
+
+        .empty-state p {
+            margin: 12px 0;
+            font-size: 15px;
+        }
+
+        .report-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px;
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .report-card:hover {
+            background: var(--brand-pale);
+            border-color: var(--brand);
+        }
+
+        .report-info { flex: 1; }
+
+        .report-date {
+            font-weight: 600;
+            color: var(--t-head);
+            margin-bottom: 6px;
+        }
+
+        .report-details {
+            font-size: 13px;
+            color: var(--t-muted);
+            line-height: 1.5;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+        }
+
+        .risk-critical {
+            background: #fecaca;
+            color: #7f1d1d;
+        }
+
+        .risk-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .risk-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .risk-low {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .view-btn {
+            padding: 8px 16px;
+            background: var(--brand);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .view-btn:hover {
+            background: var(--brand-dark);
+        }
+
+        @media (max-width: 768px) {
+            .report-card { flex-direction: column; align-items: flex-start; }
+            .report-info { margin-bottom: 12px; width: 100%; }
+            .view-btn { width: 100%; }
+        }
+    
+/* ══ SIDEBAR ══ */
+.sidebar{
+  width:var(--sidebar-w);background:var(--sidebar-bg);
+  border-right:1px solid var(--sidebar-ln);
+  position:fixed;top:0;left:0;bottom:0;z-index:99999;
+  display:flex;flex-direction:column;overflow:hidden;
+  transition:width var(--t-base) var(--ease),background var(--t-base),border-color var(--t-base);
+}
+.sidebar.collapsed{width:var(--sidebar-col)}
+.s-brand{display:flex;align-items:center;gap:11px;padding:20px 18px 16px;border-bottom:1px solid var(--sidebar-ln);flex-shrink:0;}
+.s-logo-box{width:38px;height:38px;flex-shrink:0;background:linear-gradient(140deg,var(--brand),var(--brand-light));border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:17px;box-shadow:0 4px 14px rgba(11,155,122,.35);transition:transform var(--t-fast);}
+.s-logo-box:hover{transform:scale(1.08)}
+.s-brand-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
+.sidebar.collapsed .s-brand-text{opacity:0;width:0}
+.s-brand-name{font-size:16px;font-weight:800;color:var(--t-head);letter-spacing:-.3px;white-space:nowrap}
+.s-brand-tag{font-size:10px;color:var(--brand);font-weight:600;white-space:nowrap;margin-top:1px}
+.s-toggle{position:absolute;top:22px;right:-13px;width:26px;height:26px;background:var(--base);border:1px solid var(--border-med);border-radius:50%;color:var(--t-muted);font-size:10px;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--sh-sm);transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);}
+.s-toggle:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
+.sidebar.collapsed .s-toggle i{transform:rotate(180deg)}
+.s-user{margin:12px 10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;align-items:center;gap:10px;overflow:hidden;transition:background var(--t-base),border-color var(--t-base);}
+.s-ava{width:36px;height:36px;flex-shrink:0;background:linear-gradient(135deg,var(--brand),var(--brand-light));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;position:relative;}
+.s-ava-dot{position:absolute;bottom:0;right:0;width:9px;height:9px;background:#22C55E;border-radius:50%;border:2px solid var(--sidebar-bg);}
+.s-user-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
+.sidebar.collapsed .s-user-text{opacity:0;width:0}
+.s-uname{font-size:13px;font-weight:700;color:var(--t-head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.s-urole{font-size:11px;color:var(--brand);font-weight:500;margin-top:1px}
+.s-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 8px}
+.s-group{font-size:9.5px;font-weight:700;color:var(--t-faint);text-transform:uppercase;letter-spacing:1.2px;padding:10px 10px 4px;white-space:nowrap;transition:opacity var(--t-base),height var(--t-base),padding var(--t-base);}
+.sidebar.collapsed .s-group{opacity:0;height:0;overflow:hidden;padding:0}
+.s-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--t-muted);font-size:13.5px;font-weight:500;margin-bottom:2px;white-space:nowrap;transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);}
+.s-link:hover{background:var(--hover);color:var(--t-head);transform:translateX(2px)}
+.s-link.active{background:var(--brand-faint);color:var(--brand-dark);font-weight:700}
+[data-theme="dark"] .s-link.active{background:rgba(11,155,122,.15);color:var(--brand-light)}
+.s-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.s-link.active .s-icon{background:rgba(11,155,122,.15);color:var(--brand)}
+.s-label{transition:opacity var(--t-base),width var(--t-base)}
+.sidebar.collapsed .s-label{opacity:0;width:0;overflow:hidden}
+.s-chip{margin-left:auto;background:var(--brand-faint);color:var(--brand);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px;transition:opacity var(--t-base);}
+[data-theme="dark"] .s-chip{background:rgba(11,155,122,.2);color:var(--brand-light)}
+.sidebar.collapsed .s-chip{opacity:0;width:0;overflow:hidden}
+.s-footer{padding:10px 10px 14px;border-top:1px solid var(--sidebar-ln);flex-shrink:0;}
+.s-status{display:flex;align-items:center;gap:8px;padding:8px 11px;background:rgba(22,163,74,.08);border-radius:var(--radius-sm);overflow:hidden;}
+.s-dot{width:7px;height:7px;border-radius:50%;background:#16A34A;flex-shrink:0;animation:dotPulse 2s ease-in-out infinite;}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.4)}50%{box-shadow:0 0 0 5px rgba(22,163,74,0)}}
+.s-status-txt{font-size:11px;font-weight:600;color:#16A34A;white-space:nowrap;transition:opacity var(--t-base),width var(--t-base)}
+.sidebar.collapsed .s-status-txt{opacity:0;width:0;overflow:hidden}
+
+.shell{display:flex;min-height:100vh;overflow-x:hidden}
+/* ══ MAIN ══ */
+.main{margin-left:var(--sidebar-w);width:calc(100% - var(--sidebar-w));min-width:0;min-height:100vh;display:flex;flex-direction:column;overflow-x:hidden;transition:margin-left var(--t-base) var(--ease),width var(--t-base) var(--ease);}
+.sidebar.collapsed~.main{margin-left:var(--sidebar-col);width:calc(100% - var(--sidebar-col));}
+</style>
+</head>
+<body>
+    <div class="shell">
+<!-- ══ SIDEBAR ══ -->
+<aside class="sidebar" id="sidebar">
+  <div class="s-brand">
+    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
+    <div class="s-brand-text">
+      <div class="s-brand-name">PriorityMed</div>
+      <div class="s-brand-tag">Patient Portal</div>
+    </div>
+  </div>
+  <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
+  <div class="s-user">
+    <div class="s-ava">
+      <i class="fas fa-user"></i>
+      <div class="s-ava-dot"></div>
+    </div>
+    <div class="s-user-text">
+      <div class="s-uname">{{ user.fullname if user else 'Alex Johnson' }}</div>
+      <div class="s-urole">{{ 'Doctor Account' if user and user.role == 'doctor' else 'Patient Account' }}</div>
+    </div>
+  </div>
+  <nav class="s-nav">
+    <div class="s-group">Overview</div>
+    <a href="/doctor/dashboard" class="s-link">
+      <div class="s-icon"><i class="fas fa-th-large"></i></div>
+      <span class="s-label">Dashboard</span>
+    </a>
+    <div class="s-group">My Care</div>
+    <a href="/appointments" class="s-link">
+      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+      <span class="s-label">Appointments</span>
+    </a>
+    <a href="/doctors" class="s-link">
+      <div class="s-icon"><i class="fas fa-user-md"></i></div>
+      <span class="s-label">Find Doctors</span>
+    </a>
+    <a href="/patients" class="s-link">
+      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
+      <span class="s-label">Patients</span>
+    </a>
+    <a href="/doctor/reports" class="s-link active">
+      <div class="s-icon"><i class="far fa-file-alt"></i></div>
+      <span class="s-label">Reports</span>
+    </a>
+    <div class="s-group">Support</div>
+    <a href="/messages" class="s-link">
+      <div class="s-icon"><i class="fas fa-comments"></i></div>
+      <span class="s-label">Messages</span>
+    </a>
+    <a href="/logout" class="s-link">
+      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
+      <span class="s-label">Sign Out</span>
+    </a>
+  </nav>
+  <div class="s-footer">
+    <div class="s-status">
+      <div class="s-dot"></div>
+      <span class="s-status-txt">All Systems Operational</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ══ MAIN ══ -->
+        <div class="main" id="mainContent">
+            <div class="page">
+                <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>Patient Assessment Reports</h1>
+            <button class="back-btn" onclick="window.location.href='/doctor/dashboard'">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </button>
+        </div>
+
+        <!-- PATIENT INFO -->
+        {% if patient %}
+        <div class="patient-info">
+            <h2>{{ patient.fullname }}</h2>
+            <div class="patient-details">
+                <div class="patient-details-item">
+                    <strong>Email</strong>
+                    {{ patient.email | default('N/A') }}
+                </div>
+                <div class="patient-details-item">
+                    <strong>Phone</strong>
+                    {{ patient.phone | default('N/A') }}
+                </div>
+                <div class="patient-details-item">
+                    <strong>Patient ID</strong>
+                    {{ patient.id }}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- ASSESSMENTS -->
+        <div class="section">
+            <div class="section-title">
+                <i class="fas fa-file-medical"></i> Assessment Reports ({{ reports|length }})
+            </div>
+
+            {% if reports %}
+                {% for report in reports %}
+                <div class="report-card">
+                    <div class="report-info">
+                        <div class="report-date">
+                            {{ report.formatted_date }} at {{ report.formatted_time }}
+                        </div>
+                        <div class="report-details">
+                            <span class="risk-badge risk-{{ report.risk_color|lower }}">
+                                {{ report.dual_brain_risk }}
+                            </span>
+                            <span>Age: {{ report.age }} | Temp: {{ report.temp }}°F | BP: {{ report.sys_bp }}/{{ report.dia_bp }}</span>
+                            {% if report.routing %}
+                                <br>
+                                <strong>Routing:</strong> {{ report.routing }}
+                            {% endif %}
+                            {% if report.recommended_specialist %}
+                                <br>
+                                <strong>Specialist:</strong> {{ report.recommended_specialist }}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button class="view-btn" onclick="viewReport({{ report.id }})">View Details</button>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-inbox"></i>
+                    <p><strong>No Assessment Reports Found</strong></p>
+                    <p>There are no AI assessment reports for this patient yet.</p>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        function viewReport(reportId) {
+            window.location.href = `/patient/report/${reportId}`;
+        }
+
+        // Sidebar Toggle Logic
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        
+        // Restore state
+        if(localStorage.getItem('pmSide') === 'true') {
+            sidebar.classList.add('collapsed');
+        }
+
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('pmSide', sidebar.classList.contains('collapsed'));
+        });
+    </script>
+                </div>
+            </div>
+        </div>
+</body>
+</html>

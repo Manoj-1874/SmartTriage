@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Intake & AI Triage — PHC Nurse</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --brand-dark: #087A60;
+            --brand-light: #34C9A5;
+            --brand-faint: #E6F7F3;
+            --green: #10B981;
+            --amber: #F59E0B;
+            --red: #EF4444;
+            --bg: #FFFFFF;
+            --surface: #F9FAFB;
+            --border: #E5E7EB;
+            --text: #111827;
+            --t-secondary: #4B5563;
+            --t-muted: #6B7280;
+            --radius-md: 12px;
+            --ease: cubic-bezier(.4, 0, .2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--surface);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 30px 20px;
+        }
+
+        .header {
+            margin-bottom: 30px;
+            border-bottom: 2px solid var(--brand-faint);
+            padding-bottom: 20px;
+        }
+
+        .header h1 {
+            color: var(--brand-dark);
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: var(--t-muted);
+        }
+
+        .card {
+            background: var(--bg);
+            border-radius: var(--radius-md);
+            padding: 30px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--brand);
+            box-shadow: 0 0 0 3px var(--brand-faint);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-row.cols3 {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header i {
+            font-size: 20px;
+            color: var(--brand);
+        }
+
+        .section-header h2 {
+            font-size: 18px;
+            color: var(--text);
+        }
+
+        .info-box {
+            background: var(--brand-faint);
+            border-left: 4px solid var(--brand);
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: var(--brand-dark);
+        }
+
+        .vitals-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .vital-input {
+            position: relative;
+        }
+
+        .vital-input input {
+            padding-right: 40px;
+        }
+
+        .vital-unit {
+            position: absolute;
+            right: 12px;
+            top: 38px;
+            font-size: 12px;
+            color: var(--t-muted);
+            pointer-events: none;
+        }
+
+        .symptom-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .tag {
+            padding: 8px 14px;
+            border: 1.5px solid var(--border);
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--surface);
+        }
+
+        .tag:hover {
+            border-color: var(--brand);
+            color: var(--brand);
+            background: var(--brand-faint);
+        }
+
+        .tag.selected {
+            border-color: var(--brand);
+            background: var(--brand-faint);
+            color: var(--brand-dark);
+            font-weight: 600;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: var(--brand);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--brand-dark);
+        }
+
+        .btn-secondary {
+            background: var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: #d1d5db;
+        }
+
+        .risk-badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 10px;
+        }
+
+        .risk-low {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .risk-medium {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .risk-high {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .risk-critical {
+            background: #7f1d1d;
+            color: white;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .decision-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .decision-btn {
+            padding: 12px;
+            text-align: center;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg);
+        }
+
+        .decision-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .decision-btn.active {
+            border-color: var(--brand);
+            background: var(--brand-faint);
+            color: var(--brand-dark);
+        }
+
+        .decision-btn.home { border-color: #10B981; color: #10B981; }
+        .decision-btn.appointment { border-color: #0B9B7A; color: #0B9B7A; }
+        .decision-btn.urgent { border-color: #F59E0B; color: #F59E0B; }
+        .decision-btn.referral { border-color: #EF4444; color: #EF4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Patient Intake & AI Triage Assessment</h1>
+            <p>Professional clinical assessment with AI assistance - Conduct intake, review AI triage, make care decisions</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    {% if category == 'error' %}
+                        <div class="card" style="background: #fee2e2; border-left: 4px solid #ef4444;">
+                            <strong>Error:</strong> {{ message }}
+                        </div>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('checkup') }}">
+            <!-- SECTION 1: SELECT PATIENT -->
+            <div class="card">
+                <div class="section-header">
+                    <i class="fas fa-user-check"></i>
+                    <h2>Select Patient for Intake</h2>
+                </div>
+
+                <div class="form-group">
+                    <label for="patient_id">
+                        <i class="fas fa-user-injured"></i> Patient Name <span style="color: #ef4444;">*</span>
+                    </label>
+                    <select id="patient_id" name="patient_id" required>
+                        <option value="">-- Choose a patient --</option>
+                        {% for patient in patients %}
+                            <option value="{{ patient.id }}">{{ patient.fullname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="info-box">
+                    ℹ️ <strong>Note:</strong> Select the patient you're conducting intake for. Their vitals, symptoms, and AI assessment will be recorded in their medical record.
+                </div>
+            </div>
+
+            <!-- SECTION 2: VITAL SIGNS -->
+            <div class="card">
+                <div class="section-header">
+                    <i class="fas fa-heartbeat"></i>
+                    <h2>Record Vital Signs</h2>
+                </div>
+
+                <p style="color: var(--t-muted); margin-bottom: 20px; font-size: 14px;">
+                    Measure and enter patient's vital signs for clinical assessment.
+                </p>
+
+                <div class="vitals-grid">
+                    <div class="vital-input form-group">
+                        <label for="hr">Heart Rate (bpm) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="hr" name="heart_rate" min="40" max="200" placeholder="60-100" required>
+                        <div class="vital-unit">bpm</div>
+                    </div>
+
+                    <div class="vital-input form-group">
+                        <label for="sysbp">Systolic BP (mmHg) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="sysbp" name="sys_bp" min="80" max="200" placeholder="120" required>
+                        <div class="vital-unit">mmHg</div>
+                    </div>
+
+                    <div class="vital-input form-group">
+                        <label for="diabp">Diastolic BP (mmHg) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="diabp" name="dia_bp" min="40" max="120" placeholder="80" required>
+                        <div class="vital-unit">mmHg</div>
+                    </div>
+
+                    <div class="vital-input form-group">
+                        <label for="temp">Temperature (°C) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="temp" name="temperature" min="36" max="42" step="0.1" placeholder="37" required>
+                        <div class="vital-unit">°C</div>
+                    </div>
+
+                    <div class="vital-input form-group">
+                        <label for="spo2">SpO2 (%) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="spo2" name="spo2" min="70" max="100" placeholder="95-100" required>
+                        <div class="vital-unit">%</div>
+                    </div>
+
+                    <div class="vital-input form-group">
+                        <label for="rr">Respiration Rate (breaths/min) <span style="color: #ef4444;">*</span></label>
+                        <input type="number" id="rr" name="respiration_rate" min="10" max="60" placeholder="12-20" required>
+                        <div class="vital-unit">/min</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION 3: SYMPTOMS & AI ASSESSMENT -->
+            <div class="card">
+                <div class="section-header">
+                    <i class="fas fa-stethoscope"></i>
+                    <h2>Symptoms & Chief Complaint</h2>
+                </div>
+
+                <p style="color: var(--t-muted); margin-bottom: 20px; font-size: 14px;">
+                    Select present symptoms or describe patient's chief complaint for AI analysis.
+                </p>
+
+                <div class="form-group">
+                    <label>Common Symptoms (Select if present)</label>
+                    <div class="symptom-tags" id="symptomTags">
+                        <div class="tag" data-symptom="fever">🤒 Fever</div>
+                        <div class="tag" data-symptom="cough">🫁 Cough</div>
+                        <div class="tag" data-symptom="cold">❄️ Cold</div>
+                        <div class="tag" data-symptom="headache">🧠 Headache</div>
+                        <div class="tag" data-symptom="bodyache">💪 Body Ache</div>
+                        <div class="tag" data-symptom="diarrhea">🚽 Diarrhea</div>
+                        <div class="tag" data-symptom="vomiting">🤮 Vomiting</div>
+                        <div class="tag" data-symptom="fatigue">😴 Fatigue</div>
+                        <div class="tag" data-symptom="difficulty_breathing">😤 Difficulty Breathing</div>
+                        <div class="tag" data-symptom="chest_pain">💔 Chest Pain</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="symptoms">Detailed Symptoms & History <span style="color: #ef4444;">*</span></label>
+                    <textarea id="symptoms" name="symptoms" placeholder="Describe patient's symptoms, duration, severity, and relevant medical history..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Symptom Duration <span style="color: #ef4444;">*</span></label>
+                    <select id="duration" name="symptom_duration" required>
+                        <option value="">-- Select duration --</option>
+                        <option value="Less than 24 hours">Less than 24 hours</option>
+                        <option value="1-3 days">1-3 days</option>
+                        <option value="4-7 days">4-7 days</option>
+                        <option value="1-2 weeks">1-2 weeks</option>
+                        <option value="More than 2 weeks">More than 2 weeks</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SECTION 4: AI TRIAGE RESULT & DECISION -->
+            <div class="card" style="background: linear-gradient(135deg, rgba(11, 155, 122, 0.05), rgba(16, 185, 129, 0.05));">
+                <div class="section-header">
+                    <i class="fas fa-brain"></i>
+                    <h2>AI Triage Assessment</h2>
+                </div>
+
+                <div class="info-box" style="margin-bottom: 30px;">
+                    ⚠️ <strong>Important:</strong> The AI triage provides a clinical decision support tool. Review the assessment and your professional judgment to make the final care decision.
+                </div>
+
+                <div style="text-align: center; padding: 30px 20px; border: 2px dashed var(--border); border-radius: 12px; margin-bottom: 20px;">
+                    <i class="fas fa-circle-notch" style="font-size: 24px; color: var(--brand); animation: spin 1s linear infinite; margin-bottom: 15px;"></i>
+                    <p style="color: var(--t-muted);">AI assessment will appear after you submit the form...</p>
+                </div>
+
+                <style>
+                    @keyframes spin {
+                        from { transform: rotate(0deg); }
+                        to { transform: rotate(360deg); }
+                    }
+                </style>
+
+                <div class="form-group">
+                    <label for="nurse_notes">Nurse's Clinical Notes & Assessment</label>
+                    <textarea id="nurse_notes" name="nurse_notes" placeholder="Your professional assessment, clinical findings, and recommendations..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="nurse_decision">Care Decision <span style="color: #ef4444;">*</span></label>
+                    <select id="nurse_decision" name="nurse_decision" required>
+                        <option value="">-- Select decision --</option>
+                        <option value="home">🏠 Send Home - Rest & Follow-up in 3 days</option>
+                        <option value="appointment">📅 Schedule Appointment with PHC Doctor</option>
+                        <option value="urgent">🚨 Urgent Appointment - Same day with doctor</option>
+                        <option value="referral">🏥 Urgent Referral - Transfer to Hospital</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- SUBMIT BUTTONS -->
+            <div class="button-group">
+                <button type="button" class="btn-secondary" onclick="window.history.back()">
+                    <i class="fas fa-arrow-left"></i> Cancel
+                </button>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-check"></i> Complete Intake & Assessment
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Handle symptom tag selection
+        document.querySelectorAll('.tag').forEach(tag => {
+            tag.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+
+        // Auto-add selected symptoms to the detailed symptoms field
+        document.querySelector('form').addEventListener('submit', function() {
+            const selectedSymptoms = Array.from(document.querySelectorAll('.tag.selected'))
+                .map(tag => tag.dataset.symptom.replace('_', ' '));
+            if (selectedSymptoms.length > 0) {
+                const symptomsField = document.getElementById('symptoms');
+                const currentText = symptomsField.value;
+                symptomsField.value = 'Selected: ' + selectedSymptoms.join(', ') + '\n' + currentText;
+            }
+        });
+    </script>
+</body>
+</html>

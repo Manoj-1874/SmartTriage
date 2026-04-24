@@ -277,6 +277,42 @@ class SemanticDiseaseDatabase:
                 comorbidity_risk_multiplier=1.8,
             ),
 
+            'Hurthle Cell Carcinoma': DiseaseProfile(
+                name='Hurthle Cell Carcinoma (Oncocytic Carcinoma of Thyroid)',
+                icd10_code='C73',
+                disease_category='ONCOLOGY',
+                severity_level='HIGH',
+                associated_symptoms=[
+                    'neck lump', 'hoarseness', 'difficulty swallowing', 'shortness of breath',
+                    'persistent cough', 'neck pain'
+                ],
+                risk_escalators=['age>55', 'radiation history', 'large tumor size', 'metastasis'],
+                typical_vital_changes={'hr': 'may be elevated', 'respiration': 'may be labored'},
+                progression_path=['metastasis to lungs/bones', 'local invasion', 'respiratory obstruction'],
+                treatment_urgency='URGENT',
+                specialist_referral='Endocrine Surgery/Oncology',
+                mortality_rate=0.15,
+                comorbidity_risk_multiplier=1.6,
+            ),
+
+            'Kawasaki Disease': DiseaseProfile(
+                name='Kawasaki Disease',
+                icd10_code='M30.3',
+                disease_category='AUTOIMMUNE',
+                severity_level='SEVERE',
+                associated_symptoms=[
+                    'high fever', 'rash', 'swollen hands/feet', 'red eyes', 
+                    'swollen lymph nodes', 'strawberry tongue', 'peeling skin'
+                ],
+                risk_escalators=['age<5', 'duration>5days', 'incomplete treatment'],
+                typical_vital_changes={'temp': '>102', 'hr': '>110'},
+                progression_path=['coronary artery aneurysm', 'myocarditis', 'heart valve issues'],
+                treatment_urgency='URGENT',
+                specialist_referral='Pediatric Cardiology/Rheumatology',
+                mortality_rate=0.01,
+                comorbidity_risk_multiplier=1.3,
+            ),
+
             'Acute Myocardial Infarction': DiseaseProfile(
                 name='Acute Myocardial Infarction (AMI/Heart Attack)',
                 icd10_code='I21.9',
@@ -368,8 +404,15 @@ class SemanticDiseaseDatabase:
             ),
         }
 
+    def get_all_disease_names(self) -> List[str]:
+        """Get list of all disease names in the local database"""
+        return list(self.diseases.keys())
+
     def get_disease_profile(self, disease_name: str) -> Optional[DiseaseProfile]:
         """Get disease profile if exists in database"""
+        if not disease_name:
+            return None
+            
         # Try exact match first
         if disease_name in self.diseases:
             return self.diseases.get(disease_name)
@@ -388,7 +431,7 @@ class SemanticDiseaseDatabase:
         """
         matching_diseases = []
 
-        symptoms_lower = symptom_text.lower()
+        symptoms_lower = str(symptom_text or "").lower()
 
         for disease_name, profile in self.diseases.items():
             # Calculate symptom overlap
@@ -419,6 +462,10 @@ class MedicalAIRiskAssessment:
 
     def __init__(self):
         self.disease_db = SemanticDiseaseDatabase()
+
+    def get_all_disease_names(self) -> List[str]:
+        """Get list of all disease names from the local database"""
+        return self.disease_db.get_all_disease_names()
 
     def assess_patient_disease_risk(
         self,
@@ -476,13 +523,17 @@ class MedicalAIRiskAssessment:
         else:
             # ===== STEP 3: Unknown disease - use semantic analysis =====
             result['is_known_disease'] = False
-            similar_diseases = self.disease_db.find_similar_diseases(disease_name_or_symptoms)
+            # Ensure input is string for similarity matching
+            search_text = str(disease_name_or_symptoms or "")
+            similar_diseases = self.disease_db.find_similar_diseases(search_text)
 
             if similar_diseases:
                 # Found similar disease by symptoms
                 best_match_name, similarity = similar_diseases[0]
                 best_match_profile = self.disease_db.get_disease_profile(best_match_name)
 
+                result['is_known_disease'] = True  # It's known, just found via symptoms
+                result['disease_identified'] = best_match_name
                 result['similar_diseases_found'] = similar_diseases
                 result['best_match'] = {'name': best_match_name, 'similarity': similarity}
                 base_risk = self._severity_to_risk_score(best_match_profile.severity_level)
@@ -490,7 +541,8 @@ class MedicalAIRiskAssessment:
 
             else:
                 # Completely unknown disease - use semantic understanding
-                base_risk = self._analyze_unknown_disease(disease_name_or_symptoms)
+                search_text = str(disease_name_or_symptoms or "")
+                base_risk = self._analyze_unknown_disease(search_text)
                 result['specialist_needed'] = 'General Physician + Specialist consultation'
 
         # ===== STEP 4: Age adjustment =====
@@ -570,7 +622,7 @@ class MedicalAIRiskAssessment:
         """
         risk = 0.45  # Baseline for unknown
 
-        text_lower = disease_text.lower()
+        text_lower = str(disease_text or "").lower()
 
         # Keywords that indicate severity
         if any(word in text_lower for word in ['critical', 'emergency', 'severe', 'acute', 'fatal']):
@@ -659,15 +711,19 @@ class MedicalAIRiskAssessment:
 
         # Common dangerous combinations
         for comorbidity in comorbidities:
-            if 'diabetes' in comorbidity.lower():
+            if not comorbidity:
+                continue
+            
+            comorb_lower = str(comorbidity).lower()
+            if 'diabetes' in comorb_lower:
                 total_multiplier *= 1.3  # Makes most infections worse
-            elif 'hypertension' in comorbidity.lower():
+            elif 'hypertension' in comorb_lower:
                 total_multiplier *= 1.2
-            elif 'heart' in comorbidity.lower() and disease_category != 'CARDIOVASCULAR':
+            elif 'heart' in comorb_lower and disease_category != 'CARDIOVASCULAR':
                 total_multiplier *= 1.4  # Cardiac disease + other disease = bad
-            elif 'kidney' in comorbidity.lower():
+            elif 'kidney' in comorb_lower:
                 total_multiplier *= 1.3
-            elif 'immunosuppression' in comorbidity.lower():
+            elif 'immunosuppression' in comorb_lower:
                 total_multiplier *= 1.5  # Critical for infections
 
         return min(2.0, total_multiplier)  # Cap at 2x

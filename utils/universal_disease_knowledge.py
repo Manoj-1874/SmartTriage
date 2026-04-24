@@ -28,11 +28,14 @@ class SNOMEDIntegration:
     Example: Query "Ehlers-Danlos" → Get ICD code, symptoms, complications
     """
 
-    # Primary SNOMED Servers (with multiple fallbacks)
+    # Official SNOMED International Browser API (Ground Truth)
     SNOMED_APIS = [
-        "https://browser.ihtsdotools.org/snowstorm/snomed-ct",  # Official free server
-        "https://snomed.edu-hub.com/snowstorm/snomed-ct",       # Backup server
+        "https://browser.ihtsdotools.org/snowstorm/snomed-ct",
+        "https://snowstorm.ihtsdotools.org/snowstorm/snomed-ct"
     ]
+    
+    # Latest verified branch as of April 2026
+    LATEST_BRANCH = "MAIN/2026-04-01"
 
     # Disease aliases mapping - normalize user input to standard names
     DISEASE_ALIASES = {
@@ -62,104 +65,89 @@ class SNOMEDIntegration:
         'cholangiocarcinoma': 'Cholangiocarcinoma',
         'bile duct cancer': 'Cholangiocarcinoma',
     }
-
     @staticmethod
-    def search_disease(disease_name: str, version: str = "MAIN/2023-01-31", max_retries: int = 3) -> Dict:
-        """
-        Search SNOMED-CT for disease information with retry logic and multiple servers
-
-        Example:
-        >>> search_disease("Cholangiocarcinoma")
-        Returns: {
-            'found': True,
-            'disease_name': 'Cholangiocarcinoma',
-            'preferred_term': 'Cholangiocarcinoma (disorder)',
-            ...
-        }
-        """
-        # Normalize disease name using aliases
+    def search_disease(disease_name: str, version: str = "MAIN", max_retries: int = 3) -> Dict:
+        """Search SNOMED-CT for disease information with official browser-native descriptions"""
         normalized_name = SNOMEDIntegration._normalize_disease_name(disease_name)
 
-        logger.info(f"[SNOMED] Searching for: '{normalized_name}' (original: '{disease_name}')")
+        if not normalized_name or normalized_name.lower() in ['none', 'null', 'nan']:
+            return {'found': False, 'reason': 'Empty query'}
 
-        # Try each SNOMED server
-        for server_idx, snomed_api in enumerate(SNOMEDIntegration.SNOMED_APIS):
-            for attempt in range(max_retries):
+        # Use official description matching for high fidelity
+        params = {
+            'term': normalized_name,
+            'active': 'true',
+            'conceptActive': 'true',
+            'limit': 5,
+            'lang': 'en',
+            'searchMode': 'PARTIAL_MATCHING'
+        }
+
+        headers = {
+            'User-Agent': 'SmartTriage-AI-Dashboard/2.0 (Clinical-Research)',
+            'Accept': 'application/json'
+        }
+
+        # FAST-FAIL CASCADE: Attempt only the most reliable endpoints with ultra-short timeouts
+        # SNOMED International Browser API is often slow; we fail fast to hit MeSH/Wiki instead
+        for server_url in SNOMEDIntegration.SNOMED_APIS:
+            # We check MAIN first, then the specific US branch which is often more stable
+            for branch in ["MAIN", "SNOMEDCT-US", "MAIN/2026-04-01"]:
                 try:
-                    search_url = f"{snomed_api}/{version}/concepts"
-                    params = {
-                        'query': normalized_name,
-                        'limit': 10,
-                        'offset': 0,
-                    }
-
-                    logger.debug(f"[SNOMED-ATTEMPT {attempt+1}/{max_retries}] Server {server_idx+1}: {search_url}")
-
-                    response = requests.get(search_url, params=params, timeout=5)  # Reduced timeout
-
+                    # UPDATED: Correct Snowstorm path for public browser instances
+                    # We try both 'browser' (Snowstorm UI) and native endpoints
+                    search_url = f"{server_url.rstrip('/')}/browser/{branch}/descriptions"
+                    
+                    logger.info(f"🔍 [SNOMED-TRY] URL: {search_url} | Term: {params['term']}")
+                    # Ultra-fast timeout: 3s is enough for a medical terminology hit
+                    response = requests.get(search_url, params=params, headers=headers, timeout=3)
+                    
                     if response.status_code == 200:
                         data = response.json()
-                        logger.debug(f"[SNOMED-RESPONSE] Status 200, items found: {len(data.get('items', []))}")
-
-                        if data.get('items'):
-                            top_match = data['items'][0]
-                            result = {
+                        items = data.get('items', [])
+                        if items:
+                            # Extract concept from description hit
+                            match = items[0]
+                            concept = match.get('concept', {})
+                            logger.info(f"✅ [SNOMED-HIT] Found '{normalized_name}' on {branch}")
+                            return {
                                 'found': True,
-                                'snomed_id': top_match.get('id'),
+                                'snomed_id': concept.get('conceptId'),
                                 'disease_name': normalized_name,
-                                'preferred_term': top_match.get('pt', {}).get('term'),
-                                'definitions': top_match.get('definitions', []),
-                                'parent_concepts': SNOMEDIntegration._get_parent_concepts(
-                                    top_match.get('id'), version, snomed_api
-                                ),
-                                'related_symptoms': SNOMEDIntegration._get_related_symptoms(
-                                    top_match.get('id'), version, snomed_api
-                                ),
-                                'icd_code': SNOMEDIntegration._map_to_icd10(top_match.get('id')),
-                                'server': f'SNOMED-CT (Server {server_idx+1})'
+                                'preferred_term': concept.get('pt', {}).get('term') or match.get('term'),
+                                'server': f'SNOMED-CT ({branch})'
                             }
-
-                            logger.info(f"[SNOMED-SUCCESS] Found: '{normalized_name}' via {result['server']}")
-                            return result
-                        else:
-                            logger.warning(f"[SNOMED-NO-RESULTS] No items returned for '{normalized_name}'")
-                    else:
-                        logger.warning(f"[SNOMED-HTTP-{response.status_code}] Server returned error")
-
-                except requests.Timeout:
-                    logger.warning(f"[SNOMED-TIMEOUT] Server {server_idx+1} attempt {attempt+1} timed out")
-                    time.sleep(0.5)  # Brief delay before retry
-                except requests.ConnectionError as e:
-                    logger.warning(f"[SNOMED-CONNECTION-ERROR] Server {server_idx+1} connection failed: {str(e)}")
-                    time.sleep(0.5)
-                except json.JSONDecodeError:
-                    logger.warning(f"[SNOMED-JSON-ERROR] Server {server_idx+1} returned invalid JSON")
-                except Exception as e:
-                    logger.error(f"[SNOMED-ERROR] Server {server_idx+1} attempt {attempt+1}: {type(e).__name__}: {str(e)}")
-                    time.sleep(0.5)
-
-        # If all servers failed, return not found
-        logger.warning(f"[SNOMED-ALL-FAILED] Could not find '{normalized_name}' in any SNOMED server")
-        return {'found': False, 'reason': 'Disease not found in SNOMED-CT or all servers unavailable'}
+                except: 
+                    continue # Move to next branch/server immediately
+        
+        return {'found': False, 'reason': 'Not found in official SNOMED channels'}
 
     @staticmethod
     def _normalize_disease_name(disease_name: str) -> str:
         """Normalize disease name using aliases - convert user input to standard names"""
+        if not disease_name:
+            return ""
         disease_lower = disease_name.lower().strip()
 
-        # Check if direct alias exists
+        # [STRICT] If the input contains multiple symptoms or is very long, 
+        # do NOT attempt alias normalization as it leads to hallucinations (e.g. "mi" in "abdominal").
+        if len(disease_lower) > 25 or ',' in disease_name or '.' in disease_name:
+            return disease_name
+
+        # Check if direct alias exists (High Precision)
         if disease_lower in SNOMEDIntegration.DISEASE_ALIASES:
             normalized = SNOMEDIntegration.DISEASE_ALIASES[disease_lower]
-            logger.info(f"[ALIAS] '{disease_name}' → '{normalized}'")
+            logger.info(f"[ALIAS-EXACT] '{disease_name}' → '{normalized}'")
             return normalized
 
-        # Check for partial matches (e.g., "coronary disease" contains "coronary")
-        for alias_key, standard_name in SNOMEDIntegration.DISEASE_ALIASES.items():
-            if alias_key in disease_lower or disease_lower in alias_key:
-                logger.info(f"[ALIAS-PARTIAL] '{disease_name}' → '{standard_name}'")
-                return standard_name
+        # Check for partial matches ONLY for extremely short, likely acronym inputs
+        if len(disease_lower) <= 5:
+            for alias_key, standard_name in SNOMEDIntegration.DISEASE_ALIASES.items():
+                if alias_key == disease_lower:
+                    logger.info(f"[ALIAS-MATCH] '{disease_name}' → '{standard_name}'")
+                    return standard_name
 
-        # No alias found, use original name
+        # No precise alias found, use original name to avoid incorrect mapping
         return disease_name
 
     @staticmethod
@@ -225,6 +213,8 @@ class MedicalDiseaseAPI:
         Attempt to get disease info from multiple medical sources
         Cascade through: SNOMED → Wikipedia (medical) → General search
         """
+        if not disease_name:
+            return None
 
         # Try 1: SNOMED-CT
         snomed_result = SNOMEDIntegration.search_disease(disease_name)
@@ -239,8 +229,10 @@ class MedicalDiseaseAPI:
             }
 
         # Try 2: Wikipedia (medical content)
+        logger.info(f"🌐 [WIKI] Attempting Wikipedia search for medical context: '{disease_name}'")
         wiki_result = MedicalDiseaseAPI._search_wikipedia_medical(disease_name)
         if wiki_result:
+            logger.info(f"✅ [WIKI-SUCCESS] Found Wikipedia article: {wiki_result.get('url')}")
             return {
                 'source': 'Wikipedia (Medical)',
                 'disease_name': disease_name,
@@ -248,7 +240,25 @@ class MedicalDiseaseAPI:
                 'confidence': 0.70,
             }
 
-        # Try 3: Semantic analysis (last resort)
+        # Try 3: Comprehensive Medical Research (MeSH, Wikidata, etc.)
+        from utils.medical_database_apis import MedicalDatabaseAPIs
+        comprehensive_result = MedicalDatabaseAPIs.search_disease_comprehensive(disease_name)
+        
+        if comprehensive_result.get('found'):
+            # Pick best available source from comprehensive results
+            sources = comprehensive_result.get('sources', {})
+            source_key = 'mesh' if 'mesh' in sources else 'wikidata' if 'wikidata' in sources else 'wikipedia'
+            source_data = sources.get(source_key)
+            
+            logger.info(f"✅ [COMPREHENSIVE-HIT] Found data via {source_key.upper()}")
+            return {
+                'source': f'Medical Research ({source_key.upper()})',
+                'disease_name': disease_name,
+                'description': source_data.get('definition') or source_data.get('snippet') or source_data.get('description'),
+                'confidence': 0.85 if source_key == 'mesh' else 0.65,
+            }
+
+        logger.warning(f"⚠️ [WEB-SEARCH-FAILED] No medical info found for '{disease_name}'")
         return None
 
     @staticmethod
@@ -257,13 +267,20 @@ class MedicalDiseaseAPI:
         try:
             import wikipedia
 
-            results = wikipedia.search(disease_name, results=1)
-            if results:
-                page = wikipedia.page(results[0])
-                return {
-                    'description': page.summary[:500],  # First 500 chars
-                    'url': page.url,
-                }
+            # Strict medical filtering: Append "medical condition" and verify result contains the term
+            results = wikipedia.search(disease_name + " disease", results=3)
+            for title in results:
+                # Basic validation: the result should be medically related
+                if any(kw in title.lower() for kw in disease_name.lower().split()):
+                    page = wikipedia.page(title)
+                    summary = page.summary
+                    # Only accept if the summary actually mentions a disease/condition
+                    if any(kw in summary.lower() for kw in ['disease', 'syndrome', 'condition', 'infection', 'disorder']):
+                        return {
+                            'description': summary[:500],
+                            'url': page.url,
+                            'title': title
+                        }
         except:
             pass
         return None
@@ -289,6 +306,7 @@ class UniversalDiseaseRiskAssessment:
     def assess_disease_risk_universal(
         self,
         disease_input: str,
+        symptoms: str,
         age: int,
         gender: str,
         sys_bp: int,
@@ -300,6 +318,11 @@ class UniversalDiseaseRiskAssessment:
         """
         Universal disease risk assessment using multiple knowledge sources
         """
+        # Normalize disease_input - handle "None" string or null
+        if not disease_input or str(disease_input).lower() in ['none', 'null', 'nan']:
+            disease_input = None
+
+        logger.info(f"🚀 [START] Assessing universal risk for input: '{disease_input}' | Symptoms: '{symptoms[:50]}...'")
 
         result = {
             'disease_input': disease_input,
@@ -308,8 +331,11 @@ class UniversalDiseaseRiskAssessment:
         }
 
         # ===== SOURCE 1: Local AI Database =====
+        # Use symptoms for identification if disease_input is missing
+        local_search_term = disease_input if disease_input else symptoms
+
         local_result = self.local_ai.assess_patient_disease_risk(
-            disease_name_or_symptoms=disease_input,
+            disease_name_or_symptoms=local_search_term,
             age=age,
             gender=gender,
             sys_bp=sys_bp,
@@ -318,19 +344,77 @@ class UniversalDiseaseRiskAssessment:
             temp_f=temp_f,
             comorbidities=comorbidities,
         )
+        result['final_risk'] = local_result
+        result['sources_checked'].append('Local AI Database')
+
+        # [SMART INFERENCE] If no disease name provided, analyze all symptoms
+        global_search_term = disease_input
+        if not global_search_term:
+            # 1. Priority: Extract known disease names from the local database
+            all_known_diseases = self.local_ai.get_all_disease_names()
+            for disease_name in all_known_diseases:
+                if len(disease_name) > 4 and disease_name.lower() in symptoms.lower():
+                    global_search_term = disease_name
+                    logger.info(f"🔎 [INFERENCE-MATCH] Extracted known disease from symptoms: '{global_search_term}'")
+                    break
+
+            # 2. Secondary: Extract text BEFORE parentheses (Usually the primary disease name)
+            # Example: "Hurthle Cell Carcinoma (Oncocytic Carcinoma)" -> "Hurthle Cell Carcinoma"
+            if not global_search_term and '(' in symptoms and ')' in symptoms:
+                import re
+                # Find text before parentheses, potentially after a period or at start
+                match_complex = re.search(r'(?:^|\.\s*)([A-Z][a-zA-Z\s\-]{5,})\s*\(', symptoms)
+                if match_complex:
+                    global_search_term = match_complex.group(1).strip()
+                    logger.info(f"🔎 [INFERENCE-PREFIX] Extracted primary disease before parentheses: '{global_search_term}'")
+                else:
+                    # Fallback to parentheses content if prefix extraction fails
+                    matches = re.findall(r'\((.*?)\)', symptoms)
+                    if matches:
+                        potential_disease = matches[-1].strip()
+                        if len(potential_disease) > 3:
+                            global_search_term = potential_disease
+                            logger.info(f"🔎 [INFERENCE-PAREN] Extracted disease from parentheses: '{global_search_term}'")
+
+            # 3. Tertiary: Text after last period (Common way nurses append diagnosis)
+            if not global_search_term and '.' in symptoms:
+                last_phrase = symptoms.split('.')[-1].strip()
+                if len(last_phrase) > 5 and len(last_phrase.split()) <= 4:
+                    global_search_term = last_phrase
+                    logger.info(f"🔎 [INFERENCE-SUFFIX] Extracted potential disease from suffix: '{global_search_term}'")
+
+            # 4. Quaternary: Use BERT's best semantic match
+            if not global_search_term and local_result.get('best_match'):
+                global_search_term = local_result['best_match']['name']
+                logger.info(f"🔎 [INFERENCE-BERT] Best semantic match for symptom set: '{global_search_term}'")
+            
+            # 5. ULTIMATE FALLBACK: Use ALL symptoms (last resort)
+            if not global_search_term:
+                if symptoms and len(symptoms) > 3:
+                    global_search_term = str(symptoms)[:100].split('.')[0].replace(',', ' ').strip()
+                    logger.info(f"🔎 [FALLBACK-SEARCH] Using cleaned symptoms for global search: '{global_search_term}'")
+                else:
+                    logger.info("ℹ️ [FALLBACK] No disease or symptom identified for global search.")
+                    return result
+                    
+        # [CRITICAL] Sanitize search term: Strip quotes and accidental symbols that break API lookups
+        if global_search_term:
+            global_search_term = global_search_term.strip("'\"` .")
+
+        # ===== SOURCE 2: SNOMED-CT (Terminology Brain) =====
+        snomed_info = SNOMEDIntegration.search_disease(global_search_term)
 
         if local_result.get('is_known_disease'):
+            logger.info(f"⚡ [LOCAL-HIT] '{global_search_term}' found in Local AI Database")
             result['sources_checked'].append('Local Database')
             result['source_used'] = 'Local AI (Known Disease)'
             result['final_risk'] = local_result
             return result
 
-        result['sources_checked'].append('Local Database')
-
-        # ===== SOURCE 2: SNOMED-CT (Medical Terminology) =====
-        snomed_info = SNOMEDIntegration.search_disease(disease_input)
+        logger.info(f"🔍 [LOCAL-MISS] '{global_search_term}' not in local DB. Escalating to global sources...")
 
         if snomed_info.get('found'):
+            logger.info(f"🏥 [SNOMED-HIT] Found authoritative medical data for '{global_search_term}'")
             result['sources_checked'].append('SNOMED-CT')
             result['snomed_mapping'] = snomed_info
 
@@ -344,9 +428,11 @@ class UniversalDiseaseRiskAssessment:
             return result
 
         # ===== SOURCE 3: Medical API / Wikipedia =====
-        medical_info = MedicalDiseaseAPI.get_disease_from_web(disease_input)
+        # Use inferred name for external web search
+        medical_info = MedicalDiseaseAPI.get_disease_from_web(global_search_term)
 
         if medical_info:
+            logger.info(f"📚 [WEB-HIT] Retrieved enrichment data from '{medical_info.get('source')}'")
             result['sources_checked'].append('Medical APIs')
             result['external_info'] = medical_info
 
@@ -364,7 +450,7 @@ class UniversalDiseaseRiskAssessment:
         result['source_used'] = 'Pure Semantic Analysis (Unknown Disease)'
 
         fallback_risk = {
-            'disease_identified': disease_input,
+            'disease_identified': disease_input or 'General Symptom Assessment',
             'is_known_disease': False,
             'risk_category': 'MEDIUM',  # Conservative estimate for unknown
             'recommendation': 'Consult with specialist for accurate diagnosis',
@@ -389,10 +475,12 @@ Recommend specialist evaluation for proper diagnosis.
 
         # Check parent concepts for severity
         for parent in parent_concepts:
-            if any(word in parent.lower() for word in ['critical', 'emergency', 'acute severe']):
+            # Ensure parent is a string and handle None
+            parent_str = str(parent or "").lower()
+            if any(word in parent_str for word in ['critical', 'emergency', 'acute severe']):
                 base_risk = 0.80
                 break
-            elif any(word in parent.lower() for word in ['chronic', 'genetic', 'hereditary']):
+            elif any(word in parent_str for word in ['chronic', 'genetic', 'hereditary']):
                 base_risk = 0.55
 
         # Apply vital signs
@@ -404,7 +492,7 @@ Recommend specialist evaluation for proper diagnosis.
         final_risk = base_risk * vital_risk * age_risk
 
         return {
-            'disease_identified': snomed_info.get('preferred_term'),
+            'disease_identified': snomed_info.get('preferred_term') or snomed_info.get('disease_name') or 'SNOMED Match',
             'source': 'SNOMED-CT',
             'risk_score': min(1.0, final_risk),
             'risk_category': self._risk_to_category(final_risk),
@@ -420,7 +508,7 @@ Recommend specialist evaluation for proper diagnosis.
         # Similar to SNOMED but less detailed
         base_risk = 0.50
 
-        description = medical_info.get('description', '').lower()
+        description = str(medical_info.get('description', '') or "").lower()
 
         # Extract severity keywords from description
         if any(word in description for word in ['critical', 'fatal', 'lethal', 'severe']):
@@ -436,7 +524,7 @@ Recommend specialist evaluation for proper diagnosis.
         final_risk = base_risk * vital_risk * age_risk
 
         return {
-            'disease_identified': medical_info.get('disease_name'),
+            'disease_identified': medical_info.get('disease_name') or medical_info.get('title') or 'External Match',
             'source': medical_info.get('source'),
             'risk_score': min(1.0, final_risk),
             'risk_category': self._risk_to_category(final_risk),

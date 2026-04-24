@@ -6,28 +6,63 @@
     <title>PriorityMed â€” My Health Progress</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <!-- Fallback: If Chart.js doesn't load, inject from cdnjs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" onload="window._chartJsLoaded=true;"></script>
+    <!-- Fallback and initialization for Chart.js -->
     <script>
-    setTimeout(() => {
+    window._chartJsLoaded = false;
+    window._chartRenderAttempts = 0;
+
+    function ensureChartsRender() {
+      window._chartRenderAttempts++;
+
       if (typeof Chart === 'undefined') {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
-        script.onload = () => {
-          if (typeof renderCharts === 'function') {
-            renderCharts();
-          }
-        };
-        document.head.appendChild(script);
+        if (window._chartRenderAttempts < 10) {
+          // Try again in 100ms
+          setTimeout(ensureChartsRender, 100);
+        } else if (window._chartRenderAttempts === 10) {
+          console.warn('[Charts] Chart.js still not loaded, attempting dynamic injection');
+          const script = document.createElement('script');
+          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js';
+          script.onload = () => {
+            window._chartJsLoaded = true;
+            console.log('[Charts] Chart.js dynamically loaded');
+            if (typeof renderAllCharts === 'function') {
+              renderAllCharts();
+            }
+          };
+          script.onerror = () => {
+            console.error('[Charts] Failed to load Chart.js dynamically');
+          };
+          document.head.appendChild(script);
+        }
+        return;
       }
-    }, 500);
+
+      // Chart.js is loaded, render charts if function exists
+      if (typeof renderAllCharts === 'function') {
+        console.log('[Charts] Rendering charts now');
+        renderAllCharts();
+      } else if (window._chartRenderAttempts < 5) {
+        // renderAllCharts might not be defined yet, try again
+        setTimeout(ensureChartsRender, 100);
+      }
+    }
+
+    // Start checking after small delay to ensure page is ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(ensureChartsRender, 100);
+      });
+    } else {
+      setTimeout(ensureChartsRender, 100);
+    }
     </script>
     <script>window.chtlConfig = { chatbotId: "6396798553" }</script>
     <script async data-id="6396798553" id="chtl-script" type="text/javascript" src="https://chatling.ai/js/embed.js"></script>
 <style>
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* 
    DESIGN TOKENS â€” full match with dashboard
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+ */
 :root {
     --brand:        #0B9B7A;
     --brand-dark:   #087A60;
@@ -117,7 +152,7 @@
     --brand-pale:   rgba(11,155,122,.07);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESET */
+/*  RESET */
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html,body{overflow-x:hidden;scroll-behavior:smooth}
 body{
@@ -133,10 +168,10 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border-med);border-radius:99px}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LAYOUT */
+/*  LAYOUT */
 .shell{display:flex;min-height:100vh;position:relative;overflow-x:hidden;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SIDEBAR */
+/*  SIDEBAR */
 .sidebar{
     width:var(--sidebar-w);background:var(--sidebar-bg);
     border-right:1px solid var(--sidebar-line);
@@ -237,7 +272,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .s-status-txt{color:#4ADE80}
 .sidebar.collapsed .s-status-txt{opacity:0;width:0;overflow:hidden}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• MAIN */
+/*  MAIN */
 .main{
     margin-left:var(--sidebar-w);
     flex:1;
@@ -253,7 +288,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
     width:calc(100% - var(--sidebar-col));
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOPBAR */
+/*  TOPBAR */
 .topbar{
     position:sticky;top:0;z-index:200;height:60px;padding:0 28px;
     background:var(--base);border-bottom:1px solid var(--border);
@@ -291,7 +326,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .t-btn:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
 .t-badge{position:absolute;top:5px;right:5px;width:7px;height:7px;background:var(--clr-red);border-radius:50%;border:1.5px solid var(--base);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PAGE */
+/*  PAGE */
 .page{padding:24px 28px 52px;flex:1;min-width:0;overflow-x:hidden;width:100%;}
 .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .sec-label{
@@ -304,7 +339,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .sec-link{color:var(--brand-light)}
 .sec-link:hover{gap:9px}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HERO BANNER */
+/*  HERO BANNER */
 .hero-banner{
     background:linear-gradient(135deg, #064E3B 0%, #065F46 35%, #047857 65%, #0B9B7A 100%);
     border-radius:var(--radius-2xl);padding:0;margin-bottom:28px;
@@ -428,7 +463,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .vital-val{font-size:18px;font-weight:800;color:#fff;line-height:1;margin-bottom:2px;}
 .vital-lbl{font-size:9.5px;color:rgba(255,255,255,.5);font-weight:500;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• STATS GRID */
+/*  STATS GRID */
 .stats-row{
     display:grid;
     grid-template-columns:repeat(5,minmax(0,1fr));
@@ -456,7 +491,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .stat-bar{height:4px;background:var(--border);border-radius:99px;margin-top:12px;overflow:hidden;}
 .stat-bar-fill{height:100%;border-radius:99px;transition:width 1.2s var(--ease);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• PHOTO CAROUSEL */
+/*  PHOTO CAROUSEL */
 .carousel-section{
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .15s both;
     width:100%;min-width:0;
@@ -510,7 +545,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .c-dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.4);transition:all .3s;cursor:pointer;}
 .c-dot.active{width:18px;border-radius:99px;background:rgba(255,255,255,.9);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CHARTS AREA */
+/*  CHARTS AREA */
 .charts-grid{
     display:grid;grid-template-columns:3fr 2fr;gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .2s both;
@@ -557,14 +592,14 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;color:var(--t-muted);}
 .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• FOUR CHARTS ROW */
+/*  FOUR CHARTS ROW */
 .charts-4{
     display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .25s both;
     width:100%;min-width:0;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VITALS MONITOR */
+/*  VITALS MONITOR */
 .vitals-monitor{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-xl);overflow:hidden;
@@ -605,7 +640,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .vm-sparkline svg{width:100%;height:36px;}
 .vm-trend-line{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TIMELINE */
+/*  TIMELINE */
 .timeline-card{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-xl);overflow:hidden;
@@ -674,7 +709,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 [data-theme="dark"] .tl-score-num{color:var(--brand-light)}
 .tl-score-lbl{font-size:9.5px;color:var(--t-faint);font-weight:600;text-transform:uppercase;letter-spacing:.5px;}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HEALTH FACTORS */
+/*  HEALTH FACTORS */
 .factors-grid{
     display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;
     margin-bottom:26px;animation:fadeUp .5s var(--ease) .4s both;
@@ -709,7 +744,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 .arc-bg{fill:none;stroke:var(--border);stroke-width:6;}
 .arc-fill{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset 1.4s var(--ease);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• WELLNESS TIP BANNER */
+/*  WELLNESS TIP BANNER */
 .wellness-banner{
     border-radius:var(--radius-xl);padding:24px 30px;margin-bottom:26px;
     display:grid;grid-template-columns:1fr auto;gap:20px;align-items:center;
@@ -735,7 +770,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 }
 .wb-btn:hover{background:#B45309;transform:translateY(-1px);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• EMPTY STATE */
+/*  EMPTY STATE */
 .empty-state{
     background:var(--base);border:1px solid var(--border);
     border-radius:var(--radius-2xl);padding:80px 40px;
@@ -762,19 +797,19 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 }
 .btn-primary:hover{background:var(--brand-dark);color:#fff;transform:translateY(-2px);box-shadow:0 8px 20px rgba(11,155,122,.35);}
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• FOOTER */
+/*  FOOTER */
 .page-footer{
     text-align:center;padding:18px 0 4px;border-top:1px solid var(--border);
     font-size:11.5px;color:var(--t-faint);transition:border-color var(--t-base);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• ANIMATIONS */
+/*  ANIMATIONS */
 @keyframes fadeUp{
     from{opacity:0;transform:translateY(16px)}
     to{opacity:1;transform:translateY(0)}
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• RESPONSIVE */
+/*  RESPONSIVE */
 
 /* Large screens: tighten stats from 5â†’3 col earlier */
 @media(max-width:1500px){
@@ -824,7 +859,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 <body>
 <div class="shell">
 
-<!-- â•â•â•â•â•â•â•â•â•â• SIDEBAR â•â•â•â•â•â•â•â•â•â• -->
+<!--  SIDEBAR  -->
 <aside class="sidebar" id="sidebar">
     <div class="s-brand">
         <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
@@ -855,11 +890,6 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             <span class="s-label">Health Progress</span>
         </a>
         <div class="s-group">My Care</div>
-        <a href="/checkup" class="s-link">
-            <div class="s-icon"><i class="fas fa-robot"></i></div>
-            <span class="s-label">AI Checkup</span>
-            <span class="s-chip">NEW</span>
-        </a>
         <a href="/appointments" class="s-link">
             <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
             <span class="s-label">Appointments</span>
@@ -886,7 +916,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
     </div>
 </aside>
 
-<!-- â•â•â•â•â•â•â•â•â•â• MAIN â•â•â•â•â•â•â•â•â•â• -->
+<!--  MAIN  -->
 <div class="main" id="mainContent">
 
     <!-- TOPBAR -->
@@ -922,7 +952,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 
 {% if health_records %}
 
-        <!-- â•â•â•â•â•â•â•â•â•â• HERO BANNER â•â•â•â•â•â•â•â•â•â• -->
+        <!--  HERO BANNER  -->
         <div class="hero-banner">
             <div class="hero-bg-grid"></div>
             <div class="hero-bg-glow"></div>
@@ -977,7 +1007,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                         </div>
                         <div class="vital-chip">
                             <div class="vital-ico"><i class="fas fa-thermometer-half"></i></div>
-                            <div class="vital-val">98.6Â°</div>
+                            <div class="vital-val">98.6°</div>
                             <div class="vital-lbl">Temp</div>
                         </div>
                     </div>
@@ -985,7 +1015,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• STATS ROW â•â•â•â•â•â•â•â•â•â• -->
+        <!--  STATS ROW  -->
         <div class="sec-head"><div class="sec-label">Key Health Metrics</div></div>
         <div class="stats-row">
             <div class="stat-card" style="--accent:var(--brand)">
@@ -1043,7 +1073,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• PHOTO CAROUSEL â•â•â•â•â•â•â•â•â•â• -->
+        <!--  PHOTO CAROUSEL  -->
         <div class="sec-head"><div class="sec-label">Health Education</div></div>
         <div class="carousel-section">
             <div class="carousel-wrap">
@@ -1064,7 +1094,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Mind & Body<br><em>in Harmony</em></h2>
                             <p class="slide-p">Stress management and mindfulness practices directly improve measurable health metrics and immune function.</p>
                         </div>
-                        <div class="slide-visual">ðŸ§ </div>
+                        <div class="slide-visual">🧠</div>
                     </div>
                     <div class="carousel-slide slide-3">
                         <div class="slide-bg-blob" style="width:280px;height:280px;background:rgba(167,139,250,.18);right:-40px;top:-60px;"></div>
@@ -1073,7 +1103,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                             <h2 class="slide-h">Early Detection<br><em>Saves Lives</em></h2>
                             <p class="slide-p">AI-powered early warning systems detect risk patterns months before traditional methods, enabling proactive care.</p>
                         </div>
-                        <div class="slide-visual">ðŸ”¬</div>
+                        <div class="slide-visual"></div>
                     </div>
                     <div class="carousel-slide slide-4">
                         <div class="slide-bg-blob" style="width:280px;height:280px;background:rgba(253,186,116,.18);right:-40px;top:-60px;"></div>
@@ -1096,7 +1126,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• MAIN CHARTS â•â•â•â•â•â•â•â•â•â• -->
+        <!--  MAIN CHARTS  -->
         <div class="sec-head"><div class="sec-label">Health Analytics</div></div>
         <div class="charts-grid">
             <div class="card">
@@ -1187,7 +1217,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• VITALS LIVE MONITOR â•â•â•â•â•â•â•â•â•â• -->
+        <!--  VITALS LIVE MONITOR  -->
         <div class="sec-head"><div class="sec-label">Vitals Monitor</div></div>
         <div class="vitals-monitor">
             <div class="vm-head">
@@ -1230,7 +1260,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                         <div class="vm-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-thermometer-half"></i></div>
                         <div class="vm-status-dot" style="background:var(--clr-green);box-shadow:0 0 0 3px var(--clr-green-bg);"></div>
                     </div>
-                    <div class="vm-num">98.6Â°</div>
+                    <div class="vm-num">98.6°</div>
                     <div class="vm-unit">Fahrenheit</div>
                     <div class="vm-lbl">Body Temperature</div>
                     <div class="vm-sparkline">
@@ -1244,7 +1274,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
                     </div>
                     <div class="vm-num">98%</div>
                     <div class="vm-unit">oxygen saturation</div>
-                    <div class="vm-lbl">SpOâ‚‚ Level</div>
+                    <div class="vm-lbl">SpO₂ Level</div>
                     <div class="vm-sparkline">
                         <svg viewBox="0 0 120 36"><polyline id="spo2SparkPoly" points="" stroke="#2563EB" class="vm-trend-line" stroke-width="2.5"/></svg>
                     </div>
@@ -1252,7 +1282,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• HEALTH FACTORS â•â•â•â•â•â•â•â•â•â• -->
+        <!--  HEALTH FACTORS  -->
         <div class="sec-head"><div class="sec-label">Health Score Breakdown</div></div>
         <div class="factors-grid">
             <div class="factor-card">
@@ -1284,20 +1314,20 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• WELLNESS BANNER â•â•â•â•â•â•â•â•â•â• -->
+        <!--  WELLNESS BANNER  -->
         <div class="wellness-banner">
             <div class="wb-left">
                 <div class="wb-tag"><i class="fas fa-lightbulb"></i> Today's Health Tip</div>
-                <div class="wb-title">ðŸ’§ Hydration is Your #1 Health Habit</div>
-                <p class="wb-text">Drinking 8+ glasses of water daily improves blood pressure regulation, kidney function, and overall vitals stability. Based on your health data, staying well-hydrated could improve your health score by an estimated 5â€“8 points.</p>
+                <div class="wb-title"> Hydration is Your #1 Health Habit</div>
+                <p class="wb-text">Drinking 8+ glasses of water daily improves blood pressure regulation, kidney function, and overall vitals stability. Based on your health data, staying well-hydrated could improve your health score by an estimated 5–8 points.</p>
             </div>
             <div class="wb-right">
-                <div class="wb-ico">ðŸŒ¿</div>
+                <div class="wb-ico">🌞</div>
                 <a href="/checkup" class="wb-btn"><i class="fas fa-stethoscope"></i> Start Checkup</a>
             </div>
         </div>
 
-        <!-- â•â•â•â•â•â•â•â•â•â• TIMELINE â•â•â•â•â•â•â•â•â•â• -->
+        <!--  TIMELINE  -->
         <div class="sec-head">
             <div class="sec-label">Checkup History</div>
             <div style="font-size:12px;color:var(--t-muted);">Showing last {{ [health_records|length, 10]|min }} of {{ health_records|length }} records</div>
@@ -1358,7 +1388,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
         </div>
 {% endif %}
 
-        <div class="page-footer">Â© 2024 PriorityMed &nbsp;Â·&nbsp; Secure Patient Portal &nbsp;Â·&nbsp; HIPAA Compliant &nbsp;Â·&nbsp; All rights reserved</div>
+        <div class="page-footer">© 2024 PriorityMed · Secure Patient Portal · HIPAA Compliant · All rights reserved</div>
     </div><!-- /page -->
 </div><!-- /main -->
 </div><!-- /shell -->
@@ -1658,7 +1688,7 @@ function renderAllCharts(){
             data:{
                 labels:dates,
                 datasets:[{
-                    label:'Temperature (Â°F)',
+                    label:'Temperature (°F)',
                     data:tempData,
                     backgroundColor: tempData.map(t => t > 99.5 ? 'rgba(220,38,38,.8)' : 'rgba(217,119,6,.7)'),
                     borderColor: tempData.map(t => t > 99.5 ? '#DC2626' : '#D97706'),

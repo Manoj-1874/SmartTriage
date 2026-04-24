@@ -469,13 +469,40 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
     </div>
   </div>
   <nav class="s-nav">
-    <div class="s-group">Overview</div>
-    <a href="/patient/dashboard" class="s-link"><div class="s-icon"><i class="fas fa-th-large"></i></div><span class="s-label">Dashboard</span></a>
-    <a href="/health-report" class="s-link"><div class="s-icon"><i class="fas fa-chart-line"></i></div><span class="s-label">Health Progress</span></a>
-    <div class="s-group">My Care</div>
-    <a href="/checkup" class="s-link active"><div class="s-icon"><i class="fas fa-robot"></i></div><span class="s-label">AI Checkup</span><span class="s-chip">NEW</span></a>
-    <a href="/appointments" class="s-link"><div class="s-icon"><i class="far fa-calendar-alt"></i></div><span class="s-label">Appointments</span></a>
-    <a href="/doctors" class="s-link"><div class="s-icon"><i class="fas fa-user-md"></i></div><span class="s-label">Find Doctors</span></a>
+    <div class="s-group">Navigation</div>
+    {% if user.role == 'phc_nurse' %}
+        <a href="{{ url_for('phc_nurse_dashboard') }}" class="s-link">
+          <div class="s-icon"><i class="fas fa-th-large"></i></div>
+          <span class="s-label">Dashboard</span>
+        </a>
+        <a href="{{ url_for('phc_nurse_patients') }}" class="s-link">
+          <div class="s-icon"><i class="fas fa-users"></i></div>
+          <span class="s-label">Patients</span>
+        </a>
+        <a href="{{ url_for('phc_nurse_intake') }}" class="s-link">
+          <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
+          <span class="s-label">Patient Intake</span>
+        </a>
+        <a href="{{ url_for('phc_nurse_reports') }}" class="s-link">
+          <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
+          <span class="s-label">Reports</span>
+        </a>
+    {% else %}
+        <a href="{% if user.role == 'doctor' %}/doctor/dashboard{% else %}/patient/dashboard{% endif %}" class="s-link">
+          <div class="s-icon"><i class="fas fa-th-large"></i></div>
+          <span class="s-label">Dashboard</span>
+        </a>
+        {% if user.role != 'doctor' %}
+        <a href="/health-report" class="s-link">
+          <div class="s-icon"><i class="fas fa-chart-line"></i></div>
+          <span class="s-label">Health Progress</span>
+        </a>
+        {% endif %}
+        <div class="s-group">My Care</div>
+        <a href="/appointments" class="s-link"><div class="s-icon"><i class="far fa-calendar-alt"></i></div><span class="s-label">Appointments</span></a>
+        <a href="/doctors" class="s-link"><div class="s-icon"><i class="fas fa-user-md"></i></div><span class="s-label">Find Doctors</span></a>
+    {% endif %}
+    
     <div class="s-group">Support</div>
     <a href="/messages" class="s-link"><div class="s-icon"><i class="fas fa-comments"></i></div><span class="s-label">Messages</span></a>
     <a href="/logout" class="s-link"><div class="s-icon"><i class="fas fa-sign-out-alt"></i></div><span class="s-label">Sign Out</span></a>

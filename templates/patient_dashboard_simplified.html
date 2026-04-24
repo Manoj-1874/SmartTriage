@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Patient Dashboard — PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --brand:        #0B9B7A;
+            --brand-dark:   #087A60;
+            --brand-light:  #34C9A5;
+            --brand-faint:  #E6F7F3;
+            --brand-pale:   #F0FAF7;
+            --sidebar-w:    272px;
+            --radius-sm:    8px;
+            --radius-md:    12px;
+            --radius-lg:    18px;
+            --ease:         cubic-bezier(.4,0,.2,1);
+            --t-fast:       .15s;
+            --t-base:       .28s;
+            --clr-green:    #16A34A;
+            --clr-green-bg: #DCFCE7;
+            --clr-amber:    #D97706;
+            --clr-amber-bg: #FEF3C7;
+            --clr-red:      #DC2626;
+            --clr-red-bg:   #FEE2E2;
+            --clr-blue:     #2563EB;
+            --clr-blue-bg:  #DBEAFE;
+        }
+
+        [data-theme="light"] {
+            --canvas:       #EEF6F2;
+            --base:         #FFFFFF;
+            --surface:      #F5FBF8;
+            --hover:        #EBF7F2;
+            --border:       #D9EDE5;
+            --t-head:       #0A2218;
+            --t-body:       #2C4A3C;
+            --t-muted:      #5E8C7A;
+            --t-faint:      #9DC0B2;
+            --sh-sm:        0 1px 3px rgba(0,0,0,.06);
+            --sh-md:        0 4px 20px rgba(0,0,0,.09);
+            --sh-lg:        0 12px 44px rgba(0,0,0,.12);
+        }
+
+        html, body { overflow-x: hidden; scroll-behavior: smooth; }
+
+        body {
+            background: linear-gradient(135deg, var(--canvas) 0%, #F0FAF7 50%, var(--canvas) 100%);
+            color: var(--t-body);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* ══ SIDEBAR STYLES ══ */
+        .sidebar {
+            width: 280px;
+            background: #FFFFFF;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,107,77,0.1);
+            z-index: 100;
+        }
+
+        .sidebar::-webkit-scrollbar { width: 5px; }
+        .sidebar::-webkit-scrollbar-track { background: transparent; }
+        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            padding: 0 10px;
+        }
+
+        .logo i {
+            width: 40px;
+            height: 40px;
+            background: var(--brand-light);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-size: 20px;
+            box-shadow: 0 2px 8px rgba(52,201,165,0.3);
+            animation: logo-pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes logo-pulse {
+            0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(52,201,165,0.3); }
+            50% { transform: scale(1.03); box-shadow: 0 3px 12px rgba(52,201,165,0.4); }
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--brand);
+            letter-spacing: -0.5px;
+        }
+
+        .user-profile {
+            background: var(--brand-faint);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 30px;
+            color: var(--t-head);
+        }
+
+        .user-profile h4 {
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0 0 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--t-head);
+        }
+
+        .user-profile p {
+            font-size: 12px;
+            color: var(--t-muted);
+            margin: 0;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            flex: 1;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 14px 18px;
+            color: var(--t-muted);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all var(--t-base);
+            font-size: 15px;
+            font-weight: 500;
+            position: relative;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: var(--hover);
+            color: var(--brand);
+            border-left-color: var(--brand-light);
+        }
+
+        .nav-item.active {
+            background: var(--brand-faint);
+            color: var(--brand);
+            box-shadow: 0 2px 8px rgba(52,201,165,0.3);
+            border-left-color: var(--brand-light);
+        }
+
+        .nav-item i {
+            font-size: 18px;
+            width: 24px;
+            text-align: center;
+        }
+
+        .nav-divider {
+            margin: 20px 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .container {
+            margin-left: 280px;
+            flex: 1;
+            max-width: calc(100% - 280px);
+            padding: 30px 20px;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 0;
+                overflow: hidden;
+                transition: width var(--t-base);
+            }
+            .sidebar.mobile-open {
+                width: 280px;
+                position: fixed;
+                left: 0;
+                top: 0;
+                z-index: 1000;
+            }
+            .container {
+                margin-left: 0;
+                max-width: 100%;
+            }
+        }
+
+        /* ══ HEADER ══ */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 32px;
+            padding: 28px 32px;
+            background: var(--base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--sh-md);
+            border: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(11,155,122,0.08) 0%, transparent 70%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .header-content {
+            flex: 1;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--brand), var(--brand-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0 0 8px 0;
+            font-family: 'Playfair Display', serif;
+        }
+
+        .header-subtitle {
+            font-size: 14px;
+            color: var(--t-muted);
+            font-weight: 500;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--t-muted);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all var(--t-fast);
+            font-size: 16px;
+        }
+
+        .btn-icon:hover {
+            background: var(--brand);
+            color: white;
+            border-color: var(--brand);
+            transform: translateY(-2px);
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #DC2626, #991b1b);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all var(--t-base);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(220,38,38,.3);
+        }
+
+        /* ══ QUICK STATS ══ */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--base);
+            padding: 24px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--sh-md);
+            border: 1px solid var(--border);
+            transition: all var(--t-base);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--brand);
+            transition: all var(--t-base);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--sh-lg);
+            border-color: var(--brand);
+        }
+
+        .stat-card.high::before { background: var(--clr-red); }
+        .stat-card.medium::before { background: var(--clr-amber); }
+        .stat-card.low::before { background: var(--clr-green); }
+
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+            background: var(--brand-faint);
+            color: var(--brand);
+        }
+
+        .stat-card.high .stat-icon { background: var(--clr-red-bg); color: var(--clr-red); }
+        .stat-card.medium .stat-icon { background: var(--clr-amber-bg); color: var(--clr-amber); }
+        .stat-card.low .stat-icon { background: var(--clr-green-bg); color: var(--clr-green); }
+
+        .stat-content { flex: 1; }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--t-head);
+            line-height: 1;
+            margin-bottom: 6px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--t-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* ══ SECTION ══ */
+        .section {
+            background: var(--base);
+            padding: 28px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--sh-md);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            transition: all var(--t-base);
+        }
+
+        .section:hover {
+            box-shadow: var(--sh-lg);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 2px solid var(--border);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--t-head);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-family: 'Playfair Display', serif;
+        }
+
+        .section-title i {
+            font-size: 24px;
+            color: var(--brand);
+            background: var(--brand-faint);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        .section-more {
+            font-size: 13px;
+            color: var(--brand);
+            cursor: pointer;
+            font-weight: 600;
+            transition: all var(--t-fast);
+        }
+
+        .section-more:hover {
+            transform: translateX(4px);
+        }
+
+        /* ══ EMPTY STATE ══ */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--t-muted);
+        }
+
+        .empty-state i {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.4;
+            color: var(--brand);
+        }
+
+        .empty-state p {
+            margin: 12px 0;
+            font-size: 15px;
+        }
+
+        .empty-state-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--t-head);
+            margin-bottom: 8px;
+        }
+
+        /* ══ BUTTONS ══ */
+        .btn-primary {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-light));
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 16px;
+            transition: all var(--t-base);
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(11,155,122,.3);
+        }
+
+        .btn-sm {
+            padding: 8px 14px;
+            background: var(--brand);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all var(--t-fast);
+        }
+
+        .btn-sm:hover {
+            background: var(--brand-dark);
+            transform: translateY(-1px);
+        }
+
+        /* ══ ITEM CARDS ══ */
+        .item-card {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 16px;
+            padding: 18px;
+            background: var(--surface);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            margin-bottom: 12px;
+            transition: all var(--t-base);
+            align-items: start;
+        }
+
+        .item-card:hover {
+            background: var(--brand-pale);
+            border-color: var(--brand);
+            transform: translateX(4px);
+            box-shadow: 0 4px 12px rgba(11,155,122,.1);
+        }
+
+        .item-content {
+            display: flex;
+            gap: 14px;
+        }
+
+        .item-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--brand-faint);
+            color: var(--brand);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 18px;
+        }
+
+        .item-info { flex: 1; min-width: 0; }
+
+        .item-title {
+            font-weight: 700;
+            color: var(--t-head);
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .item-detail {
+            font-size: 13px;
+            color: var(--t-muted);
+            margin: 4px 0;
+            line-height: 1.5;
+        }
+
+        .risk-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .risk-low {
+            background: var(--clr-green-bg);
+            color: var(--clr-green);
+        }
+
+        .risk-medium {
+            background: var(--clr-amber-bg);
+            color: var(--clr-amber);
+        }
+
+        .risk-high {
+            background: var(--clr-red-bg);
+            color: var(--clr-red);
+        }
+
+        .item-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        /* ══ HEALTH METRICS ══ */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .metric-box {
+            background: var(--surface);
+            padding: 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--brand);
+            margin-bottom: 4px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--t-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* ══ RESPONSIVE ══ */
+        @media (max-width: 768px) {
+            .container { padding: 20px 16px; }
+            .header { flex-direction: column; gap: 16px; }
+            .header h1 { font-size: 24px; }
+            .header-actions { width: 100%; justify-content: flex-start; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .item-card { grid-template-columns: 1fr; }
+            .item-actions { justify-content: flex-start; }
+            .section { padding: 20px; }
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="logo">
+            <i class="fas fa-heartbeat"></i>
+            <span class="logo-text">PriorityMed</span>
+        </div>
+
+        {% if user %}
+        <div class="user-profile">
+            <h4>
+                <i class="fas fa-user-circle"></i> {{ user.fullname }}
+            </h4>
+            <p>Patient Account</p>
+        </div>
+        {% endif %}
+
+        <nav class="nav-menu">
+            <a href="/patient/dashboard" class="nav-item active">
+                <i class="fas fa-home"></i>
+                <span>My Dashboard</span>
+            </a>
+            <a href="/health-report" class="nav-item">
+                <i class="fas fa-chart-line"></i>
+                <span>Health Progress</span>
+            </a>
+            <a href="/appointments" class="nav-item">
+                <i class="far fa-calendar-alt"></i>
+                <span>Appointments</span>
+            </a>
+            <a href="/doctors" class="nav-item">
+                <i class="fas fa-user-md"></i>
+                <span>Find Doctors</span>
+            </a>
+            <a href="/messages" class="nav-item">
+                <i class="far fa-comment-dots"></i>
+                <span>Messages</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/logout" class="nav-item">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+            </a>
+        </nav>
+    </aside>
+
+    <div class="container">
+        <!-- HEADER WITH PROFILE -->
+        <div class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-heart"></i> My Health Dashboard</h1>
+                <p class="header-subtitle">Welcome back, <strong>{{ user.fullname }}</strong> • Last login today</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                <button class="btn-icon" title="Settings"><i class="fas fa-cog"></i></button>
+                <button class="logout-btn" onclick="window.location.href='/logout'">
+                    <i class="fas fa-sign-out-alt"></i> Sign Out
+                </button>
+            </div>
+        </div>
+
+        <!-- QUICK STATS -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-stethoscope"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ patient_stats.total_assessments }}</div>
+                    <div class="stat-label">AI Assessments</div>
+                </div>
+            </div>
+            {% if patient_stats.high_risk > 0 %}
+            <div class="stat-card high">
+                <div class="stat-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ patient_stats.high_risk }}</div>
+                    <div class="stat-label">High Risk Cases</div>
+                </div>
+            </div>
+            {% endif %}
+            <div class="stat-card low">
+                <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ patient_stats.upcoming_appointments }}</div>
+                    <div class="stat-label">Upcoming Appointments</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-heart-pulse"></i></div>
+                <div class="stat-content">
+                    <div class="stat-value">{{ (patient_stats.total_assessments * 0.76)|int }}</div>
+                    <div class="stat-label">Health Score</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI ASSESSMENT REPORTS -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-file-medical"></i> AI Assessment Reports
+                </div>
+                {% if ai_reports %}
+                <span class="section-more" onclick="alert('View all reports')"><i class="fas fa-chevron-right"></i> View All</span>
+                {% endif %}
+            </div>
+
+            {% if ai_reports %}
+                {% for report in ai_reports[:5] %}
+                <div class="item-card">
+                    <div class="item-content">
+                        <div class="item-icon"><i class="fas fa-file-alt"></i></div>
+                        <div class="item-info">
+                            <div class="item-title">Assessment from {{ report.formatted_date }}</div>
+                            <div class="item-detail">
+                                <strong>BP:</strong> {{ report.sys_bp }}/{{ report.dia_bp }} mmHg
+                                <strong style="margin-left: 12px;">HR:</strong> {{ report.hr }} bpm
+                                <strong style="margin-left: 12px;">Temp:</strong> {{ report.temp }}°F
+                            </div>
+                            <div class="item-detail">
+                                <strong>Condition:</strong> {{ report.symptoms[:60] }}{% if report.symptoms|length > 60 %}...{% endif %}
+                            </div>
+                            <div class="risk-badge {% if report.dual_brain_risk == 'LOW' %}risk-low{% elif report.dual_brain_risk == 'MEDIUM' %}risk-medium{% else %}risk-high{% endif %}">
+                                <i class="fas fa-{% if report.dual_brain_risk == 'LOW' %}check-circle{% elif report.dual_brain_risk == 'MEDIUM' %}exclamation-circle{% else %}times-circle{% endif %}"></i>
+                                {{ report.dual_brain_risk }} RISK {% if report.routing %} • {{ report.routing }}{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn-sm" onclick="viewReport({{ report.id }})"><i class="fas fa-eye"></i> View Details</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-file-medical"></i>
+                    <p class="empty-state-title">No Assessment Reports Yet</p>
+                    <p>Your health assessments will appear here after a nurse completes your intake evaluation.</p>
+                    <button class="btn-primary" onclick="window.location.href='/phc/nurse/intake'">
+                        <i class="fas fa-plus-circle"></i> Request Assessment
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- HEALTH METRICS SUMMARY -->
+        {% if ai_reports %}
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-heartbeat"></i> Latest Health Metrics
+                </div>
+            </div>
+            <div class="metrics-grid">
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].sys_bp|default('--') }}</div>
+                    <div class="metric-label">Systolic BP</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].hr|default('--') }}</div>
+                    <div class="metric-label">Heart Rate</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].temp|default('--') }}°</div>
+                    <div class="metric-label">Temperature</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].respiration_rate|default('--') }}</div>
+                    <div class="metric-label">Resp. Rate</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].spo2|default('--') }}%</div>
+                    <div class="metric-label">O2 Saturation</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-value">{{ ai_reports[0].age|default('--') }}</div>
+                    <div class="metric-label">Age</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- UPCOMING APPOINTMENTS -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-calendar-alt"></i> Upcoming Appointments
+                </div>
+                {% if upcoming_appointments %}
+                <span class="section-more" onclick="window.location.href='/appointments'"><i class="fas fa-plus"></i> Schedule New</span>
+                {% endif %}
+            </div>
+
+            {% if upcoming_appointments %}
+                {% for appt in upcoming_appointments %}
+                <div class="item-card">
+                    <div class="item-content">
+                        <div class="item-icon"><i class="fas fa-calendar-check"></i></div>
+                        <div class="item-info">
+                            <div class="item-title">
+                                <i class="fas fa-user-md" style="color: var(--brand); margin-right: 8px;"></i>
+                                {% if appt.doctor_name %}{{ appt.doctor_name }}{% else %}Appointment Pending{% endif %}
+                            </div>
+                            <div class="item-detail">
+                                <strong>📅 Date:</strong> {{ appt.appointment_date }}
+                            </div>
+                            <div class="item-detail">
+                                <strong>🕐 Time:</strong> {{ appt.appointment_time }}
+                            </div>
+                            {% if appt.specialization %}
+                            <div class="item-detail">
+                                <strong>👨‍⚕️ Specialty:</strong> {{ appt.specialization }}
+                            </div>
+                            {% endif %}
+                            <div class="risk-badge risk-medium">
+                                <i class="fas fa-info-circle"></i> {{ appt.status }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="btn-sm" onclick="alert('View appointment details')"><i class="fas fa-eye"></i> Details</button>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div class="empty-state">
+                    <i class="fas fa-calendar-plus"></i>
+                    <p class="empty-state-title">No Upcoming Appointments</p>
+                    <p>Schedule an appointment with a doctor for professional medical consultation and guidance.</p>
+                    <button class="btn-primary" onclick="window.location.href='/appointments'">
+                        <i class="fas fa-calendar-plus"></i> Book Appointment Now
+                    </button>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- QUICK ACTIONS -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">
+                    <i class="fas fa-bolt"></i> Quick Actions
+                </div>
+            </div>
+            <div class="metrics-grid">
+                <button class="metric-box" onclick="window.location.href='/checkup'" style="border: 2px solid var(--brand); background: transparent; cursor: pointer; transition: all var(--t-base);" onmouseover="this.style.background='var(--brand-faint)'" onmouseout="this.style.background='transparent'">
+                    <div style="font-size: 24px; color: var(--brand); margin-bottom: 8px;">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <div class="metric-label" style="color: var(--brand); font-weight: 700;">New Assessment</div>
+                </button>
+                <button class="metric-box" onclick="window.location.href='/appointments'" style="border: 2px solid var(--brand); background: transparent; cursor: pointer; transition: all var(--t-base);" onmouseover="this.style.background='var(--brand-faint)'" onmouseout="this.style.background='transparent'">
+                    <div style="font-size: 24px; color: var(--brand); margin-bottom: 8px;">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="metric-label" style="color: var(--brand); font-weight: 700;">Book Appointment</div>
+                </button>
+                <button class="metric-box" onclick="alert('View health records')" style="border: 2px solid var(--brand); background: transparent; cursor: pointer; transition: all var(--t-base);" onmouseover="this.style.background='var(--brand-faint)'" onmouseout="this.style.background='transparent'">
+                    <div style="font-size: 24px; color: var(--brand); margin-bottom: 8px;">
+                        <i class="fas fa-folder-open"></i>
+                    </div>
+                    <div class="metric-label" style="color: var(--brand); font-weight: 700;">Health Records</div>
+                </button>
+                <button class="metric-box" onclick="alert('Contact support')" style="border: 2px solid var(--brand); background: transparent; cursor: pointer; transition: all var(--t-base);" onmouseover="this.style.background='var(--brand-faint)'" onmouseout="this.style.background='transparent'">
+                    <div style="font-size: 24px; color: var(--brand); margin-bottom: 8px;">
+                        <i class="fas fa-headset"></i>
+                    </div>
+                    <div class="metric-label" style="color: var(--brand); font-weight: 700;">Contact Support</div>
+                </button>
+            </div>
+        </div>
+
+        <!-- FOOTER INFO -->
+        <div style="text-align: center; padding: 40px 20px; color: var(--t-faint); font-size: 13px;">
+            <p>💙 PriorityMed Health Dashboard | Secure Health Records | Last Updated: Today</p>
+            <p style="margin-top: 8px; font-size: 12px;">For emergency medical attention, please dial 911 or visit your nearest hospital.</p>
+        </div>
+    </div>
+
+    <script>
+        function viewReport(reportId) {
+            window.location.href = `/patient/report/${reportId}`;
+        }
+
+        // Refresh functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add any dynamic behaviors here
+            console.log('Patient Dashboard loaded successfully');
+        });
+    </script>
+</body>
+</html>

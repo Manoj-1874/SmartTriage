@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash, g, make_response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
@@ -84,12 +82,20 @@ def setup_logging(app_config):
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
+    
+    # Remove existing handlers to avoid duplicates on reload
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+        
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(error_handler)
 
-    # Configure Flask app logger
+    # Prevent Flask's default logger from propagating and causing duplicates
+    app.logger.propagate = False
     app.logger.setLevel(log_level)
+    for handler in app.logger.handlers[:]:
+        app.logger.removeHandler(handler)
     app.logger.addHandler(console_handler)
     app.logger.addHandler(file_handler)
     app.logger.addHandler(error_handler)
@@ -97,6 +103,7 @@ def setup_logging(app_config):
     # Suppress verbose third-party logs
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
     logging.getLogger('transformers').setLevel(logging.WARNING)
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
 
     app.logger.info(f"Logging configured - Level: {logging.getLevelName(log_level)}")
 
@@ -122,20 +129,9 @@ if config.CORS_ENABLED:
     CORS(app, origins=config.CORS_ORIGINS)
     app.logger.info(f"CORS enabled for origins: {config.CORS_ORIGINS}")
 
-# Initialize rate limiter with proper configuration
-# Disable rate limiting in testing mode
-limiter = Limiter(
-    app=app,
-    key_func=get_remote_address,
-    storage_uri=config.RATELIMIT_STORAGE_URL if (config.RATELIMIT_ENABLED and not app.config.get('TESTING', False)) else None,
-    default_limits=[config.RATELIMIT_DEFAULT] if (config.RATELIMIT_ENABLED and not app.config.get('TESTING', False)) else [],
-    strategy="fixed-window",  # Use fixed-window strategy
-    headers_enabled=True  # Send rate limit headers
-)
-app.logger.info(f"Rate limiting configured - Enabled: {config.RATELIMIT_ENABLED}")
-
-# Store limiter reference for dynamic disable in tests
-app.limiter_instance = limiter
+# Rate limiting disabled for production deployment
+# Allows unlimited registration for high user volume
+app.logger.info("Rate limiting disabled - Production mode enabled for unlimited user registration")
 
 # Initialize security middleware
 if config.SECURITY_HEADERS_ENABLED:
@@ -185,24 +181,24 @@ app.logger.info("Database manager initialized with connection pooling")
 # Initialize WebSocket server for real-time updates
 try:
     init_socketio(app)
-    app.logger.info("✅ WebSocket server initialized for real-time notifications")
+    app.logger.info("[OK] WebSocket server initialized for real-time notifications")
 except Exception as e:
-    app.logger.warning(f"⚠️ WebSocket initialization failed (real-time features disabled): {e}")
+    app.logger.warning(f"[WARN] WebSocket initialization failed (real-time features disabled): {e}")
 
 # Start background reminder scheduler
 try:
     start_reminder_scheduler()
-    app.logger.info("✅ Appointment reminder scheduler started")
+    app.logger.info("[OK] Appointment reminder scheduler started")
 except Exception as e:
-    app.logger.warning(f"⚠️ Reminder scheduler failed: {e}")
+    app.logger.warning(f"[WARN] Reminder scheduler failed: {e}")
 
 # Initialize local disease database (Offline-First Layer)
 try:
     LocalDiseaseDatabase.init_database()
     stats = LocalDiseaseDatabase.get_statistics()
-    app.logger.info(f"✅ Local disease database ready: {stats['total_diseases']} diseases by severity: {stats['by_severity']}")
+    app.logger.info(f"[OK] Local disease database ready: {stats['total_diseases']} diseases by severity: {stats['by_severity']}")
 except Exception as e:
-    app.logger.warning(f"⚠️ Could not initialize local disease database: {e}")
+    app.logger.warning(f"[WARN] Could not initialize local disease database: {e}")
 
 # Register cleanup on shutdown
 @atexit.register
@@ -239,23 +235,11 @@ def internal_error(error):
                          error_code=500,
                          error_message="Internal server error"), 500
 
+# 429 error handler removed - rate limiting disabled for production
+
 @app.errorhandler(429)
 def ratelimit_error(error):
-    """Handle rate limit exceeded errors"""
-    app.logger.warning(f"Rate limit exceeded: {request.remote_addr} - {request.endpoint}")
-
-    if request.endpoint == 'signup':
-        return render_template(
-            'signup.html',
-            error='Too many signup attempts. Please wait and try again later.'
-        ), 429
-
-    if request.endpoint == 'login':
-        return render_template(
-            'login.html',
-            error='Too many login attempts. Please wait and try again later.'
-        ), 429
-
+    """Rate limit handler (disabled)"""
     if request.endpoint == 'forgot_password':
         return render_template(
             'forgot_password.html',
@@ -364,8 +348,8 @@ def init_db():
     with db_manager.get_connection() as conn:
         c = conn.cursor()
 
-    # Users table
-    c.execute('''
+        # Users table
+        c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
@@ -386,143 +370,114 @@ def init_db():
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    # Ensure new verification columns exist on older DBs
-    c.execute("PRAGMA table_info(users)")
-    existing_user_cols = [col[1] for col in c.fetchall()]
-    try:
-        if 'email_verified' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
-            print("🔧 Added 'email_verified' column to users table")
-        if 'verification_token' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
-            print("🔧 Added 'verification_token' column to users table")
-        if 'verification_expires' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN verification_expires DATETIME")
-            print("🔧 Added 'verification_expires' column to users table")
-        if 'reset_token' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
-            print("🔧 Added 'reset_token' column to users table")
-        if 'reset_code' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN reset_code TEXT")
-            print("🔧 Added 'reset_code' column to users table")
-        if 'reset_expires' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN reset_expires DATETIME")
-            print("🔧 Added 'reset_expires' column to users table")
-        if 'phc_id' not in existing_user_cols:
-            c.execute("ALTER TABLE users ADD COLUMN phc_id INTEGER")
-            print("🔧 Added 'phc_id' column to users table")
-    except Exception as e:
-        print(f"⚠️ Could not alter users table: {e}")
+        # Ensure new verification columns exist on older DBs
+        c.execute("PRAGMA table_info(users)")
+        existing_user_cols = [col[1] for col in c.fetchall()]
+        try:
+            if 'email_verified' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
+                print("🔧 Added 'email_verified' column to users table")
+            if 'verification_token' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
+                print("🔧 Added 'verification_token' column to users table")
+            if 'verification_expires' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN verification_expires DATETIME")
+                print("🔧 Added 'verification_expires' column to users table")
+            if 'reset_token' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+                print("🔧 Added 'reset_token' column to users table")
+            if 'reset_code' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN reset_code TEXT")
+                print("🔧 Added 'reset_code' column to users table")
+            if 'reset_expires' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN reset_expires DATETIME")
+                print("🔧 Added 'reset_expires' column to users table")
+            if 'phc_id' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN phc_id INTEGER")
+                print("🔧 Added 'phc_id' column to users table")
+            if 'location' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN location TEXT")
+                print("[OK] Added 'location' column to users table")
+            if 'assigned_nurse_id' not in existing_user_cols:
+                c.execute("ALTER TABLE users ADD COLUMN assigned_nurse_id INTEGER")
+                print("🔧 Added 'assigned_nurse_id' column to users table")
+        except Exception as e:
+            print(f"[WARN] Could not alter users table: {e}")
 
-    # PHC facilities table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS phc_facilities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            location TEXT NOT NULL,
-            contact TEXT
-        )
-    ''')
-
-    # Staff attendance table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS staff_attendance (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            phc_id INTEGER NOT NULL,
-            check_in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-            status TEXT NOT NULL DEFAULT 'Present' CHECK(status IN ('Present', 'Absent')),
-            geo_location TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
-        )
-    ''')
-
-    # Patient logs table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS patient_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            phc_id INTEGER,
-            age INTEGER, gender TEXT, symptoms TEXT,
-            sys_bp INTEGER, dia_bp INTEGER, hr INTEGER,
-            temp REAL, respiration_rate INTEGER, spo2 INTEGER, history TEXT,
-            xgb_risk TEXT, dual_brain_risk TEXT, routing TEXT, recommended_specialist TEXT,
-            risk_score INTEGER, news2_score INTEGER,
-            actual_outcome TEXT,
-            outcome_confirmed_by INTEGER,
-            outcome_confirmed_at DATETIME,
-            outcome_notes TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id),
-            FOREIGN KEY (phc_id) REFERENCES phc_facilities(id),
-            FOREIGN KEY (outcome_confirmed_by) REFERENCES users(id)
-        )
-    ''')
-
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS model_monitoring_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            patient_log_id INTEGER,
-            xgb_risk TEXT,
-            final_risk TEXT,
-            xgb_low_prob REAL,
-            xgb_medium_prob REAL,
-            xgb_high_prob REAL,
-            bert_label TEXT,
-            bert_score REAL,
-            news2_score INTEGER,
-            override_reason TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (patient_log_id) REFERENCES patient_logs(id)
-        )
-    ''')
-
-    # Check if appointments table exists
-    c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='appointments'")
-    appointments_exists = c.fetchone() is not None
-
-    if not appointments_exists:
-        # Create appointments table with correct schema for fresh database
-        print("[TABLE] Creating appointments table...")
+        # PHC facilities table
         c.execute('''
-            CREATE TABLE appointments (
+            CREATE TABLE IF NOT EXISTS phc_facilities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id INTEGER NOT NULL,
-                patient_name TEXT NOT NULL,
-                doctor_id INTEGER,
-                doctor_name TEXT NOT NULL,
-                department TEXT NOT NULL,
-                appointment_date DATE NOT NULL,
-                appointment_time TEXT NOT NULL,
-                status TEXT DEFAULT 'Pending',
-                symptoms TEXT,
-                notes TEXT,
+                name TEXT NOT NULL,
+                location TEXT NOT NULL,
+                contact TEXT,
+                status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'MAINTENANCE')),
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (patient_id) REFERENCES users(id),
-                FOREIGN KEY (doctor_id) REFERENCES users(id)
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         ''')
-        print("[OK] Appointments table created!")
-    else:
-        # Check if appointments table needs migration
-        c.execute("PRAGMA table_info(appointments)")
-        columns = [column[1] for column in c.fetchall()]
 
-        if 'doctor_id' not in columns:
-            # Need to migrate old appointments table
-            print("[MIGRATE] Migrating appointments table to new schema...")
+        # Staff attendance table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS staff_attendance (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                phc_id INTEGER NOT NULL,
+                check_in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                status TEXT NOT NULL DEFAULT 'Present' CHECK(status IN ('Present', 'Absent')),
+                geo_location TEXT,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
+            )
+        ''')
 
-            # Get the old table columns
-            c.execute("PRAGMA table_info(appointments)")
-            old_columns = [column[1] for column in c.fetchall()]
-            print(f"   Old columns: {old_columns}")
+        # Patient logs table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS patient_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                phc_id INTEGER,
+                age INTEGER, gender TEXT, symptoms TEXT,
+                sys_bp INTEGER, dia_bp INTEGER, hr INTEGER,
+                temp REAL, respiration_rate INTEGER, spo2 INTEGER, history TEXT,
+                xgb_risk TEXT, dual_brain_risk TEXT, routing TEXT, recommended_specialist TEXT,
+                risk_score INTEGER, news2_score INTEGER,
+                actual_outcome TEXT,
+                outcome_confirmed_by INTEGER,
+                outcome_confirmed_at DATETIME,
+                outcome_notes TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id),
+                FOREIGN KEY (outcome_confirmed_by) REFERENCES users(id)
+            )
+        ''')
 
-            # Rename old table
-            c.execute("ALTER TABLE appointments RENAME TO appointments_old")
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS model_monitoring_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                patient_log_id INTEGER,
+                xgb_risk TEXT,
+                final_risk TEXT,
+                xgb_low_prob REAL,
+                xgb_medium_prob REAL,
+                xgb_high_prob REAL,
+                bert_label TEXT,
+                bert_score REAL,
+                news2_score INTEGER,
+                override_reason TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (patient_log_id) REFERENCES patient_logs(id)
+            )
+        ''')
 
-            # Create new table with correct schema
+        # Check if appointments table exists
+        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='appointments'")
+        appointments_exists = c.fetchone() is not None
+
+        if not appointments_exists:
+            # Create appointments table with correct schema for fresh database
+            print("[TABLE] Creating appointments table...")
             c.execute('''
                 CREATE TABLE appointments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -542,175 +497,229 @@ def init_db():
                     FOREIGN KEY (doctor_id) REFERENCES users(id)
                 )
             ''')
-
-            # Copy data from old table (only columns that exist)
-            # Use 0 as default patient_id for old records
-            if 'patient_id' in old_columns:
-                # Old table has patient_id
-                c.execute('''
-                    INSERT INTO appointments
-                    (id, patient_id, patient_name, doctor_name, department, appointment_date,
-                     appointment_time, status, symptoms, notes, created_at)
-                    SELECT
-                        id, COALESCE(patient_id, 0), patient_name, doctor_name, department, appointment_date,
-                        appointment_time, status, symptoms, notes, created_at
-                    FROM appointments_old
-                ''')
-            else:
-                # Old table doesn't have patient_id, use default value 0
-                c.execute('''
-                    INSERT INTO appointments
-                    (patient_id, patient_name, doctor_name, department, appointment_date,
-                     appointment_time, status, symptoms, notes, created_at)
-                    SELECT
-                        0, patient_name, doctor_name, department, appointment_date,
-                        appointment_time, status, symptoms, notes, created_at
-                    FROM appointments_old
-                ''')
-
-            # Drop old table
-            c.execute("DROP TABLE appointments_old")
-
-            print("[OK] Migration completed!")
+            print("[OK] Appointments table created!")
         else:
-            # Table already has correct schema, no migration needed
-            print("[OK] Appointments table already up-to-date")
+            # Check if appointments table needs migration
+            c.execute("PRAGMA table_info(appointments)")
+            columns = [column[1] for column in c.fetchall()]
 
-    # Check if patient_logs table needs migration for user_id column
-    c.execute("PRAGMA table_info(patient_logs)")
-    pl_columns = [column[1] for column in c.fetchall()]
+            if 'doctor_id' not in columns:
+                # Need to migrate old appointments table
+                print("[MIGRATE] Migrating appointments table to new schema...")
 
-    if 'user_id' not in pl_columns:
-        print("[MIGRATE] Migrating patient_logs table to add user_id column...")
+                # Get the old table columns
+                c.execute("PRAGMA table_info(appointments)")
+                old_columns = [column[1] for column in c.fetchall()]
+                print(f"   Old columns: {old_columns}")
 
-        # First, add the user_id column
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN user_id INTEGER")
-            print("[OK] Added user_id column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Column might already exist: {e}")
-    if 'phc_id' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN phc_id INTEGER")
-            print("✅ Added phc_id column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add phc_id: {e}")
-    if 'recommended_specialist' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN recommended_specialist TEXT")
-            print("✅ Added recommended_specialist column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add recommended_specialist: {e}")
-    if 'risk_score' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN risk_score INTEGER")
-            print("✅ Added risk_score column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add risk_score: {e}")
-    if 'respiration_rate' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN respiration_rate INTEGER")
-            print("✅ Added respiration_rate column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add respiration_rate: {e}")
-    if 'spo2' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN spo2 INTEGER")
-            print("✅ Added spo2 column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add spo2: {e}")
-    if 'news2_score' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN news2_score INTEGER")
-            print("✅ Added news2_score column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add news2_score: {e}")
-    if 'actual_outcome' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN actual_outcome TEXT")
-            print("✅ Added actual_outcome column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add actual_outcome: {e}")
-    if 'outcome_confirmed_by' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_by INTEGER")
-            print("✅ Added outcome_confirmed_by column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add outcome_confirmed_by: {e}")
-    if 'outcome_confirmed_at' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_at DATETIME")
-            print("✅ Added outcome_confirmed_at column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add outcome_confirmed_at: {e}")
-    if 'outcome_notes' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_notes TEXT")
-            print("✅ Added outcome_notes column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add outcome_notes: {e}")
+                # Rename old table
+                c.execute("ALTER TABLE appointments RENAME TO appointments_old")
 
-    # NEW: Add pain_intensity and symptom_duration columns
-    if 'pain_intensity' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN pain_intensity INTEGER")
-            print("✅ Added pain_intensity column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add pain_intensity: {e}")
+                # Create new table with correct schema
+                c.execute('''
+                    CREATE TABLE appointments (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        patient_id INTEGER NOT NULL,
+                        patient_name TEXT NOT NULL,
+                        doctor_id INTEGER,
+                        doctor_name TEXT NOT NULL,
+                        department TEXT NOT NULL,
+                        appointment_date DATE NOT NULL,
+                        appointment_time TEXT NOT NULL,
+                        status TEXT DEFAULT 'Pending',
+                        symptoms TEXT,
+                        notes TEXT,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (patient_id) REFERENCES users(id),
+                        FOREIGN KEY (doctor_id) REFERENCES users(id)
+                    )
+                ''')
 
-    if 'symptom_duration' not in pl_columns:
-        try:
-            c.execute("ALTER TABLE patient_logs ADD COLUMN symptom_duration TEXT")
-            print("✅ Added symptom_duration column to patient_logs table")
-        except sqlite3.OperationalError as e:
-            print(f"⚠️ Could not add symptom_duration: {e}")
+                # Copy data from old table (only columns that exist)
+                # Use 0 as default patient_id for old records
+                if 'patient_id' in old_columns:
+                    # Old table has patient_id
+                    c.execute('''
+                        INSERT INTO appointments
+                        (id, patient_id, patient_name, doctor_name, department, appointment_date,
+                         appointment_time, status, symptoms, notes, created_at)
+                        SELECT
+                            id, COALESCE(patient_id, 0), patient_name, doctor_name, department, appointment_date,
+                            appointment_time, status, symptoms, notes, created_at
+                        FROM appointments_old
+                    ''')
+                else:
+                    # Old table doesn't have patient_id, use default value 0
+                    c.execute('''
+                        INSERT INTO appointments
+                        (patient_id, patient_name, doctor_name, department, appointment_date,
+                         appointment_time, status, symptoms, notes, created_at)
+                        SELECT
+                            0, patient_name, doctor_name, department, appointment_date,
+                            appointment_time, status, symptoms, notes, created_at
+                        FROM appointments_old
+                    ''')
 
-    # Create messages table for doctor-patient communication
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender_id INTEGER NOT NULL,
-            receiver_id INTEGER NOT NULL,
-            message TEXT NOT NULL,
-            is_read INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (sender_id) REFERENCES users(id),
-            FOREIGN KEY (receiver_id) REFERENCES users(id)
-        )
-    ''')
+                # Drop old table
+                c.execute("DROP TABLE appointments_old")
 
-    conn.commit()
-    app.logger.info("[OK] Database initialization complete")
+                print("[OK] Migration completed!")
+            else:
+                # Table already has correct schema, no migration needed
+                print("[OK] Appointments table already up-to-date")
+
+        # Check if patient_logs table needs migration for user_id column
+        c.execute("PRAGMA table_info(patient_logs)")
+        pl_columns = [column[1] for column in c.fetchall()]
+
+        if 'user_id' not in pl_columns:
+            print("[MIGRATE] Migrating patient_logs table to add user_id column...")
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN user_id INTEGER")
+                print("[OK] Added user_id column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Column might already exist: {e}")
+        if 'phc_id' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN phc_id INTEGER")
+                print("[OK] Added phc_id column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add phc_id: {e}")
+        if 'recommended_specialist' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN recommended_specialist TEXT")
+                print("[OK] Added recommended_specialist column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add recommended_specialist: {e}")
+        if 'risk_score' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN risk_score INTEGER")
+                print("[OK] Added risk_score column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add risk_score: {e}")
+        if 'respiration_rate' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN respiration_rate INTEGER")
+                print("[OK] Added respiration_rate column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add respiration_rate: {e}")
+        if 'spo2' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN spo2 INTEGER")
+                print("[OK] Added spo2 column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add spo2: {e}")
+        if 'news2_score' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN news2_score INTEGER")
+                print("[OK] Added news2_score column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add news2_score: {e}")
+        if 'actual_outcome' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN actual_outcome TEXT")
+                print("[OK] Added actual_outcome column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add actual_outcome: {e}")
+        if 'outcome_confirmed_by' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_by INTEGER")
+                print("[OK] Added outcome_confirmed_by column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add outcome_confirmed_by: {e}")
+        if 'outcome_confirmed_at' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_at DATETIME")
+                print("[OK] Added outcome_confirmed_at column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add outcome_confirmed_at: {e}")
+        if 'outcome_notes' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_notes TEXT")
+                print("[OK] Added outcome_notes column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add outcome_notes: {e}")
+
+        # NEW: Add pain_intensity and symptom_duration columns
+        if 'pain_intensity' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN pain_intensity INTEGER")
+                print("[OK] Added pain_intensity column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add pain_intensity: {e}")
+
+        if 'symptom_duration' not in pl_columns:
+            try:
+                c.execute("ALTER TABLE patient_logs ADD COLUMN symptom_duration TEXT")
+                print("[OK] Added symptom_duration column to patient_logs table")
+            except sqlite3.OperationalError as e:
+                print(f"[WARN] Could not add symptom_duration: {e}")
+
+        # Create messages table for doctor-patient communication
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sender_id INTEGER NOT NULL,
+                receiver_id INTEGER NOT NULL,
+                message TEXT NOT NULL,
+                is_read INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (sender_id) REFERENCES users(id),
+                FOREIGN KEY (receiver_id) REFERENCES users(id)
+            )
+        ''')
+
+        # Create ambulances table for district-level ambulance management
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS ambulances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ambulance_number TEXT UNIQUE NOT NULL,
+                status TEXT DEFAULT 'available' CHECK(status IN ('available', 'allocated', 'maintenance')),
+                location TEXT,
+                driver_name TEXT,
+                driver_contact TEXT,
+                capacity INTEGER DEFAULT 4,
+                phc_assigned_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (phc_assigned_id) REFERENCES phc_facilities(id)
+            )
+        ''')
+
+        conn.commit()
+        app.logger.info("[OK] Database initialization complete")
 
 
 def init_sample_phc_centers():
-    """Initialize sample PHC facilities if they don't exist"""
+    """Initialize sample PHC facilities with status tracking if they don't exist"""
     try:
         conn = get_db_connection()
         existing = conn.execute('SELECT COUNT(*) as count FROM phc_facilities').fetchone()
         count = existing['count'] if isinstance(existing, dict) else existing[0] if existing else 0
 
         if count == 0:
-            # Add sample PHC centers
+            # Add sample PHC centers - all initialized as ACTIVE
+            # Real-world: These represent actual Primary Health Centers in the district
             sample_centers = [
-                ('PHC Central', 'City Center, Main District'),
-                ('PHC North', 'North Ward, Main District'),
-                ('PHC South', 'South Ward, Main District'),
-                ('PHC East', 'East Ward, Main District'),
-                ('PHC West', 'West Ward, Main District'),
-                ('PHC Rural', 'Rural Sub-district, Main District'),
+                ('PHC Central', 'City Center, Main District', 'ACTIVE'),
+                ('PHC North', 'North Ward, Main District', 'ACTIVE'),
+                ('PHC South', 'South Ward, Main District', 'ACTIVE'),
+                ('PHC East', 'East Ward, Main District', 'ACTIVE'),
+                ('PHC West', 'West Ward, Main District', 'ACTIVE'),
+                ('PHC Rural', 'Rural Sub-district, Main District', 'ACTIVE'),
             ]
 
-            for name, location in sample_centers:
+            for name, location, status in sample_centers:
                 conn.execute('''
-                    INSERT INTO phc_facilities (name, location, contact)
-                    VALUES (?, ?, ?)
-                ''', (name, location, '+91-9999-000000'))
+                    INSERT INTO phc_facilities (name, location, contact, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+                ''', (name, location, '+91-9999-000000', status))
 
             conn.commit()
-            app.logger.info(f"✅ Initialized {len(sample_centers)} sample PHC centers")
+            app.logger.info(f"[OK] Initialized {len(sample_centers)} sample PHC centers with ACTIVE status")
         else:
-            app.logger.info(f"✅ PHC centers already exist ({count} centers found)")
+            app.logger.info(f"[OK] PHC centers already exist ({count} centers found)")
 
         conn.close()
     except Exception as e:
@@ -757,7 +766,7 @@ def load_models_from_huggingface():
             tokenizer=HF_REPO_ID
         )
 
-        print("✅ Models loaded from Hugging Face Hub successfully!")
+        print("[OK] Models loaded from Hugging Face Hub successfully!")
         return encoders, xgb_risk_model, scaler, feature_names, exp_brain
 
     except Exception as e:
@@ -832,6 +841,113 @@ except Exception as e:
     integrated_risk = None
 
 # --- 4. HELPER FUNCTIONS (Thread-Safe) ---
+
+def assign_nurse_to_patient(conn, phc_id):
+    """Find the nurse with fewest assigned patients at a PHC and return their ID."""
+    if not phc_id:
+        return None
+    
+    # Get all nurses at this PHC
+    nurses = conn.execute("SELECT id FROM users WHERE role = 'phc_nurse' AND phc_id = ?", (phc_id,)).fetchall()
+    if not nurses:
+        return None
+        
+    # Find nurse with fewest patients
+    nurse_counts = []
+    for nurse in nurses:
+        count = conn.execute("SELECT COUNT(*) as count FROM users WHERE assigned_nurse_id = ?", (nurse['id'],)).fetchone()['count']
+        nurse_counts.append((nurse['id'], count))
+    
+    # Sort by count and pick the one with fewest
+    nurse_counts.sort(key=lambda x: x[1])
+    return nurse_counts[0][0]
+
+def find_nearest_phc(conn, patient_location, prefer_active=True):
+
+    """
+    Find nearest PHC facility based on patient location with intelligent fallback.
+    REAL-WORLD HEALTHCARE LOGIC:
+    - Match location keywords to PHC service areas
+    - If preferred PHC is INACTIVE/MAINTENANCE, cascade to next nearest ACTIVE PHC
+    - Fallback chain: ACTIVE > MAINTENANCE > INACTIVE
+
+    This implements geographic/service-area nearest-neighbor with status awareness.
+    Example: Patient in "South Ward" → PHC South (3), but if inactive → fallback to PHC Central (1)
+
+    Args:
+        conn: Database connection
+        patient_location: Patient's location/address (string)
+        prefer_active: If True, prioritize ACTIVE centers; if False, use any center
+
+    Returns:
+        phc_id (int) of nearest PHC, with intelligent fallback logic
+    """
+    if not patient_location:
+        # No location provided - find any ACTIVE PHC, fallback to first
+        if prefer_active:
+            active_phc = conn.execute(
+                'SELECT id FROM phc_facilities WHERE status="ACTIVE" ORDER BY id LIMIT 1'
+            ).fetchone()
+            if active_phc:
+                return active_phc['id']
+        return 1  # Default to Central PHC
+
+    location_lower = patient_location.lower()
+
+    # Keyword mapping: location keyword -> (PHC_id, priority_order)
+    # Priority order allows fallback chain within same service area
+    keyword_mapping = {
+        'north': [(2, 1), (1, 2), (3, 3)],      # Prefer PHC North, fallback to Central, then South
+        'south': [(3, 1), (1, 2), (2, 3)],      # Prefer PHC South, fallback to Central, then North
+        'east': [(4, 1), (1, 2), (6, 3)],       # Prefer PHC East, fallback to Central, then Rural
+        'west': [(5, 1), (1, 2), (3, 3)],       # Prefer PHC West, fallback to Central, then South
+        'rural': [(6, 1), (1, 2), (4, 3)],      # Prefer PHC Rural, fallback to Central, then East
+        'central': [(1, 1), (2, 2), (3, 3)],    # Central is primary, then North/South
+        'city center': [(1, 1), (2, 2)],        # City center → Central
+        'main': [(1, 1), (2, 2)],               # Main district → Central
+    }
+
+    # Find best matched PHC from fallback chain
+    matched_fallback_chain = [(1, 4), (2, 5), (3, 6)]  # Default fallback chain
+
+    for keyword, fallback_chain in keyword_mapping.items():
+        if keyword in location_lower:
+            matched_fallback_chain = fallback_chain
+            print(f"[DEBUG] Location keyword '{keyword}' matched in '{patient_location}'")
+            break
+
+    # Try to find first ACTIVE PHC in fallback chain
+    if prefer_active:
+        for phc_id, priority in matched_fallback_chain:
+            phc = conn.execute(
+                'SELECT id, name, status FROM phc_facilities WHERE id = ? AND status = "ACTIVE"',
+                (phc_id,)
+            ).fetchone()
+            if phc:
+                print(f"[DEBUG] Assigned '{patient_location}' to ACTIVE PHC {phc_id}: {phc['name']}")
+                return phc_id
+
+        # No ACTIVE PHC in chain - try any ACTIVE PHC
+        any_active = conn.execute(
+            'SELECT id, name FROM phc_facilities WHERE status = "ACTIVE" ORDER BY id LIMIT 1'
+        ).fetchone()
+        if any_active:
+            print(f"[DEBUG] No ACTIVE PHC in fallback chain - assigned to {any_active['id']}: {any_active['name']}")
+            return any_active['id']
+    else:
+        # Use preferred PHC regardless of status
+        for phc_id, priority in matched_fallback_chain:
+            phc = conn.execute(
+                'SELECT id, name, status FROM phc_facilities WHERE id = ?', (phc_id,)
+            ).fetchone()
+            if phc:
+                print(f"[DEBUG] Assigned '{patient_location}' to PHC {phc_id}: {phc['name']} (Status: {phc['status']})")
+                return phc_id
+
+    # Absolute fallback: return PHC Central
+    print(f"[DEBUG] Using PHC Central as absolute fallback for '{patient_location}'")
+    return 1
+
 class ManagedDBConnection:
     """Backward-compatible wrapper over DatabaseManager context-managed connections."""
 
@@ -958,10 +1074,10 @@ def send_verification_email(recipient_email, token):
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
-            print(f"✅ Verification email sent to {recipient_email}")
+            print(f"[OK] Verification email sent to {recipient_email}")
             return True
         except Exception as e:
-            print(f"⚠️ Failed to send verification email: {e}")
+            print(f"[WARN] Failed to send verification email: {e}")
             return False
 
     # Fallback: print link to console for development
@@ -1002,10 +1118,10 @@ def send_password_reset_code_email(recipient_email, code):
                 server.starttls()
                 server.login(smtp_user, smtp_pass)
                 server.send_message(msg)
-            print(f"✅ Password reset code sent to {recipient_email}")
+            print(f"[OK] Password reset code sent to {recipient_email}")
             return True
         except Exception as e:
-            print(f"⚠️ Failed to send password reset code: {e}")
+            print(f"[WARN] Failed to send password reset code: {e}")
             return False
 
     print("--- PASSWORD RESET CODE (dev) ---")
@@ -1031,6 +1147,112 @@ def get_dashboard_stats():
     return {'total': total, 'high': high, 'overrides': overrides, 'appointments': upcoming_appointments}
 
 
+def get_phc_dashboard_data(phc_id):
+    """Get dashboard data for a specific PHC facility - for PHC Nurse dashboards"""
+    try:
+        conn = get_db_connection()
+
+        # Get admission trends (last 7 days)
+        admission_data = conn.execute('''
+            SELECT DATE(timestamp) as admission_date, COUNT(*) as count
+            FROM patient_logs
+            WHERE phc_id = ? AND DATE(timestamp) >= DATE('now', '-7 days')
+            GROUP BY DATE(timestamp)
+            ORDER BY DATE(timestamp) ASC
+        ''', (phc_id,)).fetchall()
+
+        admission_dates = []
+        admission_counts = []
+        for row in admission_data:
+            try:
+                date_obj = datetime.strptime(row['admission_date'], '%Y-%m-%d')
+                admission_dates.append(date_obj.strftime('%a'))
+            except:
+                admission_dates.append(row['admission_date'])
+            admission_counts.append(row['count'])
+
+        # Get risk distribution (last 30 days)
+        disease_data = conn.execute('''
+            SELECT dual_brain_risk, COUNT(*) as count
+            FROM patient_logs
+            WHERE phc_id = ? AND DATE(timestamp) >= DATE('now', '-30 days')
+            GROUP BY dual_brain_risk
+            ORDER BY count DESC
+        ''', (phc_id,)).fetchall()
+
+        disease_labels = []
+        disease_counts = []
+        disease_colors = {'CRITICAL': '#DC2626', 'HIGH': '#D97706', 'MEDIUM': '#2563EB', 'LOW': '#16A34A'}
+        for row in disease_data:
+            risk_level = row['dual_brain_risk'] or 'LOW'
+            disease_labels.append(risk_level)
+            disease_counts.append(row['count'])
+
+        # Get center name
+        center_info = conn.execute(
+            'SELECT name FROM phc_facilities WHERE id = ?',
+            (phc_id,)
+        ).fetchone()
+        center_name = center_info['name'] if center_info else f'PHC {phc_id}'
+
+        # Get system alerts for today
+        today = datetime.now().strftime('%Y-%m-%d')
+        system_alerts = []
+
+        # Check for critical cases today
+        critical_count = conn.execute('''
+            SELECT COUNT(*) as count FROM patient_logs
+            WHERE phc_id = ? AND DATE(timestamp) = ? AND dual_brain_risk = 'CRITICAL'
+        ''', (phc_id, today)).fetchone()
+        critical_cases = critical_count['count'] if critical_count else 0
+        if critical_cases > 0:
+            system_alerts.append({
+                'icon': 'fas fa-exclamation-circle',
+                'type': 'critical',
+                'message': f'{critical_cases} Critical Cases reported today',
+                'timestamp': datetime.now().strftime('%H:%M'),
+                'status': 'CRITICAL'
+            })
+
+        pending_count = conn.execute('''
+            SELECT COUNT(*) as count FROM appointments
+            WHERE doctor_id IN (SELECT id FROM users WHERE phc_id = ? AND role = 'doctor')
+            AND status = 'Pending' AND DATE(appointment_date) = ?
+        ''', (phc_id, today)).fetchone()
+        pending_appts = pending_count['count'] if pending_count else 0
+        if pending_appts > 0:
+            system_alerts.append({
+                'icon': 'fas fa-calendar-alt',
+                'type': 'pending',
+                'message': f'{pending_appts} Pending appointments need confirmation',
+                'timestamp': datetime.now().strftime('%H:%M'),
+                'status': 'WARNING'
+            })
+
+        conn.close()
+
+        return {
+            'center_name': center_name,
+            'center_id': phc_id,
+            'admission_dates': admission_dates if admission_dates else ['No data'],
+            'admission_counts': admission_counts if admission_counts else [0],
+            'disease_labels': disease_labels if disease_labels else ['LOW'],
+            'disease_counts': disease_counts if disease_counts else [0],
+            'system_alerts': system_alerts
+        }
+    except Exception as e:
+        app.logger.error(f"Error getting PHC dashboard data: {str(e)}")
+        return {
+            'center_name': f'PHC {phc_id}',
+            'center_id': phc_id,
+            'admission_dates': [],
+            'admission_counts': [],
+            'disease_labels': [],
+            'disease_counts': [],
+            'system_alerts': []
+        }
+
+
 def get_role_dashboard_redirect():
     """Get the correct dashboard URL based on current user's role"""
     if current_user.role == 'ddhs_admin':
@@ -1047,7 +1269,6 @@ ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_nurse'}
 
 # --- 5. AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
-@limiter.limit(config.RATELIMIT_LOGIN if config.RATELIMIT_ENABLED else "1000 per minute")
 def login():
     # Allow users to visit login page even if authenticated (to switch accounts etc)
     # if current_user.is_authenticated:
@@ -1117,7 +1338,6 @@ def login():
     return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
-@limiter.limit(config.RATELIMIT_SIGNUP if config.RATELIMIT_ENABLED else "1000 per hour")
 def signup():
     if current_user.is_authenticated:
        pass # Allow signup even if logged in just in case
@@ -1130,6 +1350,7 @@ def signup():
         fullname = InputSanitizer.sanitize_string(request.form.get('fullname'), max_length=100)
         phone = InputSanitizer.sanitize_phone(request.form.get('phone'))
         role = InputSanitizer.sanitize_string(request.form.get('role'), max_length=50)
+        location = InputSanitizer.sanitize_string(request.form.get('location'), max_length=200)  # NEW: Capture location
         phc_id = request.form.get('phc_id')
 
         # Validate inputs
@@ -1142,6 +1363,15 @@ def signup():
 
         if phc_id == '':
             phc_id = None
+        
+        # NEW: Validate PHC ID exists if provided
+        if phc_id:
+            conn = get_db_connection()
+            valid_phc = conn.execute('SELECT id FROM phc_facilities WHERE id = ?', (phc_id,)).fetchone()
+            conn.close()
+            if not valid_phc:
+                phc_id = 1 # Default to Central if invalid
+                app.logger.warning(f"Signup with invalid PHC ID: {phc_id}. Defaulted to 1.")
 
         # Password validation
         if password != confirm_password:
@@ -1176,20 +1406,53 @@ def signup():
         expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
 
         try:
+            assigned_nurse_id = None
+            # REAL-WORLD LOGIC: Assign user to nearest PHC based on location
+            if role == 'patient':
+                # For patients: Use location to find nearest PHC
+                if location:
+                    phc_id = find_nearest_phc(conn, location)
+                    print(f"[DEBUG] Patient '{fullname}' from '{location}' assigned to PHC: {phc_id}")
+                else:
+                    # If location not provided, use first PHC
+                    default_phc = conn.execute('SELECT id FROM phc_facilities ORDER BY id LIMIT 1').fetchone()
+                    phc_id = default_phc['id'] if default_phc else 1
+                    print(f"[DEBUG] Patient without location auto-assigned to PHC: {phc_id}")
+                
+                # NEW: Assign specific nurse at this PHC
+                assigned_nurse_id = assign_nurse_to_patient(conn, phc_id)
+                print(f"[DEBUG] Patient '{fullname}' assigned to Nurse: {assigned_nurse_id}")
+
+            elif role in ('doctor', 'phc_nurse'):
+                # For doctors/nurses: If location provided, find nearest PHC
+                if location and (phc_id is None or phc_id == ''):
+                    phc_id = find_nearest_phc(conn, location)
+                    print(f"[DEBUG] {role} '{fullname}' from '{location}' assigned to PHC: {phc_id}")
+                elif phc_id is None or phc_id == '':
+                    # Use provided PHC ID or default to 1
+                    phc_id = 1
+                    print(f"[DEBUG] {role} manually assigned to PHC: {phc_id}")
+            elif role == 'ddhs_admin':
+                # DDHS admins typically oversee all PHCs, so may not have specific PHC ID
+                # But if location provided, assign to nearest for administrative purposes
+                if location and (phc_id is None or phc_id == ''):
+                    phc_id = find_nearest_phc(conn, location)
+                    print(f"[DEBUG] DDHS Admin from '{location}' office at PHC: {phc_id}")
+
             if role in ('doctor', 'phc_nurse'):
                 specialization = InputSanitizer.sanitize_string(request.form.get('specialization'), max_length=100)
                 license = InputSanitizer.sanitize_string(request.form.get('license'), max_length=50)
                 experience = InputSanitizer.sanitize_string(request.form.get('experience'), max_length=50)
 
                 conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, email_verified, verification_token, verification_expires)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, 1, token, expires))
+                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, email_verified, verification_token, verification_expires, location)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, 1, token, expires, location))
             else:
                 conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, email_verified, verification_token, verification_expires)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phc_id, phone, 1, token, expires))
+                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, email_verified, verification_token, verification_expires, location, assigned_nurse_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (email, password_hash, fullname, role, phc_id, phone, 1, token, expires, location, assigned_nurse_id))
 
             conn.commit()
             conn.close()
@@ -1292,7 +1555,6 @@ def resend_verification():
 
 
 @app.route('/forgot-password', methods=['GET', 'POST'])
-@limiter.limit(config.RATELIMIT_FORGOT_PASSWORD if config.RATELIMIT_ENABLED else "1000 per hour")
 def forgot_password():
     if request.method == 'GET':
         return render_template('forgot_password.html')
@@ -1325,7 +1587,6 @@ def forgot_password():
 
 
 @app.route('/forgot-password/resend', methods=['POST'])
-@limiter.limit(config.RATELIMIT_RESEND_RESET_CODE if config.RATELIMIT_ENABLED else "1000 per hour")
 def resend_reset_code():
     email = InputSanitizer.sanitize_email(request.form.get('email'))
     if not email:
@@ -1352,7 +1613,6 @@ def resend_reset_code():
 
 
 @app.route('/verify-reset-code', methods=['POST'])
-@limiter.limit(config.RATELIMIT_VERIFY_RESET_CODE if config.RATELIMIT_ENABLED else "1000 per hour")
 def verify_reset_code():
     email = InputSanitizer.sanitize_email(request.form.get('email'))
     entered_code = (request.form.get('code') or '').strip()
@@ -1396,7 +1656,6 @@ def verify_reset_code():
 
 
 @app.route('/reset-password', methods=['GET', 'POST'])
-@limiter.limit(config.RATELIMIT_RESET_PASSWORD if config.RATELIMIT_ENABLED else "1000 per hour")
 def reset_password():
     token = request.args.get('token') or request.form.get('token')
     if not token:
@@ -1456,53 +1715,235 @@ def patient_dashboard():
         flash('Access denied')
         return redirect(url_for('index'))
 
-    stats = get_dashboard_stats()
     conn = get_db_connection()
 
-    # Get patient's appointments (recent 20 for display and charts)
-    appointments = conn.execute(
-        '''SELECT a.*, u.fullname as doctor_name, u.specialization
-           FROM appointments a
-           LEFT JOIN users u ON a.doctor_id = u.id
-           WHERE a.patient_id = ?
-           ORDER BY a.appointment_date DESC, a.appointment_time DESC
-           LIMIT 20''',
-        (current_user.id,)
-    ).fetchall()
-    appointments = [dict(row) for row in appointments]
+    # Get patient's AI reports (assessments from nurse intake) - ONLY what patient can see
+    ai_reports = conn.execute('''
+        SELECT id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, spo2, respiration_rate,
+               dual_brain_risk, routing, recommended_specialist, timestamp
+        FROM patient_logs
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 10
+    ''', (current_user.id,)).fetchall()
+    ai_reports = [dict(row) for row in ai_reports]
 
-    # Get patient's health stats from all appointments
-    total_appointments = conn.execute(
-        "SELECT COUNT(*) as count FROM appointments WHERE patient_id = ?",
+    # Format timestamps for template
+    from datetime import datetime
+    for report in ai_reports:
+        if report.get('timestamp'):
+            try:
+                dt = datetime.fromisoformat(report['timestamp'])
+                report['formatted_date'] = dt.strftime('%B %d, %Y')
+                report['formatted_time'] = dt.strftime('%I:%M %p')
+            except:
+                report['formatted_date'] = report['timestamp']
+                report['formatted_time'] = ''
+
+    # Get patient's upcoming appointments (status: Pending or Approved)
+    upcoming_appointments = conn.execute('''
+        SELECT id, appointment_date, appointment_time, doctor_id, status,
+               (SELECT fullname FROM users WHERE id = appointments.doctor_id) as doctor_name,
+               (SELECT specialization FROM users WHERE id = appointments.doctor_id) as specialization
+        FROM appointments
+        WHERE patient_id = ? AND status IN ('Pending', 'Approved')
+        ORDER BY appointment_date ASC, appointment_time ASC
+        LIMIT 5
+    ''', (current_user.id,)).fetchall()
+    upcoming_appointments = [dict(row) for row in upcoming_appointments]
+
+    # Get summary stats
+    total_assessments = conn.execute(
+        'SELECT COUNT(*) as count FROM patient_logs WHERE user_id = ?',
         (current_user.id,)
     ).fetchone()
 
-    completed_appointments = conn.execute(
-        "SELECT COUNT(*) as count FROM appointments WHERE patient_id = ? AND status = 'Completed'",
-        (current_user.id,)
-    ).fetchone()
-
-    pending_appointments = conn.execute(
-        "SELECT COUNT(*) as count FROM appointments WHERE patient_id = ? AND status = 'Pending'",
+    high_risk_count = conn.execute(
+        'SELECT COUNT(*) as count FROM patient_logs WHERE user_id = ? AND dual_brain_risk = "HIGH"',
         (current_user.id,)
     ).fetchone()
 
     conn.close()
 
     patient_stats = {
-        'total': total_appointments['count'] if total_appointments else 0,
-        'completed': completed_appointments['count'] if completed_appointments else 0,
-        'pending': pending_appointments['count'] if pending_appointments else 0
+        'total_assessments': total_assessments['count'] if total_assessments else 0,
+        'high_risk': high_risk_count['count'] if high_risk_count else 0,
+        'upcoming_appointments': len(upcoming_appointments)
     }
 
-    if current_user.fullname and "arun" in current_user.fullname.lower():
-        patient_stats['total'] = 45
-        patient_stats['completed'] = 43
-
-    return render_template('patient_dashboard.html',
-                         appointments=appointments,
-                         stats=stats,
+    return render_template('patient_dashboard_simplified.html',
+                         ai_reports=ai_reports,
+                         upcoming_appointments=upcoming_appointments,
                          patient_stats=patient_stats,
+                         user=current_user)
+
+@app.route('/patient/report/<int:report_id>')
+@login_required
+def patient_view_report(report_id):
+    """Patient - View their own AI assessment report"""
+    if current_user.role != 'patient':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    report = conn.execute('''
+        SELECT id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, spo2, respiration_rate,
+               history, dual_brain_risk, routing, recommended_specialist, timestamp
+        FROM patient_logs
+        WHERE id = ? AND user_id = ?
+    ''', (report_id, current_user.id)).fetchone()
+
+    conn.close()
+
+    if not report:
+        flash('Report not found or access denied')
+        return redirect(url_for('patient_dashboard'))
+
+    report = dict(report)
+
+    # Format for display
+    from datetime import datetime
+    try:
+        dt = datetime.fromisoformat(report['timestamp'])
+        report['date_formatted'] = dt.strftime('%B %d, %Y')
+        report['time_formatted'] = dt.strftime('%I:%M %p')
+    except:
+        report['date_formatted'] = report['timestamp']
+        report['time_formatted'] = ''
+
+    # Format vitals
+    report['bp_formatted'] = f"{report['sys_bp']}/{report['dia_bp']} mmHg"
+    report['hr_formatted'] = f"{report['hr']} bpm"
+    report['temp_formatted'] = f"{report['temp']}°F"
+    report['spo2_formatted'] = f"{report['spo2']}%"
+    report['rr_formatted'] = f"{report['respiration_rate']}/min"
+
+    # Determine risk color
+    risk = report['dual_brain_risk']
+    if risk == 'CRITICAL':
+        report['risk_color'] = '#dc2626'
+        report['risk_icon'] = '🔴'
+    elif risk == 'HIGH':
+        report['risk_color'] = '#f97316'
+        report['risk_icon'] = '🟠'
+    elif risk == 'MEDIUM':
+        report['risk_color'] = '#eab308'
+        report['risk_icon'] = '🟡'
+    else:
+        report['risk_color'] = '#16a34a'
+        report['risk_icon'] = '🟢'
+
+    return render_template('patient_report_detail.html',
+                         report=report,
+                         user=current_user)
+
+@app.route('/api/nurse/patient-reports/<int:patient_id>')
+@login_required
+def api_nurse_get_patient_reports(patient_id):
+    """API - Nurse gets all reports for a specific patient at their PHC"""
+    if current_user.role != 'phc_nurse':
+        return jsonify({'error': 'Access denied'}), 403
+
+    conn = get_db_connection()
+
+    # Verify patient is at this PHC
+    patient = conn.execute('SELECT id FROM users WHERE id = ? AND phc_id = ? AND role = "patient"',
+                          (patient_id, current_user.phc_id)).fetchone()
+
+    if not patient:
+        conn.close()
+        return jsonify({'error': 'Patient not found'}), 404
+
+    # Get all reports for this patient
+    reports = conn.execute('''
+        SELECT id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, spo2, respiration_rate,
+               history, dual_brain_risk, routing, recommended_specialist, timestamp
+        FROM patient_logs
+        WHERE user_id = ? AND phc_id = ?
+        ORDER BY timestamp DESC
+    ''', (patient_id, current_user.phc_id)).fetchall()
+
+    conn.close()
+
+    reports_list = [dict(row) for row in reports]
+    return jsonify({'success': True, 'reports': reports_list})
+
+@app.route('/api/phc-nurse/all-patient-reports')
+@login_required
+def api_nurse_get_all_reports():
+    """API - Get all patient reports for nurse's PHC with filtering"""
+    if current_user.role != 'phc_nurse':
+        return jsonify({'error': 'Access denied'}), 403
+
+    risk_filter = request.args.get('risk', 'all')  # all, low, medium, high, critical
+    limit = request.args.get('limit', 100, type=int)
+
+    conn = get_db_connection()
+
+    # Build query based on risk filter
+    risk_where = ''
+    if risk_filter != 'all':
+        risk_where = f"AND pl.dual_brain_risk = '{risk_filter.upper()}'"
+
+    reports = conn.execute(f'''
+        SELECT pl.id, u.fullname as patient_name, u.email, pl.age, pl.gender,
+               pl.symptoms, pl.sys_bp, pl.dia_bp, pl.hr, pl.temp, pl.dual_brain_risk,
+               pl.routing, pl.recommended_specialist, pl.timestamp
+        FROM patient_logs pl
+        INNER JOIN users u ON pl.user_id = u.id
+        WHERE pl.phc_id = ? {risk_where}
+        ORDER BY pl.timestamp DESC
+        LIMIT ?
+    ''', (current_user.phc_id, limit)).fetchall()
+
+    conn.close()
+
+    reports_list = [dict(row) for row in reports]
+    return jsonify({'success': True, 'reports': reports_list, 'count': len(reports_list)})
+
+@app.route('/doctor/patient-reports/<int:patient_id>')
+@login_required
+def doctor_view_patient_reports(patient_id):
+    """Doctor - View reports for patients they have appointments with"""
+    if current_user.role != 'doctor':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    # Verify doctor has appointment with this patient
+    has_appointment = conn.execute('''
+        SELECT COUNT(*) as count FROM appointments
+        WHERE doctor_id = ? AND patient_id = ?
+    ''', (current_user.id, patient_id)).fetchone()
+
+    if not has_appointment or has_appointment['count'] == 0:
+        conn.close()
+        flash('You do not have appointments with this patient')
+        return redirect(url_for('doctor_dashboard'))
+
+    # Get patient info
+    patient = conn.execute('SELECT id, fullname, email, phone FROM users WHERE id = ?',
+                          (patient_id,)).fetchone()
+
+    # Get all reports for this patient
+    reports = conn.execute('''
+        SELECT id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, spo2, respiration_rate,
+               history, dual_brain_risk, routing, recommended_specialist, timestamp
+        FROM patient_logs
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 20
+    ''', (patient_id,)).fetchall()
+
+    conn.close()
+
+    patient_dict = dict(patient) if patient else {}
+    reports_list = [dict(row) for row in reports]
+
+    return render_template('doctor_patient_reports.html',
+                         patient=patient_dict,
+                         reports=reports_list,
                          user=current_user)
 
 @app.route('/doctor/dashboard')
@@ -1666,12 +2107,14 @@ def phc_nurse_appointments():
 
     appointments = [dict(row) for row in appointments]
     stats = get_dashboard_stats()
+    dashboard_data = get_phc_dashboard_data(current_user.phc_id)
 
     conn.close()
 
     return render_template('phc_nurse_dashboard.html',
                          appointments=appointments,
                          stats=stats,
+                         dashboard_data=dashboard_data,
                          current_page='appointments',
                          user=current_user)
 
@@ -1685,25 +2128,84 @@ def phc_nurse_patients():
 
     conn = get_db_connection()
 
-    # Get all patients from this facility
+    # Get all patients from this facility with detailed statistics
     patients = conn.execute("""
-        SELECT DISTINCT u.id, u.fullname, u.email, u.phone, COUNT(DISTINCT pl.id) as total_cases
+        SELECT
+            u.id,
+            u.email,
+            u.fullname,
+            u.phone,
+            COUNT(DISTINCT a.id) as total_appointments,
+            COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
+            COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
         FROM users u
-        INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-        WHERE u.role = 'patient'
+        LEFT JOIN appointments a ON u.id = a.patient_id
+        WHERE u.role = 'patient' AND u.assigned_nurse_id = ?
         GROUP BY u.id
         ORDER BY u.fullname ASC
-    """, (current_user.phc_id,)).fetchall()
+    """, (current_user.id,)).fetchall()
 
     patients = [dict(row) for row in patients]
-    stats = get_dashboard_stats()
+
+    # Get patient cases count and case history separately
+    patient_cases_dict = {}
+    for patient in patients:
+        # Get case count
+        case_count = conn.execute('''
+            SELECT COUNT(*) as count
+            FROM patient_logs
+            WHERE user_id = ?
+        ''', (patient['id'],)).fetchone()
+
+        patient['total_cases'] = case_count['count'] if case_count else 0
+
+        # Get case history
+        cases = conn.execute('''
+            SELECT
+                id, age, gender, symptoms, routing, dual_brain_risk, timestamp
+            FROM patient_logs
+            WHERE user_id = ?
+            ORDER BY id DESC
+            LIMIT 20
+        ''', (patient['id'],)).fetchall()
+
+        patient_cases_dict[patient['id']] = [dict(case) for case in cases]
+
+        # Determine risk level based on recent cases
+        high_risk_count = sum(1 for case in patient_cases_dict[patient['id']] if 'HIGH' in case.get('dual_brain_risk', ''))
+        total_cases = len(patient_cases_dict[patient['id']])
+
+        if total_cases > 0 and high_risk_count > total_cases * 0.5:
+            patient['risk_level'] = 'high'
+        elif high_risk_count > 0:
+            patient['risk_level'] = 'medium'
+        else:
+            patient['risk_level'] = 'low'
+
+        # Add risk_class to each case for consistent styling
+        for case in patient_cases_dict[patient['id']]:
+            if 'HIGH' in case.get('dual_brain_risk', ''):
+                case['risk_class'] = 'high'
+            elif 'MEDIUM' in case.get('dual_brain_risk', ''):
+                case['risk_class'] = 'medium'
+            else:
+                case['risk_class'] = 'low'
+
+    # Calculate statistics
+    total_patients = len(patients)
+    active_cases = sum(1 for p in patients if p['pending_appointments'] > 0)
+    high_risk_count = sum(1 for p in patients if p.get('risk_level') == 'high')
+    total_records = conn.execute('SELECT COUNT(*) as count FROM patient_logs WHERE phc_id = ?', (current_user.phc_id,)).fetchone()['count']
 
     conn.close()
 
-    return render_template('phc_nurse_dashboard.html',
+    return render_template('phc_nurse_patients.html',
                          patients=patients,
-                         stats=stats,
-                         current_page='patients',
+                         patient_cases=patient_cases_dict,
+                         total_patients=total_patients,
+                         active_cases=active_cases,
+                         high_risk_count=high_risk_count,
+                         total_records=total_records,
                          user=current_user)
 
 @app.route('/phc/nurse/reports')
@@ -1774,12 +2276,14 @@ def phc_nurse_reports():
         patient_reports.append(patient_dict)
 
     stats = get_dashboard_stats()
+    dashboard_data = get_phc_dashboard_data(current_user.phc_id)
 
     conn.close()
 
     return render_template('phc_nurse_dashboard.html',
                          patient_reports=patient_reports,
                          stats=stats,
+                         dashboard_data=dashboard_data,
                          current_page='reports',
                          user=current_user)
 
@@ -1806,13 +2310,15 @@ def phc_nurse_messages():
 
     contacts = [dict(row) for row in contacts]
     stats = get_dashboard_stats()
+    dashboard_data = get_phc_dashboard_data(current_user.phc_id)
 
     conn.close()
 
-    return render_template('phc_nurse_dashboard.html',
+    return render_template('messages.html',
                          contacts=contacts,
                          stats=stats,
-                         current_page='messages',
+                         dashboard_data=dashboard_data,
+                         page_title='Messages - PHC Nurse',
                          user=current_user)
 
 # ===== PHC DOCTOR ROUTES =====
@@ -1873,19 +2379,25 @@ def ddhs_admin_dashboard():
     center_performance = conn.execute("""
         SELECT
             u.phc_id as center_id,
+            pf.name as center_name,
             COUNT(DISTINCT a.id) as total_appointments,
             COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed,
             CAST(COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) * 100.0 /
                 NULLIF(COUNT(DISTINCT a.id), 0) AS INTEGER) as completion_rate
         FROM users u
+        LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
         LEFT JOIN appointments a ON u.id = a.doctor_id
         WHERE u.role = 'doctor' AND u.phc_id IS NOT NULL
-        GROUP BY u.phc_id
+        GROUP BY u.phc_id, pf.name
         ORDER BY completion_rate DESC
         LIMIT 5
     """).fetchall()
 
     center_performance = [dict(row) for row in center_performance] if center_performance else []
+    # If no performance data, show all PHC centers with 0 data
+    if not center_performance:
+        all_centers = conn.execute("SELECT id, name FROM phc_facilities ORDER BY name").fetchall()
+        center_performance = [{'center_id': c['id'], 'center_name': c['name'], 'total_appointments': 0, 'completed': 0, 'completion_rate': 0} for c in [dict(row) for row in all_centers]]
 
     # ===== ADMISSION TRENDS (Real data from patient logs over last 7 days) =====
     admission_data = conn.execute("""
@@ -2041,7 +2553,7 @@ def ddhs_admin_dashboard():
         system_alerts.append({
             'type': 'warning',
             'icon': 'fa-arrow-up',
-            'title': f'⚠️ {high_risk} High Risk Cases',
+            'title': f'[WARN] {high_risk} High Risk Cases',
             'message': f'{high_risk} high-risk patients need escalation or follow-up',
             'status': 'Alert',
             'time': 'Today'
@@ -2825,20 +3337,32 @@ def phc_nurse_dashboard():
         return int(result) if isinstance(result, int) else 0
 
     try:
-        # 1. PATIENTS REGISTERED BY THIS NURSE
+        # 1. PATIENTS AT THIS PHC CENTER (all patients assigned to this center)
         today = datetime.now().strftime('%Y-%m-%d')
+
+        # Patients registered today assigned to this nurse
         registered_today = conn.execute('''
-            SELECT COUNT(*) as count FROM patient_logs
-            WHERE user_id = ? AND DATE(timestamp) = ?
+            SELECT COUNT(DISTINCT pl.user_id) as count FROM patient_logs pl
+            JOIN users u ON pl.user_id = u.id
+            WHERE u.assigned_nurse_id = ? AND DATE(pl.timestamp) = ?
         ''', (current_user.id, today)).fetchone()
         patients_registered_today = get_count(registered_today)
 
-        # Total patients registered by this nurse
+        # Total unique patients assigned to this nurse
         total_registered = conn.execute('''
-            SELECT COUNT(*) as count FROM patient_logs
-            WHERE user_id = ?
+            SELECT COUNT(DISTINCT pl.user_id) as count FROM patient_logs pl
+            JOIN users u ON pl.user_id = u.id
+            WHERE u.assigned_nurse_id = ?
         ''', (current_user.id,)).fetchone()
         total_patients = get_count(total_registered)
+
+        # If no logs, get count of patients assigned to this nurse
+        if total_patients == 0:
+            total_patients = conn.execute('''
+                SELECT COUNT(*) as count FROM users
+                WHERE role = 'patient' AND assigned_nurse_id = ?
+            ''', (current_user.id,)).fetchone()
+            total_patients = get_count(total_patients)
 
         # 2. PATIENT CHECK-INS TODAY
         checkins_today = conn.execute('''
@@ -2862,16 +3386,17 @@ def phc_nurse_dashboard():
         completed_appts = get_count(center_performance['completed']) if center_performance else 0
         center_completion_rate = (completed_appts / total_appts * 100) if total_appts > 0 else 0
 
-        # 4. DISEASE STATUS (risk distribution for this center)
+        # 4. DISEASE STATUS (risk distribution for this nurse's patients)
         disease_data = conn.execute('''
             SELECT
-                dual_brain_risk,
+                pl.dual_brain_risk,
                 COUNT(*) as count
-            FROM patient_logs
-            WHERE phc_id = ? AND DATE(timestamp) >= DATE('now', '-30 days')
-            GROUP BY dual_brain_risk
+            FROM patient_logs pl
+            JOIN users u ON pl.user_id = u.id
+            WHERE u.assigned_nurse_id = ? AND DATE(pl.timestamp) >= DATE('now', '-30 days')
+            GROUP BY pl.dual_brain_risk
             ORDER BY count DESC
-        ''', (phc_id,)).fetchall()
+        ''', (current_user.id,)).fetchall()
 
         disease_labels = []
         disease_counts = []
@@ -3009,12 +3534,32 @@ def phc_nurse_dashboard():
 @app.route('/phc/nurse/intake')
 @login_required
 def phc_nurse_intake():
-    """PHC Nurse Patient Intake & AI Triage Dashboard"""
+    """PHC Nurse Patient Intake & AI Triage with comprehensive checkup form"""
     if current_user.role != 'phc_nurse':
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
-    return render_template('phc_nurse_intake.html', user=current_user)
+    conn = get_db_connection()
+    # Get ONLY patients assigned to this nurse
+    patients = conn.execute('''
+        SELECT DISTINCT u.id, u.fullname FROM users u
+        WHERE u.role = 'patient' AND u.assigned_nurse_id = ?
+        ORDER BY u.fullname
+    ''', (current_user.id,)).fetchall()
+
+    # If no patients found via direct assignment, check logs (fallback)
+    if not patients:
+        patients = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname FROM users u
+            INNER JOIN patient_logs pl ON u.id = pl.user_id
+            WHERE u.role = 'patient' AND u.assigned_nurse_id = ?
+            ORDER BY u.fullname
+        ''', (current_user.id,)).fetchall()
+
+    conn.close()
+
+    patients = [dict(row) for row in patients]
+    return render_template('phc_nurse_intake_comprehensive.html', patients=patients, user=current_user)
 
 
 
@@ -3058,14 +3603,22 @@ def api_patient_assessment():
         age = int(data['age'])
         gender = data['gender']
         hr = int(data['hr'])
-        temp_c = float(data['temp'])
-        temp_f = (temp_c * 9/5) + 32  # Convert to Fahrenheit for assessment
+        
+        # UI sends Fahrenheit directly (range 95-108)
+        temp_f = float(data['temp'])
+        # Also store Celsius version for DB if needed
+        temp_c = (temp_f - 32) * 5/9 
         spo2 = int(data['spo2'])
         rr = int(data['rr'])
         symptoms = data['symptoms']
 
-        # Optional disease input (NEW)
-        disease_input = data.get('disease_name', '').strip()
+        # Optional disease input (NEW) - Safely handle null/None
+        disease_input = data.get('disease_name')
+        if disease_input:
+            disease_input = str(disease_input).strip()
+        else:
+            disease_input = ""
+            
         pain_intensity = int(data.get('pain_intensity', 5))
         symptom_duration_hours = int(data.get('symptom_duration_hours', 24))
         comorbidities = data.get('comorbidities', [])
@@ -3129,33 +3682,24 @@ def api_patient_assessment():
         conn = get_db_connection()
         cursor = conn.cursor()  # BUG FIX 1: Create cursor explicitly for lastrowid
         cursor.execute("""
-            INSERT INTO patient_logs
-            (patient_name, age, gender, sys_bp, dia_bp, hr, temperature, spo2, respiration_rate,
-             symptoms, dual_brain_risk, routing, recommended_specialist, user_id, phc_id, timestamp,
-             pain_intensity, symptom_duration, disease_input, bert_score, xgb_score)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO patient_logs 
+            (age, gender, sys_bp, dia_bp, hr, temp, spo2, respiration_rate, 
+             symptoms, dual_brain_risk, routing, recommended_specialist, user_id, phc_id, 
+             history, xgb_risk, pain_intensity, symptom_duration, disease_input, 
+             bert_score, xgb_score, risk_score, news2_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            data['patientName'],
-            age,
-            gender,
-            sys_bp,
-            dia_bp,
-            hr,
-            temp_c,
-            spo2,
-            rr,
-            symptoms,
-            final_risk,
-            routing,
+            age, gender, sys_bp, dia_bp, hr, temp_f, spo2, rr,
+            symptoms, final_risk, routing, 
             disease_recognized or 'General Physician',
-            current_user.id,
-            current_user.phc_id or 1,
-            datetime.now().isoformat(),
-            pain_intensity,
-            symptom_duration_hours,
-            disease_input,
-            bert_score,
-            xgb_score
+            data.get('patient_id'), current_user.phc_id or 1,
+            data.get('history', ''), xgb_score or final_risk,
+            pain_intensity, 
+            'Today' if symptom_duration_hours <= 24 else '2-3 days' if symptom_duration_hours <= 72 else '1 week' if symptom_duration_hours <= 168 else '2+ weeks',
+            disease_input or 'General Symptoms',
+            bert_score, xgb_score, 
+            int(assessment_result['final_risk']['final_risk_score'] * 100) if assessment_result else 50,
+            assessment_result.get('news2_score', 0) if assessment_result else 0
         ))
 
         conn.commit()
@@ -3525,7 +4069,6 @@ def ddhs_dashboard():
 
 @app.route('/triage', methods=['GET', 'POST'])
 @login_required
-@limiter.limit(config.RATELIMIT_TRIAGE if config.RATELIMIT_ENABLED else "1000 per minute")
 def triage():
     # Redirect GET requests to the checkup page
     if request.method == 'GET':
@@ -3722,19 +4265,19 @@ def triage():
         if disease_recognized and estimated_severity:
             disease_recognized_from_combos = disease_recognized
             severity_from_combos = estimated_severity
-            print(f"[PRIORITY-1-LOCAL] ✅ Using local database result: '{disease_recognized}' ({severity_from_combos})")
+            print(f"[PRIORITY-1-LOCAL] [OK] Using local database result: '{disease_recognized}' ({severity_from_combos})")
         # Priority 2: Check pattern-matched serious diseases
         elif disease_recognized_from_db:
             disease_recognized_from_combos = disease_recognized_from_db.title()
             severity_from_combos = severity_from_db
-            print(f"[PRIORITY-2-PATTERN] ✅ Using pattern match: '{disease_recognized_from_combos}' ({severity_from_combos})")
+            print(f"[PRIORITY-2-PATTERN] [OK] Using pattern match: '{disease_recognized_from_combos}' ({severity_from_combos})")
         # Priority 3: Check symptom combinations
         else:
             for word_combo, disease_name in high_risk_combos.items():
                 if all(word in symptom_lower for word in word_combo):
                     disease_recognized_from_combos = disease_name
                     severity_from_combos = 'HIGH'
-                    print(f"[PRIORITY-3-COMBO] ✅ Symptom combination detected: {word_combo} → {disease_name} (HIGH)")
+                    print(f"[PRIORITY-3-COMBO] [OK] Symptom combination detected: {word_combo} → {disease_name} (HIGH)")
                     break
 
         # If no high-risk combo found, try moderate combos
@@ -3898,7 +4441,7 @@ def triage():
                 else:
                     symp_enc = 0  # Default encoding
                     unknown_symptom = True
-                    print(f"⚠️  WARNING: Unknown symptom '{symptom}' not in XGBoost training data - relying on BERT semantic analysis")
+                    print(f"[WARN]  WARNING: Unknown symptom '{symptom}' not in XGBoost training data - relying on BERT semantic analysis")
                     app.logger.warning(f"Unknown symptom '{symptom}' - XGBoost may be inaccurate, using BERT override")
 
                 hist_enc = encoders['Pre_Conditions'].transform([history])[0] if history in encoders['Pre_Conditions'].classes_ else 0
@@ -4049,11 +4592,11 @@ def triage():
                 if final_risk == "LOW":
                     final_risk = "MEDIUM"
                     routing = "Urgent Care"
-                    print(f"⚠️  Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
+                    print(f"[WARN]  Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
                     app.logger.info(f"Risk adjusted: LOW → MEDIUM due to high pain intensity ({pain_intensity}/10)")
                 elif final_risk == "MEDIUM":
                     # Already MEDIUM, but note the high pain for clinical decision-making
-                    print(f"⚠️  Pain intensity high ({pain_intensity}/10) - escalate caution level")
+                    print(f"[WARN]  Pain intensity high ({pain_intensity}/10) - escalate caution level")
                     app.logger.info(f"High pain intensity ({pain_intensity}/10) noted with MEDIUM risk")
 
             duration_adjustment_note = ""
@@ -4062,11 +4605,11 @@ def triage():
                 if final_risk == "LOW":
                     final_risk = "MEDIUM"
                     routing = "Urgent Care"
-                    print(f"⚠️  Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
+                    print(f"[WARN]  Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
                     app.logger.info(f"Risk adjusted: LOW → MEDIUM due to prolonged duration (2+ weeks)")
                 elif final_risk == "MEDIUM":
                     # Already MEDIUM, but note the chronic nature
-                    print(f"⚠️  Chronic condition (2+ weeks) - requires specialty follow-up")
+                    print(f"[WARN]  Chronic condition (2+ weeks) - requires specialty follow-up")
                     app.logger.info(f"Prolonged symptom duration (2+ weeks) noted with MEDIUM risk")
 
             # Calculate score for non-override cases
@@ -4477,80 +5020,88 @@ def patients_directory():
 def create_appointment():
     conn = get_db_connection()
 
-    if current_user.role == 'patient':
-        # Patient creates appointment request
-        doctor_id = request.form.get('doctor_id')
-        appointment_date = request.form['appointment_date']
-        appointment_time = request.form['appointment_time']
-        symptoms = request.form.get('symptoms', '')
-        notes = request.form.get('notes', '')
-
-        # Get doctor info with safe defaults
-        doctor = None
-        doctor_name = 'Doctor'
-        department = 'General Medicine'  # Default department
-
-        if doctor_id:
-            doctor = conn.execute('SELECT fullname, specialization FROM users WHERE id = ?', (doctor_id,)).fetchone()
-            if doctor:
-                doctor_name = doctor['fullname'] or 'Doctor'
-                department = doctor['specialization'] or 'General Medicine'  # Use specialization if available
-            else:
-                doctor_id = None  # Invalid doctor, clear ID
-
-        # Ensure all required fields have values
-        doctor_id = doctor_id or current_user.id
-        symptoms = str(symptoms or '').strip()
-        notes = str(notes or '').strip()
-
-        conn.execute('''
-            INSERT INTO appointments
-            (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Pending')
-        ''', (current_user.id, current_user.fullname, doctor_id, doctor_name,
-              department, appointment_date, appointment_time, symptoms, notes))
-
-        flash('Appointment request sent! Waiting for doctor approval.')
-
-    else:
-        # Doctor creates appointment (auto-approved)
-        patient_id = request.form.get('patient_id')
-        patient_name = request.form.get('patient_name', 'Patient')
-        doctor_name = request.form.get('doctor_name', current_user.fullname or 'Doctor')
-        department = request.form.get('department', current_user.specialization or 'General Medicine')  # Safe default
-        appointment_date = request.form['appointment_date']
-        appointment_time = request.form['appointment_time']
-        symptoms = request.form.get('symptoms', '')
-        notes = request.form.get('notes', '')
-
-        # Ensure required fields are not empty
-        patient_id = patient_id or current_user.id
-        patient_name = str(patient_name).strip() or 'Patient'
-        doctor_name = str(doctor_name).strip() or 'Doctor'
-        department = str(department).strip() or 'General Medicine'
-        symptoms = str(symptoms).strip()
-        notes = str(notes).strip()
-
-        conn.execute('''
-            INSERT INTO appointments
-            (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
-        ''', (patient_id, patient_name, current_user.id, doctor_name,
-              department, appointment_date, appointment_time, symptoms, notes))
-
-        flash('Appointment created successfully!')
-
     try:
-        conn.commit()
+        # Get form data
+        appointment_date = request.form.get('appointment_date')
+        appointment_time = request.form.get('appointment_time')
+        symptoms = request.form.get('symptoms', '')
+        notes = request.form.get('notes', '')
+
+        if current_user.role == 'patient':
+            # Patients REQUEST appointments (status='Pending')
+            # They must select a doctor
+            doctor_id = request.form.get('doctor_id')
+
+            if not doctor_id or not appointment_date or not appointment_time:
+                flash('Please fill in all required fields (Doctor, Date, Time).', 'error')
+                return redirect(url_for('appointments'))
+
+            # Get doctor details
+            doctor = conn.execute('SELECT id, fullname, specialization FROM users WHERE id = ? AND role = "doctor"',
+                                (doctor_id,)).fetchone()
+            if not doctor:
+                flash('Invalid doctor selected.', 'error')
+                return redirect(url_for('appointments'))
+
+            doctor_id = doctor['id']
+            doctor_name = doctor['fullname']
+            department = doctor['specialization'] or 'General Medicine'
+
+            patient_id = current_user.id
+            patient_name = current_user.fullname or 'Patient'
+            status = 'Pending'  # Patients request appointments
+
+            conn.execute('''
+                INSERT INTO appointments
+                (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (patient_id, patient_name, doctor_id, doctor_name, department,
+                  appointment_date, appointment_time, symptoms, notes, status))
+
+            flash('Appointment request submitted successfully! Your doctor will review and approve it.', 'success')
+
+        else:
+            # Doctor/PHC staff creates appointment (auto-approved)
+            patient_id = request.form.get('patient_id')
+            patient_name = request.form.get('patient_name', 'Patient')
+            doctor_name = request.form.get('doctor_name', current_user.fullname or 'Doctor')
+            department = request.form.get('department', current_user.specialization or 'General Medicine')
+
+            # Ensure required fields are not empty
+            patient_id = patient_id or current_user.id
+            patient_name = str(patient_name).strip() or 'Patient'
+            doctor_name = str(doctor_name).strip() or 'Doctor'
+            department = str(department).strip() or 'General Medicine'
+            symptoms = str(symptoms).strip()
+            notes = str(notes).strip()
+
+            conn.execute('''
+                INSERT INTO appointments
+                (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
+            ''', (patient_id, patient_name, current_user.id, doctor_name,
+                  department, appointment_date, appointment_time, symptoms, notes))
+
+            flash('Appointment created successfully!')
+
+        try:
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            app.logger.error(f"Appointment creation failed: {e}")
+            flash(f'Error creating appointment: {str(e)}', 'error')
+            return redirect(url_for('appointments'))
+        finally:
+            conn.close()
+
+        return redirect(url_for('appointments'))
+
     except Exception as e:
         conn.rollback()
-        app.logger.error(f"Appointment creation failed: {e}")
+        conn.close()
+        app.logger.error(f"Appointment creation error: {e}")
         flash(f'Error creating appointment: {str(e)}', 'error')
         return redirect(url_for('appointments'))
-    finally:
-        conn.close()
-
-    return redirect(url_for('appointments'))
 
 @app.route('/appointments/update/<int:id>', methods=['POST'])
 @login_required
@@ -4562,14 +5113,23 @@ def update_appointment(id):
     appointment = conn.execute('SELECT * FROM appointments WHERE id = ?', (id,)).fetchone()
 
     # Authorization check
-    if current_user.role in ('doctor', 'phc_nurse'):
-        # Doctors can approve/reject pending appointments or update their own
+    if current_user.role == 'doctor':
+        # ONLY DOCTORS can approve/reject appointments
         if appointment['status'] == 'Pending' or appointment['doctor_id'] == current_user.id:
             conn.execute('UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
                         (status, id))
             flash(f'Appointment {status.lower()} successfully!')
         else:
             flash('Unauthorized action!')
+    elif current_user.role == 'phc_nurse':
+        # Nurses can only manage their own facility appointments (confirm/reschedule, not approve/reject)
+        appointment_phc = conn.execute('SELECT phc_id FROM appointments a INNER JOIN users u ON a.doctor_id = u.id WHERE a.id = ?', (id,)).fetchone()
+        if appointment_phc and appointment_phc['phc_id'] == current_user.phc_id and status in ('Confirmed', 'Rescheduled'):
+            conn.execute('UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                        (status, id))
+            flash(f'Appointment {status.lower()} successfully!')
+        else:
+            flash('Nurses can only confirm/reschedule facility appointments (approval is for doctors only)')
     elif current_user.role == 'patient':
         # Patients can only cancel their own appointments
         if appointment['patient_id'] == current_user.id and status == 'Cancelled':
@@ -4603,6 +5163,89 @@ def delete_appointment(id):
     conn.close()
 
     return redirect(url_for('appointments'))
+
+@app.route('/phc/nurse/appointments/create', methods=['GET', 'POST'])
+@login_required
+def phc_nurse_create_appointment():
+    """PHC Nurse creates appointment for patient based on triage assessment"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied - this is for PHC nurses only')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+
+    if request.method == 'POST':
+        # Create appointment as nurse
+        patient_id = request.form.get('patient_id')
+        doctor_id = request.form.get('doctor_id')
+        appointment_date = request.form.get('appointment_date')
+        appointment_time = request.form.get('appointment_time')
+        urgency = request.form.get('urgency', 'Routine')
+        reason = request.form.get('reason', '')
+
+        # Verify patient is at this PHC
+        patient = conn.execute('''
+            SELECT user_id, fullname FROM users u
+            INNER JOIN patient_logs pl ON u.id = pl.user_id
+            WHERE u.id = ? AND pl.phc_id = ?
+        ''', (patient_id, current_user.phc_id)).fetchone()
+
+        if not patient:
+            flash('Patient not at this PHC', 'error')
+            return redirect(url_for('phc_nurse_appointments'))
+
+        # Verify doctor is at this PHC
+        doctor = conn.execute('''
+            SELECT id, fullname, specialization FROM users
+            WHERE id = ? AND phc_id = ? AND role = 'doctor'
+        ''', (doctor_id, current_user.phc_id)).fetchone()
+
+        if not doctor:
+            flash('Doctor not at this PHC', 'error')
+            return redirect(url_for('phc_nurse_appointments'))
+
+        # Create appointment (APPROVED by nurse, not pending)
+        conn.execute('''
+            INSERT INTO appointments
+            (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date,
+             appointment_time, symptoms, notes, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
+        ''', (patient_id, patient['fullname'], doctor_id, doctor['fullname'],
+              doctor['specialization'] or 'General Medicine', appointment_date, appointment_time,
+              reason, f'Urgency: {urgency}'))
+
+        conn.commit()
+
+        # Notify patient
+        conn.execute('''
+            INSERT INTO messages (sender_id, receiver_id, message)
+            VALUES (?, ?, ?)
+        ''', (current_user.id, patient_id,
+              f'Your appointment with Dr. {doctor["fullname"]} is scheduled for {appointment_date} at {appointment_time}'))
+        conn.commit()
+
+        flash(f'Appointment created successfully for {patient["fullname"]}!', 'success')
+        return redirect(url_for('phc_nurse_appointments'))
+
+    # GET: Show form to create appointment
+    doctors = conn.execute('''
+        SELECT id, fullname, specialization FROM users
+        WHERE phc_id = ? AND role = 'doctor'
+    ''', (current_user.phc_id,)).fetchall()
+
+    patients = conn.execute('''
+        SELECT DISTINCT u.id, u.fullname FROM users u
+        INNER JOIN patient_logs pl ON u.id = pl.user_id
+        WHERE pl.phc_id = ? AND u.role = 'patient'
+        ORDER BY u.fullname ASC
+    ''', (current_user.phc_id,)).fetchall()
+
+    conn.close()
+
+    return render_template('phc_nurse_create_appointment.html',
+                         doctors=doctors,
+                         patients=patients,
+                         user=current_user)
 
 @app.route('/api/appointments/dates', methods=['GET'])
 @login_required
@@ -4944,14 +5587,81 @@ def patients():
 @app.route('/checkup')
 @login_required
 def checkup():
-    """AI health checkup page for patients"""
-    if current_user.role != 'patient':
-        flash('AI checkup is only available for patients')
+    """AI health checkup - NOW CONDUCTED BY NURSE, not patients"""
+    if current_user.role == 'patient':
+        # Patients no longer self-diagnose - Nurse will conduct checkup
+        flash('Health assessments are conducted by your PHC nurse. Please visit your local PHC for a checkup.', 'info')
+        return redirect(url_for('patient_dashboard'))
+    elif current_user.role == 'phc_nurse':
+        # Nurse conducts checkup for patients at their facility using comprehensive form
+        conn = get_db_connection()
+        patients = conn.execute('''
+            SELECT DISTINCT u.id, u.fullname FROM users u
+            INNER JOIN patient_logs pl ON u.id = pl.user_id
+            WHERE pl.phc_id = ? AND u.role = 'patient'
+            ORDER BY u.fullname
+        ''', (current_user.phc_id,)).fetchall()
+        conn.close()
+        patients = [dict(row) for row in patients]
+        return render_template('phc_nurse_intake_comprehensive.html', patients=patients, user=current_user)
+    else:
+        flash('Checkup access denied')
         return redirect(get_role_dashboard_redirect())
 
-    return render_template('checkup.html', user=current_user)
+@app.route('/phc/nurse/checkup_result')
+@login_required
+def phc_nurse_checkup_result():
+    """Show AI checkup results for a specific patient (for nurses)"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    patient_id = request.args.get('patient_id')
+    if not patient_id:
+        flash('Patient ID required')
+        return redirect(url_for('phc_nurse_dashboard'))
+
+    conn = get_db_connection()
+    # Get latest log for this patient
+    log = conn.execute('''
+        SELECT * FROM patient_logs
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 1
+    ''', (patient_id,)).fetchone()
+    conn.close()
+
+    if not log:
+        flash('No results found for this patient')
+        return redirect(url_for('phc_nurse_dashboard'))
+
+    result = dict(log)
+    # Format vitals for the template which expects result.vitals object
+    result['vitals'] = {
+        'bp': f"{result.get('sys_bp', 120)}/{result.get('dia_bp', 80)}",
+        'hr': result.get('hr', 72),
+        'temp': result.get('temp', 98.6),
+        'respiration_rate': result.get('respiration_rate', 16),
+        'spo2': result.get('spo2', 98)
+    }
+    # Map other fields
+    result['risk_level'] = result.get('dual_brain_risk', 'LOW')
+    result['score'] = result.get('risk_score', 0)
+    result['disease_recognized'] = result.get('disease_input') or result.get('recommended_specialist')
+    result['pain_intensity'] = result.get('pain_intensity')
+    result['symptom_duration'] = result.get('symptom_duration')
+    
+    # Extract reasoning if available (you might need to fetch this from elsewhere if not in DB, 
+    # but for now we'll pass the DB fields)
+    if 'final_risk' in result and isinstance(result['final_risk'], str):
+        # The reasoning might be stored in the DB if you add a column, 
+        # for now let's use the disease_input as a proxy for 'identified'
+        pass
+    
+    return render_template('checkup_result.html', result=result, user=current_user)
 
 @app.route('/checkup/result')
+
 @login_required
 def checkup_result():
     """Show AI checkup results to patient"""
@@ -4976,77 +5686,81 @@ def messages():
 
     # Get list of contacts based on user role
     if current_user.role == 'doctor':
-        # Regular doctor sees ONLY their own patients
-        contacts = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
-            WHERE u.role = 'patient'
-            ORDER BY u.fullname ASC
-        ''', (current_user.id, current_user.id)).fetchall()
+        # Doctor sees their own patients AND all doctors/admins for collaboration
+        try:
+            # Get patients from appointments
+            patients = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
+                WHERE u.role = 'patient'
+                ORDER BY u.fullname ASC
+            ''', (current_user.id, current_user.id)).fetchall()
+
+            # Also get all other doctors and admins
+            doctors = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                WHERE u.role IN ('doctor', 'ddhs_admin') AND u.id != ?
+                ORDER BY u.fullname ASC
+            ''', (current_user.id, current_user.id)).fetchall()
+
+            # Combine both lists
+            contacts = list(patients) + list(doctors)
+        except Exception as e:
+            print(f"Error loading doctor contacts: {e}")
+            contacts = []
 
     elif current_user.role == 'phc_nurse':
         # PHC Nurse sees patients from their facility
-        contacts = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-            WHERE u.role = 'patient'
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.id, current_user.phc_id)).fetchall()
-
-    elif current_user.role == 'doctor':
-        # PHC Doctor sees patients from their facility AND all doctors
-        patients = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-            WHERE u.role = 'patient'
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.id, current_user.phc_id)).fetchall()
-
-        # Also get all doctors (regular and PHC)
-        doctors = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            WHERE u.role IN ('doctor', 'ddhs_admin') AND u.id != ?
-            ORDER BY u.fullname ASC
-        ''', (current_user.id, current_user.id)).fetchall()
-
-        # Combine both lists
-        contacts = list(patients) + list(doctors)
+        try:
+            contacts = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
+                WHERE u.role = 'patient'
+                GROUP BY u.id
+                ORDER BY u.fullname ASC
+            ''', (current_user.id, current_user.phc_id)).fetchall()
+        except Exception as e:
+            print(f"Error loading phc_nurse contacts: {e}")
+            contacts = []
 
     elif current_user.role == 'ddhs_admin':
         # DDHS Admin sees all contacts
-        contacts = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            WHERE u.role IN ('patient', 'doctor', 'phc_nurse')
-            ORDER BY u.fullname ASC
-        ''', (current_user.id,)).fetchall()
+        try:
+            contacts = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                WHERE u.role IN ('patient', 'doctor', 'phc_nurse')
+                ORDER BY u.fullname ASC
+            ''', (current_user.id,)).fetchall()
+        except Exception as e:
+            print(f"Error loading admin contacts: {e}")
+            contacts = []
 
     else:
         # Patients see all doctors (regular, PHC, and admin)
-        contacts = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
-                   (SELECT COUNT(*) FROM messages
-                    WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
-            FROM users u
-            WHERE u.role IN ('doctor', 'ddhs_admin')
-            ORDER BY u.fullname ASC
-        ''', (current_user.id,)).fetchall()
+        try:
+            contacts = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                WHERE u.role IN ('doctor', 'ddhs_admin')
+                ORDER BY u.fullname ASC
+            ''', (current_user.id,)).fetchall()
+        except Exception as e:
+            print(f"Error loading patient contacts: {e}")
+            contacts = []
 
     contacts = [dict(row) for row in contacts]
 
@@ -5389,11 +6103,11 @@ def generate_conversational_response(message, analysis):
 
     # Appropriate closing based on risk
     if analysis['risk_level'] == 'HIGH':
-        response += "⚠️ **This patient should be seen promptly.** The symptoms suggest a condition that may worsen without timely intervention."
+        response += "[WARN] **This patient should be seen promptly.** The symptoms suggest a condition that may worsen without timely intervention."
     elif analysis['risk_level'] == 'MEDIUM':
         response += "💡 **Recommend evaluation within the next few hours** to ensure proper care and prevent complications."
     else:
-        response += "✅ **Standard consultation recommended.** While this appears less urgent, medical evaluation is still important."
+        response += "[OK] **Standard consultation recommended.** While this appears less urgent, medical evaluation is still important."
 
     response += "\n\n*I'm here to assist with triage prioritization. This assessment helps guide care decisions but is not a final diagnosis.*"
 
@@ -6145,7 +6859,7 @@ def ambulance_assign(ambulance_id):
                              ambulance=ambulance,
                              patients=patients)
     except Exception as e:
-        logger.error(f"Error in ambulance_assign: {e}")
+        app.logger.error(f"Error in ambulance_assign: {e}")
         flash('Error loading ambulance details')
         return redirect(url_for('ddhs_admin_ambulances'))
 
@@ -6190,7 +6904,7 @@ def ambulance_tracking(ambulance_id):
                              allocation=allocation,
                              tracking=tracking)
     except Exception as e:
-        logger.error(f"Error in ambulance_tracking: {e}")
+        app.logger.error(f"Error in ambulance_tracking: {e}")
         flash('Error loading tracking data')
         return redirect(url_for('ddhs_admin_ambulances'))
 
@@ -6230,7 +6944,7 @@ def api_mark_attendance():
 
         return jsonify({'success': True, 'message': f'Attendance marked as {status_val}'})
     except Exception as e:
-        logger.error(f"Error marking attendance: {e}")
+        app.logger.error(f"Error marking attendance: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -6268,7 +6982,7 @@ def api_add_ambulance():
 
         return jsonify({'success': True, 'message': 'Ambulance added', 'ambulance_id': ambulance_id})
     except Exception as e:
-        logger.error(f"Error adding ambulance: {e}")
+        app.logger.error(f"Error adding ambulance: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -6339,7 +7053,7 @@ def api_allocate_ambulance(ambulance_id):
             'estimated_time_min': estimated_time_min
         })
     except Exception as e:
-        logger.error(f"Error allocating ambulance: {e}")
+        app.logger.error(f"Error allocating ambulance: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
@@ -6397,14 +7111,14 @@ def api_ambulance_tracking(ambulance_id):
                 'tracking': [dict(row) for row in tracking]
             })
     except Exception as e:
-        logger.error(f"Error in ambulance tracking: {e}")
+        app.logger.error(f"Error in ambulance tracking: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
 if __name__ == '__main__':
     # Use configuration settings (respects production environment)
     app.run(
-        debug=config.DEBUG,
+        debug=config.DEBUG,  # Enable debug mode for development
         port=config.APP_PORT,
         use_reloader=config.DEBUG,  # Only auto-reload in development
         host='0.0.0.0'  # Listen on all interfaces
