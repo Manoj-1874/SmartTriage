@@ -162,7 +162,7 @@ class IntegratedDualBrainRisk:
 
         logger.info(f"""
 [INTEGRATED ASSESSMENT]
-Disease: {disease_input}
+Disease: {disease_recognition.get('final_risk', {}).get('disease_identified', 'Unknown')}
 BERT risk: {bert_risk.get('risk_score', 0):.2f}
 XGBoost risk: {xgb_risk.get('risk_score', 0):.2f}
 FINAL risk: {final_assessment.get('final_risk_score', 0):.2f}
@@ -230,11 +230,6 @@ Category: {final_assessment.get('risk_category')}
     def _analyze_symptoms_with_bert(self, symptoms_text: str) -> Dict:
         """
         Use BERT to analyze symptom severity semantically
-
-        BERT scores:
-        - HIGH_RISK (label "CRITICAL", "HIGH")
-        - MEDIUM_RISK (label "MEDIUM")
-        - LOW_RISK (label "LOW")
         """
 
         result = {
@@ -250,29 +245,17 @@ Category: {final_assessment.get('risk_category')}
             return result
 
         if not self.bert_model:
-            logger.warning("BERT model not loaded, using default scoring")
             return result
 
         try:
             # Run BERT classification
             try:
-                # Explicitly avoid passing token_type_ids if model is DistilBert
                 prediction = self.bert_model(symptoms_text, top_k=3)
             except Exception as e:
                 if 'token_type_ids' in str(e):
-                    # Fallback for models that don't support token_type_ids
-                    # We can try to use the raw model if it's available or just use default
-                    logger.warning(f"BERT model incompatibility (token_type_ids) - using symptom keyword analysis fallback")
                     # Manual keyword severity check as fallback
-                    critical_keywords = [
-                        'severe', 'critical', 'emergency', 'intense', 'unbearable', 'bleeding', 'unconscious',
-                        'chest pain', 'shortness of breath', 'difficulty breathing', 'seizure', 'stroke',
-                        'paralysis', 'vision loss', 'confusion', 'disorientation'
-                    ]
-                    medium_keywords = [
-                        'moderate', 'fever', 'persistent', 'pain', 'vomiting', 'nausea', 'dizziness',
-                        'fatigue', 'weakness', 'cough', 'rash'
-                    ]
+                    critical_keywords = ['severe', 'critical', 'emergency', 'intense', 'unbearable', 'bleeding', 'chest pain']
+                    medium_keywords = ['moderate', 'fever', 'persistent', 'pain', 'vomiting', 'nausea']
                     
                     text_lower = symptoms_text.lower()
                     if any(word in text_lower for word in critical_keywords):
@@ -285,7 +268,6 @@ Category: {final_assessment.get('risk_category')}
                     return result
                 raise e
 
-            # Get top prediction
             if prediction and len(prediction) > 0:
                 top = prediction[0]
                 label = top.get('label', 'MEDIUM').upper()
@@ -294,7 +276,6 @@ Category: {final_assessment.get('risk_category')}
                 result['bert_label'] = label
                 result['confidence'] = score
 
-                # Map label to risk score (0-1)
                 label_to_score = {
                     'CRITICAL': 0.95,
                     'HIGH': 0.80,
@@ -305,92 +286,50 @@ Category: {final_assessment.get('risk_category')}
                 result['risk_score'] = label_to_score.get(label, 0.55)
                 result['risk_label'] = label
 
-                logger.info(f"BERT classification: {label} ({score:.2%})")
-
         except Exception as e:
             logger.error(f"BERT analysis error: {str(e)}")
 
         return result
 
     def _analyze_vitals_with_xgboost(
-        self,
-        age: int,
-        gender: str,
-        symptoms: str,
-        sys_bp: int,
-        dia_bp: int,
-        hr: int,
-        temp_f: float,
-        pre_conditions: List[str] = None,
+        self, age: int, gender: str, symptoms: str, sys_bp: int, dia_bp: int, 
+        hr: int, temp_f: float, pre_conditions: List[str] = None,
     ) -> Dict:
         """
         Use XGBoost to analyze vital signs and patient profile
         """
 
         result = {
-            'risk_score': 0.5,  # Default
+            'risk_score': 0.5,
             'risk_label': 'MEDIUM',
             'features_used': [],
         }
 
         if not self.xgb_model or not self.scaler:
-            logger.warning("XGBoost model not loaded, using default scoring")
             return result
 
         try:
-            # Prepare features for XGBoost
             features = self._prepare_xgboost_features(
-                age=age,
-                gender=gender,
-                symptoms=symptoms,
-                sys_bp=sys_bp,
-                dia_bp=dia_bp,
-                hr=hr,
-                temp_f=temp_f,
+                age=age, gender=gender, symptoms=symptoms, 
+                sys_bp=sys_bp, dia_bp=dia_bp, hr=hr, temp_f=temp_f, 
                 pre_conditions=pre_conditions
             )
 
             result['features_used'] = features
 
             if len(features) > 0:
-                # Normalize features
                 features_array = np.array([features]).astype(float)
-
-                # Handle scaling if scaler is available
-                if self.scaler:
-                    try:
-                        features_scaled = self.scaler.transform(features_array)
-                    except:
-                        features_scaled = features_array
-                else:
-                    features_scaled = features_array
-
-                # Get XGBoost prediction
+                features_scaled = self.scaler.transform(features_array) if self.scaler else features_array
                 xgb_prediction = self.xgb_model.predict_proba(features_scaled)
 
-                # Get risk score (probability of HIGH risk class)
                 if len(xgb_prediction) > 0:
                     risk_prob = xgb_prediction[0]
-
-                    # Assume model outputs probabilities for [LOW, MEDIUM, HIGH]
-                    if len(risk_prob) >= 3:
-                        high_risk_prob = risk_prob[2]  # HIGH class
-                    elif len(risk_prob) == 2:
-                        high_risk_prob = risk_prob[1]  # Binary: assume second class is HIGH
-                    else:
-                        high_risk_prob = risk_prob[0]
+                    high_risk_prob = risk_prob[2] if len(risk_prob) >= 3 else risk_prob[1] if len(risk_prob) == 2 else risk_prob[0]
 
                     result['risk_score'] = float(high_risk_prob)
-
-                    # Classify
-                    if high_risk_prob >= 0.75:
-                        result['risk_label'] = 'HIGH'
-                    elif high_risk_prob >= 0.50:
-                        result['risk_label'] = 'MEDIUM'
-                    else:
-                        result['risk_label'] = 'LOW'
-
-                    logger.info(f"XGBoost prediction: {result['risk_label']} ({high_risk_prob:.2%})")
+                    if high_risk_prob >= 0.75: result['risk_label'] = 'HIGH'
+                    elif high_risk_prob >= 0.50: result['risk_label'] = 'MEDIUM'
+                    else: result['risk_label'] = 'LOW'
 
         except Exception as e:
             logger.error(f"XGBoost analysis error: {str(e)}")
@@ -401,92 +340,49 @@ Category: {final_assessment.get('risk_category')}
         self, age: int, gender: str, symptoms: str, sys_bp: int, dia_bp: int, 
         hr: int, temp_f: float, pre_conditions: List[str] = None
     ) -> list:
-        """Prepare features for XGBoost model based on trained feature set"""
-
-        # Expected: ['age', 'gender', 'symptoms', 'sys_bp', 'dia_bp', 'hr', 'temp_c', 'pre_conditions']
+        """Prepare features for XGBoost model"""
         features = []
-
-        # 1. Age
         features.append(float(age))
-
-        # 2. Gender (Encoded)
+        
         gender_val = str(gender).capitalize()
         if 'Gender' in self.encoders:
-            try:
-                features.append(float(self.encoders['Gender'].transform([gender_val])[0]))
-            except:
-                features.append(0.0)
-        else:
-            features.append(1.0 if gender_val == 'Male' else 0.0)
+            try: features.append(float(self.encoders['Gender'].transform([gender_val])[0]))
+            except: features.append(1.0 if gender_val == 'Male' else 0.0)
+        else: features.append(1.0 if gender_val == 'Male' else 0.0)
 
-        # 3. Symptoms (Encoded)
-        # Use first symptom or general category
         symptom_val = str(symptoms).split(',')[0].strip().capitalize() if symptoms else "None"
         if 'Symptoms' in self.encoders:
-            try:
-                features.append(float(self.encoders['Symptoms'].transform([symptom_val])[0]))
-            except:
-                # Try fallback to generic
-                try:
-                    features.append(float(self.encoders['Symptoms'].transform(['Fever'])[0]))
-                except:
-                    features.append(0.0)
-        else:
-            features.append(0.0)
+            try: features.append(float(self.encoders['Symptoms'].transform([symptom_val])[0]))
+            except: features.append(0.0)
+        else: features.append(0.0)
 
-        # 4. Sys BP
         features.append(float(sys_bp))
-
-        # 5. Dia BP
         features.append(float(dia_bp))
-
-        # 6. HR
         features.append(float(hr))
-
-        # 7. Temp C
+        
         temp_c = (float(temp_f) - 32) * 5 / 9
         features.append(temp_c)
 
-        # 8. Pre-conditions (Encoded)
         pre_cond_val = str(pre_conditions[0]).capitalize() if pre_conditions else "None"
         if 'Pre_Conditions' in self.encoders:
-            try:
-                features.append(float(self.encoders['Pre_Conditions'].transform([pre_cond_val])[0]))
-            except:
-                features.append(0.0)
-        else:
-            features.append(0.0)
+            try: features.append(float(self.encoders['Pre_Conditions'].transform([pre_cond_val])[0]))
+            except: features.append(0.0)
+        else: features.append(0.0)
 
         return features
 
     def _fuse_dual_brain_results(
-        self,
-        bert_result: Dict,
-        xgb_result: Dict,
-        disease_context: Dict,
-        age: int,
-        sys_bp: int,
-        dia_bp: int,
-        hr: int,
-        temp_f: float,
-        spo2: int = 95,
-        respiration_rate: int = 16
+        self, bert_result: Dict, xgb_result: Dict, disease_context: Dict,
+        age: int, sys_bp: int, dia_bp: int, hr: int, temp_f: float,
+        spo2: int = 95, respiration_rate: int = 16
     ) -> Dict:
         """
-        Fuse BERT (semantic) + XGBoost (numerical) results
-        Apply disease-specific risk multipliers and hard-coded vitals safety logic
-
-        Weighting:
-        - XGBoost: 40% (vital signs are critical)
-        - BERT: 35% (symptom severity matters)
-        - Disease Context: 25% (disease knowledge)
+        Fuse BERT + XGBoost + Disease Context
         """
 
-        # Extract scores
         bert_score = bert_result.get('risk_score', 0.5)
         xgb_score = xgb_result.get('risk_score', 0.5)
 
-        # Disease base score
         disease_score = 0.5
         disease_multiplier = 1.0
         if disease_context.get('risk_score'):
@@ -494,41 +390,27 @@ Category: {final_assessment.get('risk_category')}
         if disease_context.get('comorbidity_adjustment'):
             disease_multiplier = disease_context.get('comorbidity_adjustment', 1.0)
 
-        # Weighted fusion
-        final_score = (
-            xgb_score * 0.40 +      # Vital signs: 40%
-            bert_score * 0.35 +     # Symptoms: 35%
-            disease_score * 0.25    # Disease knowledge: 25%
-        )
+        final_score = (xgb_score * 0.40 + bert_score * 0.35 + disease_score * 0.25) * disease_multiplier
 
-        # Apply disease-specific multiplier
-        final_score *= disease_multiplier
-
-        # Numerical Safety Layer: Hard-coded clinical thresholds (Red Flags)
-        # Even if AI models return moderate risk, we force risk up for dangerous vitals
+        # Numerical Safety Layer
         vitals_multiplier = 1.0
-        
-        # Hypotension (Low BP) or Hypertension Stage 2/Crisis
         if sys_bp < 90 or dia_bp < 60:
-            vitals_multiplier *= 1.3  # Serious hypotension
+            vitals_multiplier *= 1.3
             logger.warning(f"⚠️ [VITALS-ALERT] Low BP detected ({sys_bp}/{dia_bp}). Escalating risk.")
         elif sys_bp > 160 or dia_bp > 100:
-            vitals_multiplier *= 1.25 # High BP risk
+            vitals_multiplier *= 1.25
             logger.warning(f"⚠️ [VITALS-ALERT] High BP detected ({sys_bp}/{dia_bp}). Escalating risk.")
             
-        # Tachycardia (High HR) or Bradycardia (Low HR)
         if hr > 110 or hr < 50:
             vitals_multiplier *= 1.15
             logger.warning(f"⚠️ [VITALS-ALERT] Abnormal heart rate detected ({hr} bpm).")
             
-        # Hypoxia (Low SpO2) - CRITICAL
         if spo2 < 92:
             vitals_multiplier *= 1.4
             logger.warning(f"⚠️ [VITALS-ALERT] Low oxygen saturation detected ({spo2}%). Escalating risk.")
         elif spo2 < 95:
             vitals_multiplier *= 1.1
             
-        # Hyperpyrexia (High Fever) or Hypothermia
         if temp_f > 103.5:
             vitals_multiplier *= 1.3
             logger.warning(f"⚠️ [VITALS-ALERT] High fever detected ({temp_f:.1f}°F). Escalating risk.")
@@ -536,28 +418,17 @@ Category: {final_assessment.get('risk_category')}
             vitals_multiplier *= 1.25
             logger.warning(f"⚠️ [VITALS-ALERT] Low body temperature detected ({temp_f:.1f}°F).")
 
-        # Respiratory Distress (High/Low RR)
         if respiration_rate > 30 or respiration_rate < 8:
             vitals_multiplier *= 1.35
             logger.warning(f"⚠️ [VITALS-ALERT] Critical respiratory rate detected ({respiration_rate} bpm).")
-        elif respiration_rate > 24:
-            vitals_multiplier *= 1.15
             
         final_score *= vitals_multiplier
 
-        # Age-based adjustment
-        if age > 75:
-            final_score *= 1.2
-        elif age > 65:
-            final_score *= 1.1
-        elif age < 5:
-            final_score *= 1.2
+        if age > 75: final_score *= 1.2
+        elif age < 5: final_score *= 1.2
 
-        # Cap at 0-1
         final_score = min(1.0, max(0.0, final_score))
 
-        # Classify
-        # Classify based on standard medical risk tiers
         if final_score >= 0.85:
             risk_category = 'CRITICAL'
             urgency = 'IMMEDIATE EMERGENCY - Life Threatening'
@@ -579,7 +450,7 @@ Category: {final_assessment.get('risk_category')}
             'final_risk_score': final_score,
             'risk_category': risk_category,
             'urgency': urgency,
-            'reasoning': f\"\"\"
+            'reasoning': f"""
 Dual-Brain Analysis Results:
 • XGBoost (Vital Signs): {xgb_score:.2%}
 • BERT (Symptoms): {bert_score:.2%}
@@ -590,5 +461,5 @@ Weighted Fusion (40% XGBoost + 35% BERT + 25% Disease):
 Final Risk Score: {final_score:.2%}
 Risk Category: {risk_category}
 Urgency: {urgency}
-            \"\"\".strip(),
+            """.strip(),
         }

@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 sys.path.insert(0, r'e:\Nilal_thiruvila\SmartTriage_Dashboard')
 import utils.integrated_dual_brain_risk

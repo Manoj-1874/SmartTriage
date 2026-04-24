@@ -1,4 +1,4 @@
-﻿import requests
+import requests
 url = 'https://browser.ihtsdotools.org/snowstorm/snomed-ct/browser/MAIN/descriptions'
 params = {
     'term': 'Morquio Syndrome',

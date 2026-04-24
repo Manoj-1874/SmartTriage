@@ -22,7 +22,16 @@ from functools import wraps
 from contextlib import contextmanager
 import time
 
+# Version Marker for Debugging
+logger = logging.getLogger(__name__)
+logger.info(f"🚀 [STARTUP-V2.5-STABLE] !!! AG-WAS-HERE !!! Running from: {os.path.abspath(__file__)}")
+
 # Import configuration and utilities
+import utils.integrated_dual_brain_risk
+import utils.universal_disease_knowledge
+logger.info(f"📁 [PATH-CHECK] integrated_dual_brain_risk: {utils.integrated_dual_brain_risk.__file__}")
+logger.info(f"📁 [PATH-CHECK] universal_disease_knowledge: {utils.universal_disease_knowledge.__file__}")
+
 from config import get_config
 from utils.validation import VitalSignsValidator, UserValidator, ValidationError
 from utils.database import DatabaseManager, get_db_connection
@@ -122,6 +131,16 @@ app.config['VERSION'] = config.VERSION
 
 # Setup logging
 setup_logging(config)
+
+# [CRITICAL DEBUG] Startup Verification and Path Check
+logger.info("="*80)
+logger.info(f"🚀 [STARTUP-V2.5-STABLE] !!! AG-WAS-HERE !!!")
+logger.info(f"📍 Main App Path: {os.path.abspath(__file__)}")
+import utils.integrated_dual_brain_risk
+import utils.universal_disease_knowledge
+logger.info(f"📁 Module Path (Integrated): {utils.integrated_dual_brain_risk.__file__}")
+logger.info(f"📁 Module Path (Universal): {utils.universal_disease_knowledge.__file__}")
+logger.info("="*80)
 app.logger.info(f"Starting SmartTriage Dashboard v{config.VERSION} - Environment: {config.ENV}")
 
 # Initialize CORS if enabled
@@ -806,7 +825,7 @@ try:
     else:
         encoders, xgb_risk_model, scaler, feature_names, exp_brain = load_models_locally()
 
-    print("[OK] System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
+    logger.info("[OK] System 1 (XGBoost) & System 2 (Shadow Brain) Online.")
 
     # Initialize integrated dual-brain risk assessment system
     try:
@@ -816,22 +835,22 @@ try:
             feature_names=feature_names,
             bert_model=exp_brain
         )
-        print("[OK] System 3 (Integrated Dual-Brain) Online - Ready for disease recognition + BERT + XGBoost fusion.")
+        logger.info("[OK] System 3 (Integrated Dual-Brain) Online - Ready for disease recognition + BERT + XGBoost fusion.")
     except Exception as e:
-        print(f"[WARNING] Integrated risk system error: {e}")
+        logger.error(f"[WARNING] Integrated risk system error: {e}")
         integrated_risk = None
 
     # Initialize semantic disease database for local recognition
     try:
         from utils.medical_ai_knowledge_system import SemanticDiseaseDatabase
         local_disease_db = SemanticDiseaseDatabase()
-        print("[OK] Local Disease Database (15+ diseases) loaded for fast recognition.")
+        logger.info("[OK] Local Disease Database (15+ diseases) loaded for fast recognition.")
     except Exception as e:
-        print(f"[WARNING] Local disease database failed to load: {e}")
+        logger.error(f"[WARNING] Local disease database failed to load: {e}")
         local_disease_db = None
 
 except Exception as e:
-    print(f"[WARNING] Model load error, running in UI-only mode: {e}")
+    logger.error(f"[CRITICAL] Model load error, running in UI-only mode: {e}")
     # Create dummy models for UI testing if loading fails
     xgb_risk_model = None
     exp_brain = None
