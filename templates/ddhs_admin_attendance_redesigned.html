@@ -62,6 +62,10 @@
         <div class="attendance-stat-value">{{ late_count }}</div>
         <div class="attendance-stat-label">Late</div>
     </div>
+    <div class="attendance-stat" style="border-left-color: var(--info);">
+        <div class="attendance-stat-value">{{ on_leave_count }}</div>
+        <div class="attendance-stat-label">On Leave</div>
+    </div>
     <div class="attendance-stat">
         <div class="attendance-stat-value">{{ attendance_percentage }}%</div>
         <div class="attendance-stat-label">Attendance Rate</div>
@@ -91,6 +95,7 @@
                     <option value="present">Present</option>
                     <option value="absent">Absent</option>
                     <option value="late">Late</option>
+                    <option value="on leave">On Leave</option>
                 </select>
             </div>
             <div class="filter-group search-box" style="min-width: 200px;">
@@ -166,6 +171,10 @@
                                     <span class="status-badge late">
                                         <i class="fas fa-clock"></i> Late
                                     </span>
+                                {% elif staff.status == 'on leave' %}
+                                    <span class="status-badge" style="background: #e0f2fe; color: #0284c7;">
+                                        <i class="fas fa-calendar-day"></i> On Leave
+                                    </span>
                                 {% else %}
                                     <span class="status-badge" style="background: var(--info-bg); color: var(--info);">
                                         <i class="fas fa-question-circle"></i> Not Marked
@@ -173,7 +182,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-secondary btn-sm" onclick="editAttendance({{ staff.id }})">
+                                <button class="btn btn-secondary btn-sm" title="Edit Attendance" onclick="editAttendance({{ staff.id }}, '{{ staff.name }}')">
                                     <i class="fas fa-edit"></i>
                                 </button>
                             </td>
@@ -188,6 +197,85 @@
                     {% endif %}
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Leave Requests -->
+<div class="section-card" style="margin-top: 24px;">
+    <div class="section-header">
+        <h3><i class="fas fa-calendar-alt"></i> Pending Leave Requests</h3>
+    </div>
+    <div class="section-body">
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Staff Name</th>
+                        <th>Role</th>
+                        <th>PHC Center</th>
+                        <th>Duration</th>
+                        <th>Reason</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for leave in pending_leaves %}
+                    <tr>
+                        <td><strong>{{ leave.fullname }}</strong></td>
+                        <td>{{ leave.role|replace('phc_', '')|title }}</td>
+                        <td>{{ leave.center_name }}</td>
+                        <td>{{ leave.start_date }} to {{ leave.end_date }}</td>
+                        <td title="{{ leave.reason }}">{{ (leave.reason[:30] + '...') if leave.reason|length > 30 else leave.reason }}</td>
+                        <td>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn btn-primary btn-sm" style="background: var(--success);" onclick="manageLeave({{ leave.id }}, 'APPROVED')">
+                                    Approve
+                                </button>
+                                <button class="btn btn-secondary btn-sm" style="background: var(--danger); border-color: var(--danger);" onclick="manageLeave({{ leave.id }}, 'REJECTED')">
+                                    Reject
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center" style="padding: 20px; color: var(--text-muted);">No pending leave requests</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Attendance Modal -->
+<div id="attendanceModal" class="modal-overlay">
+    <div class="modal-box" style="max-width: 400px;">
+        <div class="modal-header">
+            <div>
+                <div class="modal-title">Mark Attendance</div>
+                <div class="modal-sub" id="staffNameDisplay">Staff Member Name</div>
+            </div>
+            <button class="modal-close" onclick="closeAttendanceModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="staffIdField">
+            <div class="form-group">
+                <label class="form-label">Status</label>
+                <select id="attendanceStatusField" class="form-ctrl">
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="late">Late</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Date</label>
+                <input type="date" id="attendanceDateField" class="form-ctrl" value="{{ today }}">
+            </div>
+            <button class="btn-submit-modal" onclick="submitAttendance()">
+                <i class="fas fa-check"></i> Save Attendance
+            </button>
         </div>
     </div>
 </div>
@@ -225,16 +313,72 @@ function filterAttendance() {
     });
 }
 
-function editAttendance(staffId) {
-    // Open modal to edit attendance
-    alert('Edit attendance for staff ID: ' + staffId);
-    // TODO: Implement modal to edit attendance status
+function editAttendance(staffId, staffName) {
+    document.getElementById('staffIdField').value = staffId;
+    document.getElementById('staffNameDisplay').innerText = staffName;
+    
+    // Set default date to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('attendanceDateField').value = today;
+    
+    document.getElementById('attendanceModal').classList.add('open');
+}
+
+function closeAttendanceModal() {
+    document.getElementById('attendanceModal').classList.remove('open');
+}
+
+function submitAttendance() {
+    const staffId = document.getElementById('staffIdField').value;
+    const status = document.getElementById('attendanceStatusField').value;
+    const date = document.getElementById('attendanceDateField').value;
+
+    fetch('/api/attendance/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            staff_id: staffId,
+            status: status,
+            date: date
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            alert('Attendance marked successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Failed to mark attendance.');
+    });
+}
+
+function manageLeave(leaveId, status) {
+    if(!confirm(`Are you sure you want to ${status.toLowerCase()} this leave request?`)) return;
+
+    fetch('/api/ddhs/leave/manage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leave_id: leaveId, status: status })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) {
+            alert('Leave request ' + status.toLowerCase() + 'ed!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    });
 }
 
 function exportAttendance() {
     // Export to CSV
     alert('Exporting attendance data...');
-    // TODO: Implement CSV export
 }
 </script>
 

@@ -292,7 +292,7 @@
         box-shadow:var(--sh-panel);
         width:100%;max-width:1180px;
         display:grid;
-        grid-template-columns:1fr 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         overflow:hidden;
         transition:background var(--t-base),border-color var(--t-base),box-shadow var(--t-base);
         animation:panelIn .7s var(--ease) both;
@@ -496,6 +496,7 @@
     .panel-right{
         padding:52px 44px;
         display:flex;flex-direction:column;
+        flex: 1; min-width: 0;
         animation:fadeUp .7s var(--ease) .12s both;
     }
 
@@ -574,26 +575,22 @@
     }
 
     .role-grid{
-        display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;
+        display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin-bottom:20px;
     }
-
     .role-opt input[type="radio"]{position:absolute;opacity:0;pointer-events:none}
-
     .role-opt label{
         display:flex;flex-direction:column;align-items:center;justify-content:center;
-        gap:9px;padding:20px 16px;
+        gap:6px;padding:12px 8px;
         background:var(--input-bg);border:2px solid var(--input-border);
         border-radius:var(--radius-md);cursor:pointer;
         transition:all var(--t-base) var(--ease);
         position:relative;overflow:hidden;
     }
-
     .role-opt label::before{
         content:'';position:absolute;inset:0;
         background:linear-gradient(135deg,var(--brand),var(--brand-light));
         opacity:0;transition:opacity var(--t-base);
     }
-
     .role-opt input:checked + label{
         background:var(--base);
         border-color:var(--brand);
@@ -604,7 +601,7 @@
     .role-opt input:checked + label::before{opacity:.06}
 
     .role-opt label i{
-        font-size:30px;color:var(--brand);
+        font-size:22px;color:var(--brand);
         position:relative;z-index:1;
         transition:transform var(--t-base),filter var(--t-base);
     }
@@ -612,12 +609,12 @@
     [data-theme="dark"] .role-opt label i{color:var(--brand-light)}
 
     .role-opt input:checked + label i{
-        transform:scale(1.12);
+        transform:scale(1.1);
         filter:drop-shadow(0 3px 10px rgba(11,155,122,.4));
     }
 
     .role-opt label span{
-        font-size:13.5px;font-weight:700;color:var(--t-head);
+        font-size:12px;font-weight:700;color:var(--t-head);
         position:relative;z-index:1;
     }
 
@@ -951,10 +948,10 @@
                     </div>
                 </div>
                 <div class="feat-item">
-                    <div class="feat-ico"><i class="fas fa-chart-line"></i></div>
+                    <div class="feat-ico"><i class="fas fa-shield-alt"></i></div>
                     <div>
-                        <div class="feat-title">Health Analytics</div>
-                        <div class="feat-desc">Track and visualise your health progress over time</div>
+                        <div class="feat-title">Secure Records</div>
+                        <div class="feat-desc">Your health data is encrypted and safe with us</div>
                     </div>
                 </div>
             </div>
@@ -1032,6 +1029,13 @@
                             <label for="rolePhcNurse">
                                 <i class="fas fa-user-nurse"></i>
                                 <span>PHC Nurse</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="roleAmbulanceDriver" value="ambulance_driver">
+                            <label for="roleAmbulanceDriver">
+                                <i class="fas fa-ambulance"></i>
+                                <span>Driver</span>
                             </label>
                         </div>
                     </div>
@@ -1186,7 +1190,8 @@ function updateRole(role) {
         patient:    { icon: 'fas fa-user-injured', title: 'Patient Portal', sub: 'Sign in to access your healthcare dashboard' },
         doctor:     { icon: 'fas fa-user-md', title: 'Doctor Portal', sub: 'Sign in to access your doctor dashboard' },
         ddhs_admin: { icon: 'fas fa-user-shield', title: 'DDHS Command Portal', sub: 'Monitor PHC workforce and live escalations' },
-        phc_nurse:  { icon: 'fas fa-user-nurse', title: 'PHC Nurse Portal', sub: 'Track PHC workflow and patient queue' }
+        phc_nurse:  { icon: 'fas fa-user-nurse', title: 'PHC Nurse Portal', sub: 'Track PHC workflow and patient queue' },
+        ambulance_driver: { icon: 'fas fa-ambulance', title: 'Driver Portal', sub: 'Access real-time navigation and dispatches' }
     };
 
     const selected = roleMeta[role] || roleMeta.patient;

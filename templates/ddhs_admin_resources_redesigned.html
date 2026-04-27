@@ -11,14 +11,20 @@
     <!-- Summary Stats -->
     <div class="stats-grid">
         <div class="stat-card">
-            <div class="stat-card-number">{{ total_items or 0 }}</div>
-            <div class="stat-card-label">Total Items</div>
-            <div class="stat-card-change">+3.2%</div>
+            <div class="stat-card-number">₹{{ "{:,.2f}".format(current_month_cost) }}</div>
+            <div class="stat-card-label">Monthly Spending</div>
+            <div class="stat-card-change" style="color: {% if current_month_cost > prev_month_cost %}#dc3545{% else %}#28a745{% endif %};">
+                {% if prev_month_cost > 0 %}
+                    {{ "{:+.1f}%".format(((current_month_cost - prev_month_cost) / prev_month_cost) * 100) }}
+                {% else %}
+                    New
+                {% endif %}
+            </div>
         </div>
         <div class="stat-card">
-            <div class="stat-card-number">{{ good_stock or 0 }}</div>
-            <div class="stat-card-label">Good Stock</div>
-            <div class="stat-card-change" style="color: #28a745;">✓</div>
+            <div class="stat-card-number">{{ total_items or 0 }}</div>
+            <div class="stat-card-label">Unique Items</div>
+            <div class="stat-card-change">+{{ categories|length }} Cat</div>
         </div>
         <div class="stat-card">
             <div class="stat-card-number">{{ low_stock or 0 }}</div>
@@ -39,7 +45,7 @@
                 <h3>📊 Stock Level Distribution</h3>
             </div>
             <div style="position: relative; height: 250px;">
-                <canvas id="stockChart"></canvas>
+                <canvas id="spendingChart"></canvas>
             </div>
         </div>
 
@@ -156,8 +162,10 @@
                             <span class="status-badge active">Good Stock</span>
                         {% elif item.status == 'Low' %}
                             <span class="status-badge" style="background: #ff9800; color: white;">Low Stock</span>
-                        {% else %}
+                        {% elif item.status == 'Critical' %}
                             <span class="status-badge absent">Critical</span>
+                        {% else %}
+                            <span class="status-badge">Unknown</span>
                         {% endif %}
                     </td>
                     <td>
@@ -178,24 +186,13 @@
             {% for category in categories or [] %}
             <div style="border: 1px solid #e0e0e0; border-radius: 10px; padding: 15px; background: #f9f9f9;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <strong>{{ category.name }}</strong>
+                    <strong>{{ category.category }}</strong>
                     <span style="background: #0B9B7A; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
                         {{ category.count }} items
                     </span>
                 </div>
                 <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
-                    Total Value: <strong>₹{{ category.value }}</strong>
-                </div>
-                <div style="display: flex; gap: 5px;">
-                    <span style="background: #28a745; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
-                        Good: {{ category.good }}
-                    </span>
-                    <span style="background: #ff9800; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
-                        Low: {{ category.low }}
-                    </span>
-                    <span style="background: #dc3545; color: white; padding: 4px 8px; border-radius: 4px; font-size: 11px;">
-                        Critical: {{ category.critical }}
-                    </span>
+                    District Value: <strong>₹{{ "{:,.2f}".format(category.total_value) }}</strong>
                 </div>
             </div>
             {% endfor %}
@@ -221,21 +218,19 @@
             <tbody>
                 {% for alert in low_stock_alerts or [] %}
                 <tr>
-                    <td><strong>{{ alert.item }}</strong></td>
-                    <td>{{ alert.current_qty }}</td>
+                    <td><strong>{{ alert.name }}</strong></td>
+                    <td>{{ alert.quantity }}</td>
                     <td>{{ alert.min_required }}</td>
                     <td>
                         <span style="color: #dc3545; font-weight: bold;">
-                            -{{ alert.min_required - alert.current_qty }}
+                            -{{ alert.min_required - alert.quantity }}
                         </span>
                     </td>
                     <td>
-                        {% if alert.priority == 'Critical' %}
+                        {% if alert.status == 'Critical' %}
                             <span class="status-badge absent">Critical</span>
-                        {% elif alert.priority == 'High' %}
-                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
                         {% else %}
-                            <span class="status-badge">Medium</span>
+                            <span class="status-badge" style="background: #ff9800; color: white;">High</span>
                         {% endif %}
                     </td>
                     <td>
@@ -253,31 +248,24 @@
 <!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
-    // Stock Level Distribution Chart (Doughnut)
-    const stockCtx = document.getElementById('stockChart').getContext('2d');
-    new Chart(stockCtx, {
-        type: 'doughnut',
+    // Spending by PHC Chart (Bar)
+    const spendingCtx = document.getElementById('spendingChart').getContext('2d');
+    new Chart(spendingCtx, {
+        type: 'bar',
         data: {
-            labels: ['In Stock', 'Low Stock', 'Out of Stock'],
+            labels: [{% for c in center_spending %}'{{ c.center_name }}',{% endfor %}],
             datasets: [{
-                data: [75, 20, 5],
-                backgroundColor: [
-                    '#28a745',
-                    '#ff9800',
-                    '#dc3545'
-                ],
-                borderColor: '#fff',
-                borderWidth: 3
+                label: 'Spending (₹)',
+                data: [{% for c in center_spending %}{{ c.spent }},{% endfor %}],
+                backgroundColor: '#0B9B7A',
+                borderRadius: 6
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { font: { size: 12 }, padding: 15 }
-                }
+                legend: { display: false }
             }
         }
     });

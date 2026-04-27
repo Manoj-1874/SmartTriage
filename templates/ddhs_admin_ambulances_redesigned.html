@@ -237,12 +237,24 @@
 <!-- Scripts -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-// Initialize map
-const map = L.map('ambulance-map').setView([12.9716, 79.1573], 13);
+// Initialize map with district-specific focus
+const mapFocus = {{ map_focus|tojson }};
+const map = L.map('ambulance-map').setView([mapFocus.lat, mapFocus.lon], mapFocus.zoom);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxZoom: 19
 }).addTo(map);
+
+// Add District Boundary Highlight (Simplified for Demo)
+const districtBoundary = L.circle([mapFocus.lat, mapFocus.lon], {
+    color: 'var(--brand)',
+    fillColor: 'var(--brand)',
+    fillOpacity: 0.05,
+    radius: 15000, // 15km radius approx
+    dashArray: '10, 10'
+}).addTo(map);
+
+districtBoundary.bindTooltip("Your Command: {{ user.district }}", {permanent: true, direction: 'top'});
 
 // Add ambulance markers
 const ambulances = {{ ambulances_json|safe }};

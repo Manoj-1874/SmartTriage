@@ -83,15 +83,16 @@ def book_appointment():
         manager = get_appointment_manager()
 
         success, appointment_id, message = manager.book_appointment(
-            patient_id=current_user.id,
-            patient_name=data.get('patient_name', current_user.username),
+            patient_id=data.get('patient_id', current_user.id),
+            patient_name=data.get('patient_name', current_user.fullname),
             doctor_id=data['doctor_id'],
             doctor_name=data['doctor_name'],
             appointment_date=data['appointment_date'],
             appointment_time=data['appointment_time'],
             department=data['department'],
             symptoms=data['symptoms'],
-            notes=data.get('notes', '')
+            notes=data.get('notes', ''),
+            triage_log_id=data.get('triage_log_id')
         )
 
         if success:

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facility Registration — PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --brand-dark: #087A60;
+            --brand-light: #34C9A5;
+            --canvas: #EEF6F2;
+            --base: #FFFFFF;
+            --surface: #F5FBF8;
+            --border: #D9EDE5;
+            --t-head: #0A2218;
+            --t-body: #2C4A3C;
+            --t-muted: #5E8C7A;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --sh-panel: 0 32px 80px rgba(11,155,122,.13);
+        }
+        [data-theme="dark"] {
+            --canvas: #0B1812;
+            --base: #101F18;
+            --surface: #152A20;
+            --border: #1D3528;
+            --t-head: #E4F2EB;
+            --t-body: #9ABFAE;
+            --t-muted: #527A65;
+        }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--canvas);
+            color: var(--t-body);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .panel {
+            background: var(--base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--sh-panel);
+            width: 100%;
+            max-width: 500px;
+            padding: 40px;
+            border: 1px solid var(--border);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .logo {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--brand), var(--brand-light));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 24px;
+            margin: 0 auto 15px;
+            box-shadow: 0 4px 12px rgba(11, 155, 122, 0.3);
+        }
+        h1 {
+            font-size: 24px;
+            color: var(--t-head);
+            margin: 0 0 8px;
+        }
+        p {
+            font-size: 14px;
+            color: var(--t-muted);
+            margin: 0;
+        }
+        .field {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--t-head);
+        }
+        .input-wrap {
+            position: relative;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 12px 15px 12px 42px;
+            border: 1.5px solid var(--border);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            color: var(--t-head);
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        textarea {
+            padding-left: 15px;
+            height: 100px;
+            resize: none;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--brand);
+            background: var(--base);
+            box-shadow: 0 0 0 4px rgba(11, 155, 122, 0.1);
+        }
+        .field i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--t-muted);
+            font-size: 16px;
+        }
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--brand);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 10px;
+        }
+        .btn-submit:hover {
+            background: var(--brand-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(11, 155, 122, 0.3);
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        .back-link a {
+            color: var(--brand);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .alert-error { background: #fee2e2; color: #dc2626; }
+        .alert-success { background: #dcfce7; color: #16a34a; }
+    </style>
+</head>
+<body>
+    <div class="panel">
+        <div class="header">
+            <div class="logo"><i class="fas fa-hospital"></i></div>
+            <h1>Register Health Center</h1>
+            <p>Submit a request to add your facility to the network</p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form action="/register-phc" method="POST">
+            <div class="field">
+                <label for="name">Facility Name *</label>
+                <div class="input-wrap">
+                    <input type="text" id="name" name="name" placeholder="e.g., T. Nagar PHC" required>
+                    <i class="fas fa-hospital-user"></i>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="district">District *</label>
+                <div class="input-wrap">
+                    <select id="district" name="district" required>
+                        <option value="Chennai">Chennai</option>
+                        <option value="Trichy">Trichy</option>
+                        <option value="Madurai">Madurai</option>
+                        <option value="Coimbatore">Coimbatore</option>
+                    </select>
+                    <i class="fas fa-map-marked-alt"></i>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="location">Detailed Address *</label>
+                <div class="input-wrap">
+                    <input type="text" id="location" name="location" placeholder="Street, Ward, Area" required>
+                    <i class="fas fa-location-dot"></i>
+                </div>
+            </div>
+
+            <div class="field">
+                <label for="contact_info">Contact Details / Phone</label>
+                <div class="input-wrap">
+                    <textarea id="contact_info" name="contact_info" placeholder="Email, phone number, or person in charge"></textarea>
+                </div>
+            </div>
+
+            <button type="submit" class="btn-submit">Submit Registration</button>
+        </form>
+
+        <div class="back-link">
+            Already registered? <a href="/login">Return to Login</a>
+        </div>
+    </div>
+</body>
+</html>

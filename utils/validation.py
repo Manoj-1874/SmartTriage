@@ -293,51 +293,53 @@ class VitalSignsValidator:
 
     @classmethod
     def validate_triage_data(cls, data):
-        """Validate complete triage assessment data"""
+        """Validate complete triage assessment data (Now with optional fields for real-world speed)"""
         validated = {}
+        validated['vitals_estimated'] = []
 
         try:
-            # Validate age
+            # Age and Gender are always required for AI context
             validated['age'] = cls.validate_age(data.get('age'))
-
-            # Validate gender
             validated['gender'] = cls.validate_gender(data.get('gender'))
-
-            # Validate blood pressure
-            sys_bp, dia_bp = cls.validate_blood_pressure(
-                data.get('sys_bp'),
-                data.get('dia_bp')
-            )
-            validated['sys_bp'] = sys_bp
-            validated['dia_bp'] = dia_bp
-
-            # Validate heart rate
-            validated['hr'] = cls.validate_heart_rate(data.get('hr'))
-
-            # Validate temperature
-            temp_f = cls.validate_temperature(
-                data.get('temp'),
-                data.get('temp_unit', 'F')
-            )
-            validated['temp'] = temp_f  # Fahrenheit for display/storage
-            validated['temp_celsius'] = cls.fahrenheit_to_celsius(temp_f)  # Celsius for ML model
-
-            # Validate respiration and oxygen saturation (NEWS2 critical vitals)
-            validated['respiration_rate'] = cls.validate_respiration_rate(data.get('respiration_rate'))
-            validated['spo2'] = cls.validate_spo2(data.get('spo2'))
-
-            # Validate symptoms
             validated['symptoms'] = cls.validate_symptoms(data.get('symptoms'))
 
-            # Validate medical history
-            validated['history'] = cls.validate_medical_history(data.get('history'))
+            # BLOOD PRESSURE (Optional fallback to 120/80)
+            try:
+                sys_bp, dia_bp = cls.validate_blood_pressure(data.get('sys_bp'), data.get('dia_bp'))
+                validated['sys_bp'], validated['dia_bp'] = sys_bp, dia_bp
+            except (ValidationError, TypeError):
+                validated['sys_bp'], validated['dia_bp'] = 120, 80
+                validated['vitals_estimated'].append('Blood Pressure')
 
-            # Validate pain level and duration
+            # HEART RATE (Optional fallback to 75 bpm)
+            try:
+                validated['hr'] = cls.validate_heart_rate(data.get('hr'))
+            except (ValidationError, TypeError):
+                validated['hr'] = 75
+                validated['vitals_estimated'].append('Heart Rate')
+
+            # TEMPERATURE (Optional fallback to 98.6°F)
+            try:
+                temp_f = cls.validate_temperature(data.get('temp'), data.get('temp_unit', 'F'))
+                validated['temp'] = temp_f
+                validated['temp_celsius'] = cls.fahrenheit_to_celsius(temp_f)
+            except (ValidationError, TypeError):
+                validated['temp'], validated['temp_celsius'] = 98.6, 37.0
+                validated['vitals_estimated'].append('Temperature')
+
+            # RESPIRATION & SPO2 (Optional fallbacks)
+            validated['respiration_rate'] = cls.validate_respiration_rate(data.get('respiration_rate'))
+            if data.get('respiration_rate') is None: validated['vitals_estimated'].append('Respiration Rate')
+            
+            validated['spo2'] = cls.validate_spo2(data.get('spo2'))
+            if data.get('spo2') is None: validated['vitals_estimated'].append('Oxygen Saturation')
+
+            # Other clinical metadata
+            validated['history'] = cls.validate_medical_history(data.get('history'))
             validated['pain_level'] = cls.validate_pain_level(data.get('pain_level'))
             validated['duration'] = cls.validate_duration(data.get('duration'))
 
             return validated
-
         except ValidationError:
             raise
         except Exception as e:

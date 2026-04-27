@@ -495,11 +495,12 @@ function showToast(msg,ico='fas fa-check-circle'){
 
 <!-- ══ SIDEBAR ══ -->
 <aside class="sidebar" id="sidebar">
+  {% set u = current_user if current_user and current_user.is_authenticated else (user if user else None) %}
   <div class="s-brand">
     <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
     <div class="s-brand-text">
       <div class="s-brand-name">PriorityMed</div>
-      <div class="s-brand-tag">Patient Portal</div>
+      <div class="s-brand-tag">{% if u and u.role == 'doctor' %}Doctor Portal{% else %}Patient Portal{% endif %}</div>
     </div>
   </div>
   <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
@@ -509,18 +510,17 @@ function showToast(msg,ico='fas fa-check-circle'){
       <div class="s-ava-dot"></div>
     </div>
     <div class="s-user-text">
-      <div class="s-uname">{{ user.fullname if user else 'Alex Johnson' }}</div>
-      <div class="s-urole">{{ 'Doctor Account' if user and user.role == 'doctor' else 'Patient Account' }}</div>
+      <div class="s-uname">{{ u.fullname if u else 'Alex Johnson' }}</div>
+      <div class="s-urole">{% if u and u.role == 'doctor' %}Doctor Account{% else %}Patient Account{% endif %}</div>
     </div>
   </div>
   <nav class="s-nav">
     <div class="s-group">Overview</div>
-    {% set u = current_user if current_user and current_user.is_authenticated else (user if user else None) %}
     <a href="{% if u and u.role == 'doctor' %}/doctor/dashboard{% else %}/patient/dashboard{% endif %}" class="s-link">
       <div class="s-icon"><i class="fas fa-th-large"></i></div>
       <span class="s-label">Dashboard</span>
     </a>
-    {% if not u or u.role != 'doctor' %}
+    {% if not u or u.role != 'doctor' and u.role != 'patient' %}
     <a href="/health-report" class="s-link">
       <div class="s-icon"><i class="fas fa-chart-line"></i></div>
       <span class="s-label">Health Progress</span>
@@ -534,6 +534,14 @@ function showToast(msg,ico='fas fa-check-circle'){
     <a href="/doctor/reports" class="s-link">
       <div class="s-icon"><i class="far fa-file-alt"></i></div>
       <span class="s-label">Reports</span>
+    </a>
+    <a href="/phc/doctor/resources" class="s-link">
+      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
+      <span class="s-label">Resource Governance</span>
+    </a>
+    <a href="/phc/attendance" class="s-link">
+      <div class="s-icon"><i class="fas fa-user-check"></i></div>
+      <span class="s-label">Staff Attendance</span>
     </a>
     {% endif %}
     <div class="s-group">My Care</div>
@@ -574,6 +582,7 @@ function showToast(msg,ico='fas fa-check-circle'){
       <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
       <span class="t-breadcrumb-active">Appointments</span>
     </div>
+    {% if u and u.role != 'doctor' %}
     <div class="t-right">
       <div class="t-clock" id="liveClock">--:-- --</div>
       <div class="theme-pill" id="themeToggle">
@@ -593,6 +602,7 @@ function showToast(msg,ico='fas fa-check-circle'){
         </div>
       </div>
     </div>
+    {% endif %}
   </header>
 
   <div class="page">

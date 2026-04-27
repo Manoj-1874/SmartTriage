@@ -103,12 +103,10 @@ class AppointmentManager:
 
     def book_appointment(self, patient_id: int, patient_name: str, doctor_id: int,
                         doctor_name: str, appointment_date: str, appointment_time: str,
-                        department: str, symptoms: str, notes: str = "") -> Tuple[bool, Optional[int], str]:
+                        department: str, symptoms: str, notes: str = "", 
+                        triage_log_id: Optional[int] = None) -> Tuple[bool, Optional[int], str]:
         """
-        Book appointment with availability check
-
-        Returns:
-            (success, appointment_id, message)
+        Book appointment with availability check and dual notifications
         """
         try:
             # Check availability first
@@ -123,31 +121,42 @@ class AppointmentManager:
             self.cursor.execute("""
                 INSERT INTO appointments
                 (patient_id, patient_name, doctor_id, doctor_name, department,
-                 appointment_date, appointment_time, status, symptoms, notes, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 appointment_date, appointment_time, status, symptoms, notes, 
+                 triage_log_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 patient_id, patient_name, doctor_id, doctor_name, department,
                 appointment_date, appointment_time, self.STATUS_SCHEDULED,
-                symptoms, notes, datetime.now().isoformat(), datetime.now().isoformat()
+                symptoms, notes, triage_log_id,
+                datetime.now().isoformat(), datetime.now().isoformat()
             ))
 
             self.conn.commit()
             appointment_id = self.cursor.lastrowid
 
-            # Create notification for doctor
+            # 1. NOTIFICATION FOR DOCTOR (To prepare for patient)
             self._create_notification(
                 recipient_id=doctor_id,
                 notification_type='appointment_booked',
-                title=f"New Appointment Booked",
-                message=f"Appointment with {patient_name} on {appointment_date} at {appointment_time}",
+                title=f"New Patient Booking: {patient_name}",
+                message=f"Scheduled for {appointment_date} at {appointment_time}. AI Medical History attached.",
+                related_id=appointment_id
+            )
+
+            # 2. NOTIFICATION FOR PATIENT (Confirmation)
+            self._create_notification(
+                recipient_id=patient_id,
+                notification_type='appointment_confirmed',
+                title="Appointment Confirmed",
+                message=f"Your appointment with Dr. {doctor_name} is confirmed for {appointment_date} at {appointment_time}.",
                 related_id=appointment_id
             )
 
             # Schedule reminders
             self._schedule_reminders(appointment_id, appointment_date, appointment_time)
 
-            logger.info(f"[APPOINTMENT-BOOKED] ID: {appointment_id}, Doctor: {doctor_name}, Patient: {patient_name}")
-            return True, appointment_id, f"Appointment booked successfully (ID: {appointment_id})"
+            logger.info(f"[REAL-WORLD-BOOKING] ID: {appointment_id} | Nurse-Patient Sync Complete")
+            return True, appointment_id, f"Appointment successfully booked for {patient_name}"
 
         except Exception as e:
             logger.error(f"[APPOINTMENT-ERROR] {str(e)}")
@@ -223,7 +232,15 @@ class AppointmentManager:
             if appt:
                 patient_id, doctor_id, patient_name, appt_date = appt
 
-                if new_status == self.STATUS_COMPLETED:
+                if new_status == self.STATUS_CONFIRMED:
+                    self._create_notification(
+                        recipient_id=patient_id,
+                        notification_type='appointment_confirmed',
+                        title="Appointment Confirmed",
+                        message=f"Your appointment on {appt_date} has been confirmed by Dr. {doctor_name}.",
+                        related_id=appointment_id
+                    )
+                elif new_status == self.STATUS_COMPLETED:
                     self._create_notification(
                         recipient_id=patient_id,
                         notification_type='appointment_completed',

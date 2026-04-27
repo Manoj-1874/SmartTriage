@@ -160,10 +160,10 @@ if (monthlyCtx) {
     new Chart(monthlyCtx, {
         type: 'line',
         data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+            labels: [{% for stat in monthly_stats %}'{{ stat.month }}',{% endfor %}],
             datasets: [{
                 label: 'Patients',
-                data: {{ monthly_data|default([120, 140, 160, 150, 180, 200, 220, 240, 230, 250, 270, 290])|safe }},
+                data: [{% for stat in monthly_stats %}{{ stat.count }},{% endfor %}],
                 borderColor: 'var(--brand)',
                 backgroundColor: 'rgba(11, 155, 122, 0.1)',
                 borderWidth: 2,
@@ -201,9 +201,9 @@ if (diseaseCtx) {
     new Chart(diseaseCtx, {
         type: 'doughnut',
         data: {
-            labels: ['Hypertension', 'Diabetes', 'Fever', 'Cold', 'Others'],
+            labels: [{% for stat in disease_stats %}'{{ stat.recommended_specialist }}',{% endfor %}],
             datasets: [{
-                data: [30, 25, 20, 15, 10],
+                data: [{% for stat in disease_stats %}{{ stat.count }},{% endfor %}],
                 backgroundColor: [
                     '#0B9B7A',
                     '#34C9A5',

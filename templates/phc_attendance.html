@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PHC Staff Attendance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --brand-dark: #087A60;
+            --brand-light: #34C9A5;
+            --canvas: #EEF6F2;
+            --base: #FFFFFF;
+            --surface: #F5FBF8;
+            --border: #D9EDE5;
+            --t-head: #0A2218;
+            --t-body: #2C4A3C;
+            --t-muted: #5E8C7A;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--canvas);
+            color: var(--t-body);
+            margin: 0;
+            display: flex;
+        }
+
+        .sidebar {
+            width: 280px;
+            height: 100vh;
+            background: #fff;
+            border-right: 1px solid var(--border);
+            position: fixed;
+            padding: 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 40px;
+        }
+
+        .s-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            color: var(--t-muted);
+            text-decoration: none;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+
+        .s-link:hover { background: var(--surface); color: var(--brand); }
+        .s-link.active { background: var(--brand); color: #fff; }
+
+        .card {
+            background: var(--base);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            margin-bottom: 24px;
+        }
+        /* ... other styles remain same ... */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: var(--brand);
+            color: #fff;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px;
+            color: var(--t-muted);
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 15px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .present { background: #dcfce7; color: #16a34a; }
+        .absent { background: #fee2e2; color: #dc2626; }
+        .late { background: #fef3c7; color: #d97706; }
+        .pending { background: #f3f4f6; color: #4b5563; }
+        .approved { background: #dcfce7; color: #16a34a; }
+        .rejected { background: #fee2e2; color: #dc2626; }
+        .on-leave { background: #e0f2fe; color: #0284c7; }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-box {
+            background: #fff;
+            padding: 30px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        select, input, textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:40px;">
+        <div style="width:36px; height:36px; background:var(--brand); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff;">
+            <i class="fas fa-heartbeat"></i>
+        </div>
+        <div style="display:flex; flex-direction:column;">
+            <span style="font-weight:800; font-size:18px; color:var(--t-head); line-height:1;">PriorityMed</span>
+            <span style="font-size:10px; font-weight:700; color:var(--brand); text-transform:uppercase; letter-spacing:1px; margin-top:2px;">Doctor Portal</span>
+        </div>
+    </div>
+
+    <a href="/doctor/dashboard" class="s-link">
+        <i class="fas fa-th-large"></i> Dashboard
+    </a>
+    <a href="/patients" class="s-link">
+        <i class="fas fa-user-injured"></i> Patients
+    </a>
+    <a href="/doctor/reports" class="s-link">
+        <i class="far fa-file-alt"></i> Reports
+    </a>
+    <a href="/phc/doctor/resources" class="s-link">
+        <i class="fas fa-boxes-stacked"></i> Resource Governance
+    </a>
+    <a href="/phc/attendance" class="s-link active">
+        <i class="fas fa-user-check"></i> Staff Attendance
+    </a>
+    <a href="/appointments" class="s-link">
+        <i class="far fa-calendar-alt"></i> Appointments
+    </a>
+    <a href="/doctors" class="s-link">
+        <i class="fas fa-user-md"></i> Find Doctors
+    </a>
+    <a href="/messages" class="s-link">
+        <i class="fas fa-comments"></i> Messages
+    </a>
+
+    <div style="margin-top:auto; padding-top:20px; border-top:1px solid var(--border);">
+        <a href="/logout" class="s-link" style="color:#dc2626;">
+            <i class="fas fa-sign-out-alt"></i> Logout
+        </a>
+    </div>
+</div>
+
+<div class="main-content">
+    <div class="header">
+        <div>
+            <h1 style="margin:0; color: var(--t-head);">Staff Attendance</h1>
+            <p style="margin:5px 0 0; color: var(--t-muted);">Daily presence tracking for your facility</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" onclick="markOwnAttendance()">
+                <i class="fas fa-user-check"></i> Mark My Attendance
+            </button>
+            <button class="btn" style="background:#fff; border:1px solid var(--brand); color:var(--brand);" onclick="openLeaveModal()">
+                <i class="fas fa-calendar-plus"></i> Request Leave
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Today's Roster</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Role</th>
+                    <th>Check-in Time</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for staff in staff_list %}
+                <tr>
+                    <td style="font-weight:600;">
+                        {{ staff.fullname }}
+                        {% if staff.id == user.id %}<span style="color:var(--brand); font-size:10px;">(You)</span>{% endif %}
+                    </td>
+                    <td>{{ staff.role|replace('phc_', '')|title }}</td>
+                    <td>{{ staff.checkin_time or '--:--' }}</td>
+                    <td>
+                        <span class="status-badge {{ staff.status.lower()|replace(' ', '-') }}">
+                            {{ staff.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="card" style="margin-top:20px;">
+        <h3>My Leave History</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Duration</th>
+                    <th>Reason</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for leave in my_leaves %}
+                <tr>
+                    <td>{{ leave.start_date }} to {{ leave.end_date }}</td>
+                    <td>{{ leave.reason or '---' }}</td>
+                    <td>
+                        <span class="status-badge {{ leave.status.lower() }}">
+                            {{ leave.status }}
+                        </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="text-align:center; color:var(--t-muted);">No leave records found</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Simple Attendance Modal -->
+<div id="markModal" class="modal-overlay">
+    <div class="modal-box">
+        <h3>Check In</h3>
+        <p style="font-size:14px; color:var(--t-muted);">Confirm your presence for today.</p>
+        <label>Status</label>
+        <select id="statusSelect">
+            <option value="present">Present</option>
+            <option value="late">Late</option>
+        </select>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="submitAttendance()">Confirm</button>
+            <button class="btn" style="background:#eee;" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Leave Request Modal -->
+<div id="leaveModal" class="modal-overlay">
+    <div class="modal-box">
+        <h3>Request Leave</h3>
+        <p style="font-size:14px; color:var(--t-muted);">Submit a request for leave approval.</p>
+        
+        <label style="font-size:12px; font-weight:600;">Start Date</label>
+        <input type="date" id="leaveStart">
+        
+        <label style="font-size:12px; font-weight:600;">End Date</label>
+        <input type="date" id="leaveEnd">
+        
+        <label style="font-size:12px; font-weight:600;">Reason</label>
+        <textarea id="leaveReason" placeholder="Optional..."></textarea>
+
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="submitLeaveRequest()">Submit Request</button>
+            <button class="btn" style="background:#eee;" onclick="closeLeaveModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function markOwnAttendance() {
+    document.getElementById('markModal').style.display = 'flex';
+}
+function closeModal() {
+    document.getElementById('markModal').style.display = 'none';
+}
+function submitAttendance() {
+    const status = document.getElementById('statusSelect').value;
+    fetch('/api/attendance/mark', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            staff_id: {{ user.id }},
+            status: status
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) location.reload();
+        else alert('Error: ' + data.message);
+    });
+}
+
+function openLeaveModal() {
+    document.getElementById('leaveModal').style.display = 'flex';
+}
+function closeLeaveModal() {
+    document.getElementById('leaveModal').style.display = 'none';
+}
+function submitLeaveRequest() {
+    const start_date = document.getElementById('leaveStart').value;
+    const end_date = document.getElementById('leaveEnd').value;
+    const reason = document.getElementById('leaveReason').value;
+
+    if(!start_date || !end_date) {
+        alert('Please select both start and end dates');
+        return;
+    }
+
+    fetch('/api/staff/leave/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ start_date, end_date, reason })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) {
+            alert('Leave request submitted!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    });
+}
+</script>
+
+</body>
+</html>

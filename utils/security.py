@@ -151,14 +151,25 @@ class AuditLogger:
         app.logger.info("Audit logging initialized")
 
     def log_event(self, action, details='', user=None):
-        """Log an audit event"""
+        """Log an audit event to both file and database"""
         if not self.audit_logger:
             return
+
+        import sqlite3
+        import os
 
         request_id = getattr(g, 'request_id', 'unknown')
         user_id = user if user else (current_user.email if hasattr(current_user, 'email') else 'anonymous')
         ip_address = request.remote_addr if request else 'unknown'
+        
+        # Determine resource based on action (heuristic)
+        resource = 'System'
+        if 'PATIENT' in action.upper(): resource = 'Patient Records'
+        elif 'STAFF' in action.upper(): resource = 'Staff Management'
+        elif 'INVENTORY' in action.upper(): resource = 'Resources'
+        elif 'APPOINTMENT' in action.upper(): resource = 'Appointments'
 
+        # 1. Log to File (Legacy Support)
         self.audit_logger.info(
             '',
             extra={
@@ -169,6 +180,20 @@ class AuditLogger:
                 'details': details
             }
         )
+
+        # 2. Log to Database (New Real-Time Boss Level)
+        try:
+            db_path = r'e:\Nilal_thiruvila\SmartTriage_Dashboard\triage.db'
+            conn = sqlite3.connect(db_path)
+            conn.execute("""
+                INSERT INTO system_audit (user_email, action, resource, details, ip_address)
+                VALUES (?, ?, ?, ?, ?)
+            """, (user_id, action, resource, details, ip_address))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            # Fallback to standard logging if DB fails
+            logger.error(f"Audit DB logging failed: {e}")
 
 
 class InputSanitizer:

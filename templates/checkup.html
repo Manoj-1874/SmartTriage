@@ -2198,6 +2198,7 @@
           <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
           <span class="t-breadcrumb-active">AI Checkup</span>
         </div>
+        {% if u and u.role != 'doctor' %}
         <div class="t-right">
           <div class="t-clock" id="liveClock">--:-- --</div>
           <div class="theme-pill" id="themeToggle">
@@ -2221,6 +2222,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </header>
 
       <div class="page">

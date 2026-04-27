@@ -59,7 +59,7 @@ class Config:
 
     # Flask Configuration
     SECRET_KEY = os.getenv('FLASK_SECRET_KEY', secrets.token_hex(32))
-    DEBUG = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+    DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     ENV = os.getenv('FLASK_ENV', 'production')
 
     # Prevent accidentally running in debug mode in production
@@ -144,7 +144,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     """Development configuration"""
-    DEBUG = True
+    DEBUG = False
     ENV = 'development'
     SESSION_COOKIE_SECURE = False
 

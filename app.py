@@ -5,12 +5,21 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import sqlite3
 import pandas as pd
 import numpy as np
-import joblib
-from transformers import pipeline
-from huggingface_hub import hf_hub_download
 import os
 import sys
 import warnings
+import joblib
+from huggingface_hub import hf_hub_download
+
+# [MEMORY RESILIENCE] Lazy-load heavy AI modules to prevent startup crash
+AI_ENGINE_AVAILABLE = False
+try:
+    from transformers import pipeline
+    AI_ENGINE_AVAILABLE = True
+except (ImportError, MemoryError, RuntimeError, Exception) as e:
+    print(f"[LIGHTWEIGHT MODE] AI Engine (Transformers) disabled: {e}")
+
+
 from datetime import datetime, timedelta
 import secrets
 import smtplib
@@ -238,6 +247,19 @@ def cleanup_on_exit():
 # ===================================
 # ERROR HANDLERS
 # ===================================
+@app.template_filter('strftime')
+def _jinja2_filter_datetime(date_str, fmt=None):
+    if not date_str:
+        return ""
+    try:
+        if isinstance(date_str, str):
+            dt = datetime.strptime(date_str, '%Y-%m-%d %H:%M:%S')
+        else:
+            dt = date_str
+        return dt.strftime(fmt or '%Y-%m-%d')
+    except:
+        return str(date_str)
+
 @app.errorhandler(404)
 def not_found_error(error):
     """Handle 404 errors"""
@@ -324,7 +346,7 @@ def handle_db_errors(f):
 
 # --- 2. USER CLASS FOR FLASK-LOGIN ---
 class User(UserMixin):
-    def __init__(self, id, email, fullname, role, phone, specialization=None, license=None, experience=None, phc_id=None):
+    def __init__(self, id, email, fullname, role, phone, specialization=None, license=None, experience=None, phc_id=None, district='Trichy', address=None, lat=None, lon=None):
         self.id = id
         self.email = email
         self.fullname = fullname
@@ -334,6 +356,10 @@ class User(UserMixin):
         self.license = license
         self.experience = experience
         self.phc_id = phc_id
+        self.district = district
+        self.address = address
+        self.lat = lat
+        self.lon = lon
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -345,16 +371,22 @@ def load_user(user_id):
             user_data = c.fetchone()
 
             if user_data:
+                # Convert to dict for safer attribute access
+                ud = dict(user_data)
                 return User(
-                    id=user_data['id'],
-                    email=user_data['email'],
-                    fullname=user_data['fullname'],
-                    role=user_data['role'],
-                    phone=user_data['phone'],
-                    specialization=user_data['specialization'],
-                    license=user_data['license'],
-                    experience=user_data['experience'],
-                    phc_id=user_data['phc_id'] if 'phc_id' in user_data.keys() else None
+                    id=ud.get('id'),
+                    email=ud.get('email'),
+                    fullname=ud.get('fullname'),
+                    role=ud.get('role'),
+                    phone=ud.get('phone'),
+                    specialization=ud.get('specialization'),
+                    license=ud.get('license'),
+                    experience=ud.get('experience'),
+                    phc_id=ud.get('phc_id'),
+                    district=ud.get('district', 'Trichy'),
+                    address=ud.get('address'),
+                    lat=ud.get('lat'),
+                    lon=ud.get('lon')
                 )
     except Exception as e:
         app.logger.error(f"Error loading user {user_id}: {str(e)}", exc_info=True)
@@ -362,12 +394,12 @@ def load_user(user_id):
 
 # --- 3. INITIALIZE DATABASE ---
 def init_db():
-    """Initialize database with thread-safe connection"""
+    """Initialize database with thread-safe connection and automated migrations"""
     app.logger.info("Initializing database...")
     with db_manager.get_connection() as conn:
         c = conn.cursor()
 
-        # Users table
+        # 1. Core Users Table
         c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,9 +409,12 @@ def init_db():
             role TEXT NOT NULL,
             phc_id INTEGER,
             phone TEXT,
+            district TEXT DEFAULT 'Trichy',
             specialization TEXT,
             license TEXT,
+            license_number TEXT,
             experience INTEGER,
+            is_approved INTEGER DEFAULT 0,
             email_verified INTEGER DEFAULT 0,
             verification_token TEXT,
             verification_expires DATETIME,
@@ -388,55 +423,26 @@ def init_db():
             reset_expires DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
-    ''')
-        # Ensure new verification columns exist on older DBs
-        c.execute("PRAGMA table_info(users)")
-        existing_user_cols = [col[1] for col in c.fetchall()]
-        try:
-            if 'email_verified' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0")
-                print("🔧 Added 'email_verified' column to users table")
-            if 'verification_token' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
-                print("🔧 Added 'verification_token' column to users table")
-            if 'verification_expires' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN verification_expires DATETIME")
-                print("🔧 Added 'verification_expires' column to users table")
-            if 'reset_token' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
-                print("🔧 Added 'reset_token' column to users table")
-            if 'reset_code' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN reset_code TEXT")
-                print("🔧 Added 'reset_code' column to users table")
-            if 'reset_expires' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN reset_expires DATETIME")
-                print("🔧 Added 'reset_expires' column to users table")
-            if 'phc_id' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN phc_id INTEGER")
-                print("🔧 Added 'phc_id' column to users table")
-            if 'location' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN location TEXT")
-                print("[OK] Added 'location' column to users table")
-            if 'assigned_nurse_id' not in existing_user_cols:
-                c.execute("ALTER TABLE users ADD COLUMN assigned_nurse_id INTEGER")
-                print("🔧 Added 'assigned_nurse_id' column to users table")
-        except Exception as e:
-            print(f"[WARN] Could not alter users table: {e}")
+        ''')
 
-        # PHC facilities table
+        # 2. PHC Facilities Table
         c.execute('''
             CREATE TABLE IF NOT EXISTS phc_facilities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
                 location TEXT NOT NULL,
+                district TEXT DEFAULT 'Trichy',
                 contact TEXT,
-                status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'MAINTENANCE')),
+                contact_info TEXT,
+                status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'INACTIVE', 'MAINTENANCE', 'PENDING', 'REJECTED')),
+                approved_by INTEGER,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (approved_by) REFERENCES users(id)
             )
         ''')
 
-        # Staff attendance table
+        # 3. Staff Attendance Table
         c.execute('''
             CREATE TABLE IF NOT EXISTS staff_attendance (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -450,7 +456,7 @@ def init_db():
             )
         ''')
 
-        # Patient logs table
+        # 4. Patient Logs Table
         c.execute('''
             CREATE TABLE IF NOT EXISTS patient_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -465,6 +471,8 @@ def init_db():
                 outcome_confirmed_by INTEGER,
                 outcome_confirmed_at DATETIME,
                 outcome_notes TEXT,
+                pain_intensity INTEGER,
+                symptom_duration TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (phc_id) REFERENCES phc_facilities(id),
@@ -472,242 +480,173 @@ def init_db():
             )
         ''')
 
+        # 5. Appointments Table
         c.execute('''
-            CREATE TABLE IF NOT EXISTS model_monitoring_logs (
+            CREATE TABLE IF NOT EXISTS appointments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_log_id INTEGER,
-                xgb_risk TEXT,
-                final_risk TEXT,
-                xgb_low_prob REAL,
-                xgb_medium_prob REAL,
-                xgb_high_prob REAL,
-                bert_label TEXT,
-                bert_score REAL,
-                news2_score INTEGER,
-                override_reason TEXT,
+                patient_id INTEGER NOT NULL,
+                patient_name TEXT NOT NULL,
+                doctor_id INTEGER,
+                doctor_name TEXT NOT NULL,
+                phc_id INTEGER,
+                department TEXT NOT NULL,
+                appointment_date DATE NOT NULL,
+                appointment_time TEXT NOT NULL,
+                status TEXT DEFAULT 'Pending',
+                symptoms TEXT,
+                notes TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (patient_log_id) REFERENCES patient_logs(id)
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (patient_id) REFERENCES users(id),
+                FOREIGN KEY (doctor_id) REFERENCES users(id),
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
             )
         ''')
 
-        # Check if appointments table exists
-        c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='appointments'")
-        appointments_exists = c.fetchone() is not None
-
-        if not appointments_exists:
-            # Create appointments table with correct schema for fresh database
-            print("[TABLE] Creating appointments table...")
-            c.execute('''
-                CREATE TABLE appointments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    patient_id INTEGER NOT NULL,
-                    patient_name TEXT NOT NULL,
-                    doctor_id INTEGER,
-                    doctor_name TEXT NOT NULL,
-                    department TEXT NOT NULL,
-                    appointment_date DATE NOT NULL,
-                    appointment_time TEXT NOT NULL,
-                    status TEXT DEFAULT 'Pending',
-                    symptoms TEXT,
-                    notes TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (patient_id) REFERENCES users(id),
-                    FOREIGN KEY (doctor_id) REFERENCES users(id)
-                )
-            ''')
-            print("[OK] Appointments table created!")
-        else:
-            # Check if appointments table needs migration
-            c.execute("PRAGMA table_info(appointments)")
-            columns = [column[1] for column in c.fetchall()]
-
-            if 'doctor_id' not in columns:
-                # Need to migrate old appointments table
-                print("[MIGRATE] Migrating appointments table to new schema...")
-
-                # Get the old table columns
-                c.execute("PRAGMA table_info(appointments)")
-                old_columns = [column[1] for column in c.fetchall()]
-                print(f"   Old columns: {old_columns}")
-
-                # Rename old table
-                c.execute("ALTER TABLE appointments RENAME TO appointments_old")
-
-                # Create new table with correct schema
-                c.execute('''
-                    CREATE TABLE appointments (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        patient_id INTEGER NOT NULL,
-                        patient_name TEXT NOT NULL,
-                        doctor_id INTEGER,
-                        doctor_name TEXT NOT NULL,
-                        department TEXT NOT NULL,
-                        appointment_date DATE NOT NULL,
-                        appointment_time TEXT NOT NULL,
-                        status TEXT DEFAULT 'Pending',
-                        symptoms TEXT,
-                        notes TEXT,
-                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (patient_id) REFERENCES users(id),
-                        FOREIGN KEY (doctor_id) REFERENCES users(id)
-                    )
-                ''')
-
-                # Copy data from old table (only columns that exist)
-                # Use 0 as default patient_id for old records
-                if 'patient_id' in old_columns:
-                    # Old table has patient_id
-                    c.execute('''
-                        INSERT INTO appointments
-                        (id, patient_id, patient_name, doctor_name, department, appointment_date,
-                         appointment_time, status, symptoms, notes, created_at)
-                        SELECT
-                            id, COALESCE(patient_id, 0), patient_name, doctor_name, department, appointment_date,
-                            appointment_time, status, symptoms, notes, created_at
-                        FROM appointments_old
-                    ''')
-                else:
-                    # Old table doesn't have patient_id, use default value 0
-                    c.execute('''
-                        INSERT INTO appointments
-                        (patient_id, patient_name, doctor_name, department, appointment_date,
-                         appointment_time, status, symptoms, notes, created_at)
-                        SELECT
-                            0, patient_name, doctor_name, department, appointment_date,
-                            appointment_time, status, symptoms, notes, created_at
-                        FROM appointments_old
-                    ''')
-
-                # Drop old table
-                c.execute("DROP TABLE appointments_old")
-
-                print("[OK] Migration completed!")
-            else:
-                # Table already has correct schema, no migration needed
-                print("[OK] Appointments table already up-to-date")
-
-        # Check if patient_logs table needs migration for user_id column
-        c.execute("PRAGMA table_info(patient_logs)")
-        pl_columns = [column[1] for column in c.fetchall()]
-
-        if 'user_id' not in pl_columns:
-            print("[MIGRATE] Migrating patient_logs table to add user_id column...")
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN user_id INTEGER")
-                print("[OK] Added user_id column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Column might already exist: {e}")
-        if 'phc_id' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN phc_id INTEGER")
-                print("[OK] Added phc_id column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add phc_id: {e}")
-        if 'recommended_specialist' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN recommended_specialist TEXT")
-                print("[OK] Added recommended_specialist column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add recommended_specialist: {e}")
-        if 'risk_score' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN risk_score INTEGER")
-                print("[OK] Added risk_score column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add risk_score: {e}")
-        if 'respiration_rate' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN respiration_rate INTEGER")
-                print("[OK] Added respiration_rate column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add respiration_rate: {e}")
-        if 'spo2' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN spo2 INTEGER")
-                print("[OK] Added spo2 column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add spo2: {e}")
-        if 'news2_score' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN news2_score INTEGER")
-                print("[OK] Added news2_score column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add news2_score: {e}")
-        if 'actual_outcome' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN actual_outcome TEXT")
-                print("[OK] Added actual_outcome column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add actual_outcome: {e}")
-        if 'outcome_confirmed_by' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_by INTEGER")
-                print("[OK] Added outcome_confirmed_by column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add outcome_confirmed_by: {e}")
-        if 'outcome_confirmed_at' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_confirmed_at DATETIME")
-                print("[OK] Added outcome_confirmed_at column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add outcome_confirmed_at: {e}")
-        if 'outcome_notes' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN outcome_notes TEXT")
-                print("[OK] Added outcome_notes column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add outcome_notes: {e}")
-
-        # NEW: Add pain_intensity and symptom_duration columns
-        if 'pain_intensity' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN pain_intensity INTEGER")
-                print("[OK] Added pain_intensity column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add pain_intensity: {e}")
-
-        if 'symptom_duration' not in pl_columns:
-            try:
-                c.execute("ALTER TABLE patient_logs ADD COLUMN symptom_duration TEXT")
-                print("[OK] Added symptom_duration column to patient_logs table")
-            except sqlite3.OperationalError as e:
-                print(f"[WARN] Could not add symptom_duration: {e}")
-
-        # Create messages table for doctor-patient communication
-        c.execute('''
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sender_id INTEGER NOT NULL,
-                receiver_id INTEGER NOT NULL,
-                message TEXT NOT NULL,
-                is_read INTEGER DEFAULT 0,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (sender_id) REFERENCES users(id),
-                FOREIGN KEY (receiver_id) REFERENCES users(id)
-            )
-        ''')
-
-        # Create ambulances table for district-level ambulance management
+        # 6. Ambulances Table
         c.execute('''
             CREATE TABLE IF NOT EXISTS ambulances (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 ambulance_number TEXT UNIQUE NOT NULL,
-                status TEXT DEFAULT 'available' CHECK(status IN ('available', 'allocated', 'maintenance')),
+                vehicle_type TEXT DEFAULT 'Basic Life Support',
+                status TEXT DEFAULT 'available' CHECK(status IN ('available', 'allocated', 'maintenance', 'in_transit')),
                 location TEXT,
+                location_lat REAL,
+                location_lon REAL,
                 driver_name TEXT,
                 driver_contact TEXT,
+                current_driver_id INTEGER,
                 capacity INTEGER DEFAULT 4,
-                phc_assigned_id INTEGER,
+                phc_id INTEGER,
+                district TEXT DEFAULT 'Trichy',
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (phc_assigned_id) REFERENCES phc_facilities(id)
+                FOREIGN KEY (current_driver_id) REFERENCES users(id),
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
             )
         ''')
 
+        # 7. Ambulance Allocations Table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS ambulance_allocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ambulance_id INTEGER NOT NULL,
+                patient_id INTEGER,
+                source_location TEXT,
+                destination_location TEXT,
+                status TEXT DEFAULT 'allocated',
+                estimated_time_min INTEGER,
+                allocation_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (ambulance_id) REFERENCES ambulances(id),
+                FOREIGN KEY (patient_id) REFERENCES users(id)
+            )
+        ''')
+
+        # 8. Inventory and Financial Tables
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phc_id INTEGER NOT NULL,
+                item_name TEXT NOT NULL,
+                quantity INTEGER DEFAULT 0,
+                min_threshold INTEGER DEFAULT 10,
+                category TEXT,
+                unit_cost REAL DEFAULT 0.0,
+                status TEXT,
+                last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
+            )
+        ''')
+
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS resource_usage_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phc_id INTEGER NOT NULL,
+                item_id INTEGER,
+                quantity_used INTEGER,
+                unit_cost_at_time REAL DEFAULT 0.0,
+                total_cost REAL DEFAULT 0.0,
+                usage_type TEXT,
+                logged_by_email TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id),
+                FOREIGN KEY (item_id) REFERENCES inventory(id)
+            )
+        ''')
+
+        # 9. Campaigns and Budget
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS health_campaigns (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                description TEXT,
+                status TEXT DEFAULT 'Upcoming',
+                beneficiaries INTEGER DEFAULT 0,
+                start_date DATETIME,
+                district TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS budget_allocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                purpose TEXT NOT NULL,
+                amount REAL DEFAULT 0.0,
+                district TEXT,
+                allocated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+
+        # 11. Staff Leaves Table
+        c.execute('''
+            CREATE TABLE IF NOT EXISTS staff_leaves (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                phc_id INTEGER NOT NULL,
+                start_date DATE NOT NULL,
+                end_date DATE NOT NULL,
+                reason TEXT,
+                status TEXT DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'APPROVED', 'REJECTED')),
+                requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (phc_id) REFERENCES phc_facilities(id)
+            )
+        ''')
+
+        # 12. Migration Logic: Add missing columns to existing tables
+        tables_to_check = {
+            'users': ['district', 'is_approved', 'license_number', 'phc_id', 'location', 'address', 'lat', 'lon'],
+            'phc_facilities': ['district', 'contact', 'contact_info', 'approved_by', 'lat', 'lon'],
+            'ambulances': ['district', 'phc_id', 'location_lat', 'location_lon', 'current_driver_id'],
+            'ambulance_allocations': ['source_lat', 'source_lon', 'dest_lat', 'dest_lon', 'driver_id', 'reached_at'],
+            'inventory': ['unit_cost', 'last_updated', 'status'],
+            'resource_usage_logs': ['unit_cost_at_time', 'logged_by_email', 'usage_type'],
+            'patient_logs': ['user_id', 'phc_id', 'recommended_specialist', 'risk_score', 'respiration_rate', 'spo2', 'news2_score', 'actual_outcome', 'outcome_confirmed_by', 'outcome_confirmed_at', 'outcome_notes', 'pain_intensity', 'symptom_duration', 'temp', 'hr', 'sys_bp', 'dia_bp']
+        }
+
+        for table, columns in tables_to_check.items():
+            c.execute(f"PRAGMA table_info({table})")
+            existing_cols = [col[1] for col in c.fetchall()]
+            for col in columns:
+                if col not in existing_cols:
+                    try:
+                        # Determine default type/value for some columns
+                        type_str = "TEXT"
+                        if col in ['phc_id', 'is_approved', 'current_driver_id', 'approved_by', 'user_id', 'risk_score', 'respiration_rate', 'spo2', 'news2_score', 'pain_intensity', 'quantity_used']:
+                            type_str = "INTEGER"
+                        elif col in ['location_lat', 'location_lon', 'temp', 'unit_cost_at_time', 'total_cost']:
+                            type_str = "REAL"
+                        elif col in ['last_updated', 'timestamp']:
+                            type_str = "DATETIME DEFAULT CURRENT_TIMESTAMP"
+                        
+                        c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {type_str}")
+                        app.logger.info(f"🔧 Migrated: Added column '{col}' to table '{table}'")
+                    except Exception as e:
+                        app.logger.warning(f"Could not add column {col} to {table}: {e}")
+
         conn.commit()
-        app.logger.info("[OK] Database initialization complete")
+        app.logger.info("[OK] Database initialization and migrations complete")
 
 
 def init_sample_phc_centers():
@@ -778,18 +717,24 @@ def load_models_from_huggingface():
         scaler = assets['scaler']
         feature_names = assets.get('features') or assets.get('feature_names')  # Handle both key names
 
-        # Load BERT model from Hugging Face
-        exp_brain = pipeline(
-            "text-classification",
-            model=HF_REPO_ID,
-            tokenizer=HF_REPO_ID
-        )
-
-        print("[OK] Models loaded from Hugging Face Hub successfully!")
+        # Load BERT model from Hugging Face (Protected)
+        exp_brain = None
+        if AI_ENGINE_AVAILABLE:
+            try:
+                exp_brain = pipeline(
+                    "text-classification",
+                    model=HF_REPO_ID,
+                    tokenizer=HF_REPO_ID
+                )
+                print("[OK] BERT model loaded from Hugging Face Hub successfully!")
+            except Exception as bert_e:
+                print(f"[ERROR] BERT load failed: {bert_e}")
+        else:
+            print("[INFO] Skipping BERT load - AI Engine not available")
         return encoders, xgb_risk_model, scaler, feature_names, exp_brain
 
     except Exception as e:
-        print(f"❌ Failed to load from Hugging Face: {e}")
+        print(f"[CRITICAL] Failed to load from Hugging Face: {e}")
         raise
 
 def load_models_locally():
@@ -804,14 +749,17 @@ def load_models_locally():
         feature_names = assets.get('features') or assets.get('feature_names')  # Handle both key names
         print("[OK] XGBoost models loaded successfully")
 
-        # Try to load BERT model
-        try:
-            exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
-            print("[OK] BERT model loaded successfully")
-        except Exception as bert_error:
-            print(f"[WARNING] Failed to load BERT model: {bert_error}")
-            print("[INFO] Running with XGBoost only (text analysis disabled)")
-            exp_brain = None
+        # Try to load BERT model (Protected)
+        exp_brain = None
+        if AI_ENGINE_AVAILABLE:
+            try:
+                exp_brain = pipeline("text-classification", model=MODEL_DIR, tokenizer=MODEL_DIR)
+                print("[OK] BERT model loaded successfully")
+            except Exception as bert_error:
+                print(f"[WARNING] Failed to load BERT model: {bert_error}")
+                print("[INFO] Running with XGBoost only (text analysis disabled)")
+        else:
+            print("[INFO] Skipping BERT load - AI Engine not available")
 
         return encoders, xgb_risk_model, scaler, feature_names, exp_brain
     except Exception as e:
@@ -1248,6 +1196,36 @@ def get_phc_dashboard_data(phc_id):
                 'status': 'WARNING'
             })
 
+        # Get staff availability and check-ins
+        availability = conn.execute('''
+            SELECT 
+                SUM(CASE WHEN role = 'doctor' AND status = 'Present' THEN 1 ELSE 0 END) as docs,
+                SUM(CASE WHEN role = 'phc_nurse' AND status = 'Present' THEN 1 ELSE 0 END) as nurses,
+                COUNT(*) as total_present
+            FROM (
+                SELECT u.role, COALESCE(sa.status, 'Absent') as status
+                FROM users u
+                LEFT JOIN staff_attendance sa ON u.id = sa.user_id
+                    AND date(sa.check_in_time) = date('now')
+                WHERE u.phc_id = ?
+            )
+        ''', (phc_id,)).fetchone()
+
+        docs_avail = availability['docs'] if availability['docs'] else 0
+        nurses_avail = availability['nurses'] if availability['nurses'] else 0
+        checkins = availability['total_present'] if availability['total_present'] else 0
+
+        # Get total patients for this center
+        total_pats_row = conn.execute('SELECT COUNT(*) as count FROM users WHERE role = "patient" AND phc_id = ?', (phc_id,)).fetchone()
+        total_patients = total_pats_row['count'] if total_pats_row else 0
+
+        # Patients registered today
+        reg_today_row = conn.execute('''
+            SELECT COUNT(DISTINCT user_id) as count FROM patient_logs 
+            WHERE phc_id = ? AND date(timestamp) = ?
+        ''', (phc_id, today)).fetchone()
+        reg_today = reg_today_row['count'] if reg_today_row else 0
+
         conn.close()
 
         return {
@@ -1257,7 +1235,12 @@ def get_phc_dashboard_data(phc_id):
             'admission_counts': admission_counts if admission_counts else [0],
             'disease_labels': disease_labels if disease_labels else ['LOW'],
             'disease_counts': disease_counts if disease_counts else [0],
-            'system_alerts': system_alerts
+            'system_alerts': system_alerts,
+            'doctors_available': docs_avail,
+            'nurses_available': nurses_avail,
+            'checkins_today': checkins,
+            'total_patients': total_patients,
+            'patients_registered_today': reg_today
         }
     except Exception as e:
         app.logger.error(f"Error getting PHC dashboard data: {str(e)}")
@@ -1275,7 +1258,7 @@ def get_phc_dashboard_data(phc_id):
 def get_role_dashboard_redirect():
     """Get the correct dashboard URL based on current user's role"""
     if current_user.role == 'ddhs_admin':
-        return url_for('admin_dashboard')
+        return url_for('ddhs_admin_dashboard')
     elif current_user.role == 'doctor':
         return url_for('doctor_dashboard')
     elif current_user.role == 'phc_nurse':
@@ -1284,7 +1267,7 @@ def get_role_dashboard_redirect():
         return url_for('patient_dashboard')
 
 
-ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_nurse'}
+ALLOWED_ROLES = {'patient', 'doctor', 'ddhs_admin', 'phc_nurse', 'ambulance_driver'}
 
 # --- 5. AUTHENTICATION ROUTES ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -1329,16 +1312,25 @@ def login():
         conn.close()
 
         if user_data and check_password_hash(user_data['password_hash'], password):
+            # Convert sqlite3.Row to dict for easier .get() access
+            u = dict(user_data)
+            district = u.get('district', 'Trichy')
+
+            # REAL WORLD SECURITY: Check if professional accounts are approved by DDHS
+            if u['role'] != 'patient' and not u.get('is_approved', 0):
+                return render_template('login.html', 
+                                    error='Your account is awaiting DDHS verification. Please try again once approved.', 
+                                    email=email, 
+                                    selected_role=role)
+
             user = User(
-                id=user_data['id'],
-                email=user_data['email'],
-                fullname=user_data['fullname'],
-                role=user_data['role'],
-                phone=user_data['phone'],
-                specialization=user_data['specialization'],
-                license=user_data['license'],
-                experience=user_data['experience'],
-                phc_id=user_data.get('phc_id') if isinstance(user_data, dict) else (user_data[5] if len(user_data) > 5 else None)
+                id=u['id'],
+                email=u['email'],
+                fullname=u['fullname'],
+                role=u['role'],
+                phone=u['phone'],
+                phc_id=u.get('phc_id'),
+                district=district
             )
             login_user(user, remember=request.form.get('remember'))
 
@@ -1354,12 +1346,19 @@ def login():
         else:
             return render_template('login.html', error='Invalid password. Please try again.', email=email, selected_role=role)
 
+
     return render_template('login.html')
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if current_user.is_authenticated:
-       pass # Allow signup even if logged in just in case
+       pass 
+
+    conn = get_db_connection()
+    # Get active PHCs for the signup form dropdown
+    phcs = conn.execute("SELECT id, name, district FROM phc_facilities WHERE status = 'ACTIVE' ORDER BY name").fetchall()
+    phcs_list = [dict(row) for row in phcs]
+    conn.close()
 
     if request.method == 'POST':
         # Sanitize inputs
@@ -1369,135 +1368,82 @@ def signup():
         fullname = InputSanitizer.sanitize_string(request.form.get('fullname'), max_length=100)
         phone = InputSanitizer.sanitize_phone(request.form.get('phone'))
         role = InputSanitizer.sanitize_string(request.form.get('role'), max_length=50)
-        location = InputSanitizer.sanitize_string(request.form.get('location'), max_length=200)  # NEW: Capture location
+        location = InputSanitizer.sanitize_string(request.form.get('location'), max_length=200)
+        district = InputSanitizer.sanitize_string(request.form.get('district'), max_length=50) or 'Trichy'
         phc_id = request.form.get('phc_id')
+        
+        # Professional fields
+        license_number = InputSanitizer.sanitize_string(request.form.get('license_number'), max_length=50)
+        specialization = InputSanitizer.sanitize_string(request.form.get('specialization'), max_length=100)
 
         # Validate inputs
-        if not email:
-            return render_template('signup.html', error='Invalid email address.')
+        if not email or not password or not fullname:
+            return render_template('signup.html', error='Missing required fields.', phcs=phcs_list)
 
         if role not in ALLOWED_ROLES:
-            app.logger.warning(f"Signup attempt with invalid role: {role} from {request.remote_addr}")
-            return render_template('signup.html', error='Invalid role selected.')
+            return render_template('signup.html', error='Invalid role selected.', phcs=phcs_list)
 
-        if phc_id == '':
-            phc_id = None
-        
-        # NEW: Validate PHC ID exists if provided
-        if phc_id:
-            conn = get_db_connection()
-            valid_phc = conn.execute('SELECT id FROM phc_facilities WHERE id = ?', (phc_id,)).fetchone()
-            conn.close()
-            if not valid_phc:
-                phc_id = 1 # Default to Central if invalid
-                app.logger.warning(f"Signup with invalid PHC ID: {phc_id}. Defaulted to 1.")
-
-        # Password validation
         if password != confirm_password:
-            return render_template('signup.html', error='Passwords do not match.')
+            return render_template('signup.html', error='Passwords do not match.', phcs=phcs_list)
 
         # Enforce password policy
         is_valid, policy_message = PasswordPolicy.validate(password)
         if not is_valid:
-            app.logger.warning(f"Signup with weak password from {request.remote_addr}")
-            return render_template('signup.html', error=f'Password Policy: {policy_message}')
+            return render_template('signup.html', error=f'Password Policy: {policy_message}', phcs=phcs_list)
 
         conn = get_db_connection()
-
-        # Check if email already exists
-        existing_user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
-        if existing_user:
-            conn.close()
-            app.logger.warning(f"Signup attempt with existing email: {email} from {request.remote_addr}")
-            return render_template(
-                'login.html',
-                error='Email already registered. If you forgot your password, use Forgot Password.',
-                email=email,
-                selected_role=existing_user['role'],
-                show_reset=True
-            )
-
-        # Hash password
-        password_hash = generate_password_hash(password)
-
-        # Prepare verification token
-        token = secrets.token_urlsafe(24)
-        expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
-
         try:
-            assigned_nurse_id = None
-            # REAL-WORLD LOGIC: Assign user to nearest PHC based on location
-            if role == 'patient':
-                # For patients: Use location to find nearest PHC
-                if location:
-                    phc_id = find_nearest_phc(conn, location)
-                    print(f"[DEBUG] Patient '{fullname}' from '{location}' assigned to PHC: {phc_id}")
-                else:
-                    # If location not provided, use first PHC
-                    default_phc = conn.execute('SELECT id FROM phc_facilities ORDER BY id LIMIT 1').fetchone()
-                    phc_id = default_phc['id'] if default_phc else 1
-                    print(f"[DEBUG] Patient without location auto-assigned to PHC: {phc_id}")
-                
-                # NEW: Assign specific nurse at this PHC
-                assigned_nurse_id = assign_nurse_to_patient(conn, phc_id)
-                print(f"[DEBUG] Patient '{fullname}' assigned to Nurse: {assigned_nurse_id}")
+            # Check if email already exists
+            existing_user = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+            if existing_user:
+                return render_template('login.html', error='Email already registered.', email=email)
 
-            elif role in ('doctor', 'phc_nurse'):
-                # For doctors/nurses: If location provided, find nearest PHC
-                if location and (phc_id is None or phc_id == ''):
-                    phc_id = find_nearest_phc(conn, location)
-                    print(f"[DEBUG] {role} '{fullname}' from '{location}' assigned to PHC: {phc_id}")
-                elif phc_id is None or phc_id == '':
-                    # Use provided PHC ID or default to 1
-                    phc_id = 1
-                    print(f"[DEBUG] {role} manually assigned to PHC: {phc_id}")
-            elif role == 'ddhs_admin':
-                # DDHS admins typically oversee all PHCs, so may not have specific PHC ID
-                # But if location provided, assign to nearest for administrative purposes
-                if location and (phc_id is None or phc_id == ''):
-                    phc_id = find_nearest_phc(conn, location)
-                    print(f"[DEBUG] DDHS Admin from '{location}' office at PHC: {phc_id}")
+            # REAL WORLD LOGIC: Automatic PHC Assignment if not chosen
+            if not phc_id and location:
+                phc_id = find_nearest_phc(conn, location)
 
-            if role in ('doctor', 'phc_nurse'):
-                specialization = InputSanitizer.sanitize_string(request.form.get('specialization'), max_length=100)
-                license = InputSanitizer.sanitize_string(request.form.get('license'), max_length=50)
-                experience = InputSanitizer.sanitize_string(request.form.get('experience'), max_length=50)
+            # PROFESSIONALS NEED APPROVAL (is_approved=0 for non-patients)
+            is_approved = 1 if role == 'patient' else 0
 
-                conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, email_verified, verification_token, verification_expires, location)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phc_id, phone, specialization, license, experience, 1, token, expires, location))
-            else:
-                conn.execute('''
-                    INSERT INTO users (email, password_hash, fullname, role, phc_id, phone, email_verified, verification_token, verification_expires, location, assigned_nurse_id)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (email, password_hash, fullname, role, phc_id, phone, 1, token, expires, location, assigned_nurse_id))
+            # Prepare verification token
+            token = secrets.token_urlsafe(24)
+            expires = (datetime.utcnow() + timedelta(hours=24)).isoformat()
+            password_hash = generate_password_hash(password)
 
+            # GPS and Address for patients/drivers
+            lat = request.form.get('lat')
+            lon = request.form.get('lon')
+            address = request.form.get('address')
+
+            conn.execute('''
+                INSERT INTO users (
+                    email, password_hash, fullname, role, phone, 
+                    phc_id, district, license_number, specialization, 
+                    is_approved, verification_token, verification_expires,
+                    lat, lon, address
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                email, password_hash, fullname, role, phone, 
+                phc_id, district, license_number, specialization, 
+                is_approved, token, expires,
+                lat, lon, address
+            ))
             conn.commit()
-            conn.close()
-
-            # Audit log successful signup
-            if audit_logger := app.extensions.get('audit_logger'):
-                audit_logger.log_event(
-                    action='USER_SIGNUP',
-                    details=f"Role: {role} | Name: {fullname}",
-                    user=email
-                )
-
-            app.logger.info(f"New user registered - Email: {email} | Role: {role}")
-            return render_template(
-                'login.html',
-                success='Account created successfully! You can now login.',
-                email=email,
-                selected_role=role
-            )
+            
+            if is_approved:
+                flash('Account created! Please log in.')
+            else:
+                flash('Registration submitted! A DDHS Admin will verify your credentials shortly.')
+                
+            return redirect(url_for('login'))
 
         except Exception as e:
+            app.logger.error(f"Signup error: {e}")
+            return render_template('signup.html', error=f'Registration failed: {str(e)}', phcs=phcs_list)
+        finally:
             conn.close()
-            app.logger.error(f"Signup error for {email}: {str(e)}")
-            return render_template('signup.html', error=f'Registration failed: {str(e)}')
 
-    return render_template('signup.html')
+    return render_template('signup.html', phcs=phcs_list)
 
 @app.route('/logout')
 @login_required
@@ -1824,11 +1770,11 @@ def patient_view_report(report_id):
     from datetime import datetime
     try:
         dt = datetime.fromisoformat(report['timestamp'])
-        report['date_formatted'] = dt.strftime('%B %d, %Y')
-        report['time_formatted'] = dt.strftime('%I:%M %p')
+        report['formatted_date'] = dt.strftime('%B %d, %Y')
+        report['formatted_time'] = dt.strftime('%I:%M %p')
     except:
-        report['date_formatted'] = report['timestamp']
-        report['time_formatted'] = ''
+        report['formatted_date'] = report['timestamp']
+        report['formatted_time'] = ''
 
     # Format vitals
     report['bp_formatted'] = f"{report['sys_bp']}/{report['dia_bp']} mmHg"
@@ -2154,6 +2100,9 @@ def phc_nurse_patients():
             u.email,
             u.fullname,
             u.phone,
+            u.lat,
+            u.lon,
+            u.address,
             COUNT(DISTINCT a.id) as total_appointments,
             COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
             COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
@@ -2165,6 +2114,19 @@ def phc_nurse_patients():
     """, (current_user.id,)).fetchall()
 
     patients = [dict(row) for row in patients]
+
+    # Fetch available ambulances for this district
+    # We join with users to get the current driver's name if needed, or use driver_name column
+    available_ambulances = conn.execute("""
+        SELECT id, ambulance_number, vehicle_type, driver_name, driver_contact, location
+        FROM ambulances
+        WHERE status = 'available' AND district = ?
+    """, (current_user.district or 'Trichy',)).fetchall()
+    available_ambulances = [dict(row) for row in available_ambulances]
+
+    # Fetch all PHC facilities as potential destinations
+    facilities = conn.execute("SELECT id, name, location, lat, lon FROM phc_facilities WHERE status = 'ACTIVE'").fetchall()
+    facilities = [dict(row) for row in facilities]
 
     # Get patient cases count and case history separately
     patient_cases_dict = {}
@@ -2221,6 +2183,8 @@ def phc_nurse_patients():
     return render_template('phc_nurse_patients.html',
                          patients=patients,
                          patient_cases=patient_cases_dict,
+                         available_ambulances=available_ambulances,
+                         facilities=facilities,
                          total_patients=total_patients,
                          active_cases=active_cases,
                          high_risk_count=high_risk_count,
@@ -2345,282 +2309,195 @@ def phc_nurse_messages():
 
 
 
-# ===== DDHS ADMIN ROUTES =====
+# ===== DDHS =====
+@app.route('/register-phc', methods=['GET', 'POST'])
+def register_phc():
+    if request.method == 'POST':
+        name = InputSanitizer.sanitize_string(request.form.get('name'))
+        location = InputSanitizer.sanitize_string(request.form.get('location'))
+        district = request.form.get('district')
+        contact_info = InputSanitizer.sanitize_string(request.form.get('contact_info'))
+        
+        if not name or not location or not district:
+            flash("All fields are required.", "error")
+            return render_template('register_phc.html')
+            
+        try:
+            with db_manager.get_connection() as conn:
+                conn.execute('''
+                    INSERT INTO phc_facilities (name, location, district, status, contact_info)
+                    VALUES (?, ?, ?, 'PENDING', ?)
+                ''', (name, location, district, contact_info))
+                conn.commit()
+                flash("Facility registration request submitted! The DDHS Admin of your district will review it.", "success")
+                return redirect(url_for('login'))
+        except Exception as e:
+            app.logger.error(f"PHC registration error: {e}")
+            flash("An error occurred. Please try again.", "error")
+            
+    return render_template('register_phc.html')
+
+@app.route('/ddhs-admin/approve-phc/<int:phc_id>', methods=['POST'])
+@login_required
+def approve_phc(phc_id):
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    
+    action = request.form.get('action') # 'approve' or 'reject'
+    status = 'ACTIVE' if action == 'approve' else 'REJECTED'
+    
+    try:
+        with db_manager.get_connection() as conn:
+            conn.execute('UPDATE phc_facilities SET status = ?, approved_by = ? WHERE id = ?', (status, current_user.id, phc_id))
+            conn.commit()
+            return jsonify({'success': True, 'message': f'Facility {action}d successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/ddhs-admin/approve-user/<int:user_id>', methods=['POST'])
+@login_required
+def approve_user(user_id):
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    
+    action = request.form.get('action')
+    approved = 1 if action == 'approve' else -1 # -1 for rejected
+    
+    try:
+        with db_manager.get_connection() as conn:
+            conn.execute('UPDATE users SET is_approved = ? WHERE id = ?', (approved, user_id))
+            conn.commit()
+            return jsonify({'success': True, 'message': f'User {action}d successfully.'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+
 @app.route('/ddhs-admin/dashboard')
 @login_required
 def ddhs_admin_dashboard():
-    """DDHS Admin Dashboard - District-level health administration with real data"""
+    """DDHS Admin Dashboard - Real World Dynamic Data with Approval workflows"""
     if current_user.role != 'ddhs_admin':
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
+    # FORCE RELOAD USER TO REFRESH DISTRICT CONTEXT
     conn = get_db_connection()
+    db_user = conn.execute('SELECT * FROM users WHERE id = ?', (current_user.id,)).fetchone()
+    if db_user:
+        try:
+            current_user.district = db_user['district'] or 'Trichy'
+            current_user.fullname = db_user['fullname']
+        except: pass
 
-    # Helper to safely extract count values
-    def get_count(result):
-        if result is None:
-            return 0
-        if isinstance(result, dict):
-            return result.get('count', 0)
-        if isinstance(result, (tuple, list)):
-            return result[0] if result else 0
-        return result if isinstance(result, int) else 0
+    # REAL WORLD: Fetch pending facilities for THIS district
+    pending_phcs = conn.execute("SELECT * FROM phc_facilities WHERE district = ? AND status = 'PENDING'", (current_user.district,)).fetchall()
+    
+    # REAL WORLD: Fetch pending staff (is_approved=0) for THIS district
+    pending_staff = conn.execute("SELECT * FROM users WHERE district = ? AND is_approved = 0 AND role != 'patient'", (current_user.district,)).fetchall()
 
-    # Get district-level statistics
-    total_patients_row = conn.execute(
-        "SELECT COUNT(*) as count FROM users WHERE role = 'patient'"
-    ).fetchone()
-    total_patients = get_count(total_patients_row)
+    # Core Metrics filtered by District
+    total_patients_row = conn.execute("SELECT COUNT(*) as count FROM users WHERE role = 'patient' AND district = ?", (current_user.district,)).fetchone()
+    total_centers_row = conn.execute("SELECT COUNT(*) as count FROM phc_facilities WHERE status = 'ACTIVE' AND district = ?", (current_user.district,)).fetchone()
+    total_staff_row = conn.execute("SELECT COUNT(*) as count FROM users WHERE role IN ('phc_nurse', 'doctor') AND district = ?", (current_user.district,)).fetchone()
+    
+    # Ambulance context
+    ambulances_active_row = conn.execute("SELECT COUNT(*) as count FROM ambulances WHERE status = 'available' AND district = ?", (current_user.district,)).fetchone()
 
-    # Get health centers count (PHC and CHC facilities)
-    health_centers_row = conn.execute(
-        "SELECT COUNT(DISTINCT phc_id) as count FROM users WHERE role IN ('phc_nurse', 'doctor') AND phc_id IS NOT NULL"
-    ).fetchone()
-    health_centers = get_count(health_centers_row)
-
-    # Get total staff across all facilities
-    total_staff_row = conn.execute(
-        "SELECT COUNT(*) as count FROM users WHERE role IN ('phc_nurse', 'doctor', 'ddhs_admin')"
-    ).fetchone()
-    total_staff = get_count(total_staff_row)
-
-    # Get critical cases - HIGH and CRITICAL risk levels
-    critical_cases_row = conn.execute(
-        "SELECT COUNT(DISTINCT user_id) as count FROM patient_logs WHERE dual_brain_risk IN ('HIGH', 'CRITICAL')"
-    ).fetchone()
-    critical_cases = get_count(critical_cases_row)
-
-    # Get vaccine coverage estimate from completed appointments
-    vaccine_coverage = 65  # Default placeholder
-
-    # ===== CENTER PERFORMANCE (Connected to PHC Nurses & Doctors) =====
-    # Shows completion rate of each health center to track performance
-    center_performance = conn.execute("""
-        SELECT
-            u.phc_id as center_id,
-            pf.name as center_name,
-            COUNT(DISTINCT a.id) as total_appointments,
-            COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed,
-            CAST(COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) * 100.0 /
-                NULLIF(COUNT(DISTINCT a.id), 0) AS INTEGER) as completion_rate
-        FROM users u
-        LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
-        LEFT JOIN appointments a ON u.id = a.doctor_id
-        WHERE u.role = 'doctor' AND u.phc_id IS NOT NULL
-        GROUP BY u.phc_id, pf.name
-        ORDER BY completion_rate DESC
-        LIMIT 5
-    """).fetchall()
-
-    center_performance = [dict(row) for row in center_performance] if center_performance else []
-    # If no performance data, show all PHC centers with 0 data
-    if not center_performance:
-        all_centers = conn.execute("SELECT id, name FROM phc_facilities ORDER BY name").fetchall()
-        center_performance = [{'center_id': c['id'], 'center_name': c['name'], 'total_appointments': 0, 'completed': 0, 'completion_rate': 0} for c in [dict(row) for row in all_centers]]
-
-    # ===== ADMISSION TRENDS (Real data from patient logs over last 7 days) =====
-    admission_data = conn.execute("""
-        SELECT
-            DATE(timestamp) as date,
-            COUNT(*) as admissions
-        FROM patient_logs
-        WHERE DATE(timestamp) >= DATE('now', '-7 days')
-        GROUP BY DATE(timestamp)
-        ORDER BY date ASC
-    """).fetchall()
-
-    admission_dates = []
-    admission_counts = []
-    if admission_data:
-        for row in admission_data:
-            row_dict = dict(row) if hasattr(row, 'keys') else {'date': row[0], 'admissions': row[1]}
-            admission_dates.append(row_dict['date'])
-            admission_counts.append(row_dict['admissions'])
-
-    # ===== DISEASE DISTRIBUTION (Risk levels from real patient data) =====
-    disease_distribution = conn.execute("""
-        SELECT
-            dual_brain_risk as disease_type,
-            COUNT(*) as count
-        FROM patient_logs
-        WHERE dual_brain_risk IS NOT NULL AND DATE(timestamp) >= DATE('now', '-30 days')
-        GROUP BY dual_brain_risk
-        ORDER BY count DESC
-    """).fetchall()
-
-    disease_labels = []
-    disease_counts = []
-    if disease_distribution:
-        for row in disease_distribution:
-            row_dict = dict(row) if hasattr(row, 'keys') else {'disease_type': row[0], 'count': row[1]}
-            disease_labels.append(row_dict['disease_type'])
-            disease_counts.append(row_dict['count'])
-
-    # ===== RESOURCE STATUS (From PHC Nurses management) =====
-    # Shows resources managed by PHC nurses by center
-    resource_alerts = []
-    phc_resources = conn.execute("""
-        SELECT
-            u.phc_id,
-            COUNT(DISTINCT CASE WHEN u.role = 'phc_nurse' THEN u.id END) as nurses,
-            COUNT(DISTINCT CASE WHEN u.role = 'doctor' THEN u.id END) as doctors,
-            COUNT(DISTINCT a.id) as active_cases
-        FROM users u
-        LEFT JOIN appointments a ON u.id = a.doctor_id AND a.status != 'Completed'
-        WHERE u.phc_id IS NOT NULL AND u.role IN ('phc_nurse', 'doctor')
-        GROUP BY u.phc_id
-    """).fetchall()
-
-    for resource in phc_resources:
-        resource_data = dict(resource) if hasattr(resource, 'keys') else {'phc_id': resource[0], 'nurses': resource[1], 'doctors': resource[2], 'active_cases': resource[3]}
-        center_id = resource_data.get('phc_id') or 'Unknown'
-        nurses = resource_data.get('nurses') or 0
-        doctors = resource_data.get('doctors') or 0
-        active_cases = resource_data.get('active_cases') or 0
-
-        # Determine status based on resource availability
-        total_staff_count = nurses + doctors
-        status = 'optimal' if total_staff_count >= 3 else 'warning' if total_staff_count >= 1 else 'critical'
-
-        resource_alerts.append({
-            'center': f"PHC {center_id}",
-            'nurses': nurses,
-            'doctors': doctors,
-            'active_cases': active_cases,
-            'status': status
+    # Performance list
+    all_centers = conn.execute("SELECT id, name FROM phc_facilities WHERE district = ? AND status = 'ACTIVE' ORDER BY name", (current_user.district,)).fetchall()
+    
+    center_performance = []
+    for c in all_centers:
+        metrics = conn.execute("""
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+            FROM appointments 
+            WHERE phc_id = ?
+        """, (c['id'],)).fetchone()
+        
+        total = metrics['total'] or 0
+        comp = metrics['completed'] or 0
+        rate = int((comp / total * 100)) if total > 0 else 0
+        
+        center_performance.append({
+            'center_id': c['id'],
+            'phc_name': c['name'],
+            'total_appointments': total,
+            'completed': comp,
+            'completion_rate': rate
         })
 
-    # ===== SYSTEM ALERTS & NOTIFICATIONS (Real-time, data-driven) =====
-    system_alerts = []
+    # Recent activity
+    recent_activities = [
+        {'time': 'Just now', 'activity': 'System Online', 'type': 'System', 'details': f'Sector {current_user.district} commands active'}
+    ]
 
-    # Alert 1: Critical patient cases reported today
-    critical_today_row = conn.execute("""
-        SELECT COUNT(DISTINCT user_id) as count FROM patient_logs
-        WHERE dual_brain_risk = 'CRITICAL' AND DATE(timestamp) = DATE('now')
-    """).fetchone()
-    critical_today = get_count(critical_today_row)
-
-    if critical_today > 0:
-        system_alerts.append({
-            'type': 'critical',
-            'icon': 'fa-exclamation-circle',
-            'title': f'🚨 {critical_today} Critical Cases',
-            'message': f'{critical_today} critical health cases reported today requiring immediate attention',
-            'status': 'Critical',
-            'time': 'Today'
-        })
-
-    # Alert 2: Pending appointments needing confirmation
-    pending_appts_row = conn.execute("""
-        SELECT COUNT(*) as count FROM appointments
-        WHERE status = 'Pending'
-    """).fetchone()
-    pending_appts = get_count(pending_appts_row)
-
-    if pending_appts > 0:
-        system_alerts.append({
-            'type': 'warning',
-            'icon': 'fa-clock',
-            'title': f'⏳ {pending_appts} Pending Appointments',
-            'message': f'{pending_appts} appointments awaiting confirmation from PHC centers',
-            'status': 'Pending',
-            'time': 'Recent'
-        })
-
-    # Alert 3: New patient registrations
-    new_patients_row = conn.execute("""
-        SELECT COUNT(*) as count FROM users
-        WHERE role = 'patient' AND DATE(created_at) = DATE('now')
-    """).fetchone()
-    new_patients = get_count(new_patients_row)
-
-    if new_patients > 0:
-        system_alerts.append({
-            'type': 'info',
-            'icon': 'fa-user-plus',
-            'title': f'👥 {new_patients} New Registrations',
-            'message': f'{new_patients} new patients registered today in the district',
-            'status': 'Completed',
-            'time': 'Today'
-        })
-
-    # Alert 4: PHC Nurse check-ins and patient logs
-    phc_entries_row = conn.execute("""
-        SELECT COUNT(*) as count FROM patient_logs
-        WHERE DATE(timestamp) = DATE('now')
-    """).fetchone()
-    phc_entries = get_count(phc_entries_row)
-
-    if phc_entries > 0:
-        system_alerts.append({
-            'type': 'success',
-            'icon': 'fa-check-circle',
-            'title': f'✓ {phc_entries} PHC Check-ins',
-            'message': f'{phc_entries} patient check-ins recorded by PHC nurses today',
-            'status': 'Completed',
-            'time': 'Recent'
-        })
-
-    # Alert 5: High risk cases that need escalation
-    high_risk_row = conn.execute("""
-        SELECT COUNT(DISTINCT user_id) as count FROM patient_logs
-        WHERE dual_brain_risk = 'HIGH' AND DATE(timestamp) >= DATE('now', '-1 day')
-    """).fetchone()
-    high_risk = get_count(high_risk_row)
-
-    if high_risk > 0:
-        system_alerts.append({
-            'type': 'warning',
-            'icon': 'fa-arrow-up',
-            'title': f'[WARN] {high_risk} High Risk Cases',
-            'message': f'{high_risk} high-risk patients need escalation or follow-up',
-            'status': 'Alert',
-            'time': 'Today'
-        })
-
+    current_time = datetime.utcnow().strftime('%H:%M:%S')
     conn.close()
 
-    # Prepare data for response
-    dashboard_data = {
-        'total_patients': total_patients,
-        'health_centers': health_centers,
-        'total_staff': total_staff,
-        'critical_cases': critical_cases,
-        'vaccine_coverage': vaccine_coverage,
-        'district_name': 'Kanpur District',
-        'center_performance': center_performance,
-        'admission_dates': admission_dates,
-        'admission_counts': admission_counts,
-        'disease_labels': disease_labels,
-        'disease_counts': disease_counts,
-        'resource_alerts': resource_alerts,
-        'system_alerts': system_alerts,
-    }
-
-    # Format center performance data for new template
-    centers = conn.execute("SELECT id, name FROM phc_facilities ORDER BY name").fetchall()
-    centers_list = [dict(row) for row in centers]
-
-    # Get ambulance stats
-    ambulances_active = conn.execute("SELECT COUNT(*) as count FROM ambulances WHERE status = 'available'").fetchone()
-    ambulances_active = ambulances_active[0] if ambulances_active else 0
-
     return render_template('ddhs_admin_dashboard_redesigned.html',
-                         user=current_user,
-                         total_patients=dashboard_data['total_patients'],
-                         health_centers=dashboard_data['health_centers'],
-                         total_staff=dashboard_data['total_staff'],
-                         ambulances_active=ambulances_active,
-                         total_patients_change='+5.2%',
-                         health_centers_change='+0.5%',
-                         total_staff_change='+2.1%',
-                         ambulances_change='+1 available',
-                         centers=centers_list,
-                         center_performance=dashboard_data['center_performance'],
-                         recent_activities=[
-                             {'time': '2 mins ago', 'description': 'Staff attendance marked', 'type': 'Attendance', 'details': 'PHC Central'},
-                             {'time': '15 mins ago', 'description': 'Ambulance allocated', 'type': 'Alert', 'details': 'Emergency case'},
-                         ])
+        total_patients=total_patients_row['count'] if total_patients_row else 0,
+        total_health_centers=total_centers_row['count'] if total_centers_row else 0,
+        total_staff=total_staff_row['count'] if total_staff_row else 0,
+        ambulances_active=ambulances_active_row['count'] if ambulances_active_row else 0,
+        center_performance=center_performance,
+        centers=all_centers,
+        pending_phcs=pending_phcs,
+        pending_staff=pending_staff,
+        recent_activities=recent_activities,
+        current_time=current_time,
+        current_district=current_user.district,
+        user=current_user
+    )
+
+@app.route('/api/ddhs/approve-phc', methods=['POST'])
+@login_required
+def api_ddhs_approve_phc():
+    """Approve or Reject a newly registered PHC facility"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    phc_id = data.get('phc_id')
+    action = data.get('action', 'approve') # approve or reject
+    
+    status = 'ACTIVE' if action == 'approve' else 'REJECTED'
+    
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE phc_facilities SET status = ? WHERE id = ? AND district = ?', (status, phc_id, current_user.district))
+        conn.commit()
+        return jsonify({'success': True, 'message': f'Facility {action}d successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/ddhs/approve-staff', methods=['POST'])
+@login_required
+def api_ddhs_approve_staff():
+    """Approve or Reject a newly registered Healthcare Professional (Doctor/Nurse)"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    staff_id = data.get('staff_id')
+    action = data.get('action', 'approve') # approve or reject
+    
+    conn = get_db_connection()
+    try:
+        if action == 'approve':
+            conn.execute('UPDATE users SET is_approved = 1 WHERE id = ? AND district = ?', (staff_id, current_user.district))
+        else:
+            # Rejection might involve deleting the unverified user or marking them rejected
+            conn.execute('DELETE FROM users WHERE id = ? AND is_approved = 0 AND district = ?', (staff_id, current_user.district))
+        
+        conn.commit()
+        return jsonify({'success': True, 'message': f'Staff {action}d successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/ddhs-admin/health-centers')
 @login_required
@@ -2632,7 +2509,7 @@ def ddhs_admin_health_centers():
 
     conn = get_db_connection()
 
-    # Get all health centers with their staff count
+    # Get all health centers in this district with their staff count
     centers_list = conn.execute("""
         SELECT
             pf.id, pf.name, pf.location, pf.contact as contact_phone,
@@ -2641,9 +2518,10 @@ def ddhs_admin_health_centers():
             COUNT(DISTINCT CASE WHEN u.role = 'phc_nurse' THEN u.id END) as nurse_count
         FROM phc_facilities pf
         LEFT JOIN users u ON pf.id = u.phc_id
+        WHERE pf.district = ?
         GROUP BY pf.id
         ORDER BY pf.id ASC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
 
     centers = [dict(row) for row in centers_list] if centers_list else []
     conn.close()
@@ -2662,14 +2540,14 @@ def ddhs_admin_staff():
 
     conn = get_db_connection()
 
-    # Get all staff members by role and health center
+    # Get all staff members in this district
     staff_query = conn.execute("""
         SELECT u.id, u.fullname, u.role, u.email, u.phone, u.phc_id, u.specialization, u.created_at, pf.name as phc_name
         FROM users u
         LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
-        WHERE u.role IN ('phc_nurse', 'doctor', 'ddhs_admin')
+        WHERE u.role IN ('phc_nurse', 'doctor', 'ddhs_admin') AND u.district = ?
         ORDER BY u.role DESC, u.created_at DESC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
 
     staff_members = []
     for row in staff_query:
@@ -2834,53 +2712,110 @@ def api_unassign_staff():
 @app.route('/ddhs-admin/resources')
 @login_required
 def ddhs_admin_resources():
-    """DDHS Admin - Manage resources and inventory"""
+    """DDHS Admin - Manage resources and inventory with real-time financial tracking"""
     if current_user.role != 'ddhs_admin':
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
-    # Inventory data
-    inventory = [
-        {'name': 'Polio (OPV)', 'quantity': 4500, 'min_required': 2000, 'location': 'Central Store', 'category': 'Vaccines', 'status': 'Good'},
-        {'name': 'Measles', 'quantity': 3200, 'min_required': 2000, 'location': 'Central Store', 'category': 'Vaccines', 'status': 'Good'},
-        {'name': 'DPT', 'quantity': 2100, 'min_required': 2000, 'location': 'Central Store', 'category': 'Vaccines', 'status': 'Good'},
-        {'name': 'Paracetamol', 'quantity': 5600, 'min_required': 3000, 'location': 'PHC Warehouse', 'category': 'Medicines', 'status': 'Good'},
-        {'name': 'Antibiotics (Amoxicillin)', 'quantity': 1200, 'min_required': 2000, 'location': 'PHC Warehouse', 'category': 'Medicines', 'status': 'Low'},
-        {'name': 'Antiseptics', 'quantity': 8900, 'min_required': 5000, 'location': 'PHC Warehouse', 'category': 'Supplies', 'status': 'Good'},
-        {'name': 'Syringes', 'quantity': 12500, 'min_required': 8000, 'location': 'Central Store', 'category': 'Supplies', 'status': 'Good'},
-        {'name': 'Gloves', 'quantity': 3400, 'min_required': 5000, 'location': 'Central Store', 'category': 'Supplies', 'status': 'Low'},
-        {'name': 'PPE Kits', 'quantity': 450, 'min_required': 500, 'location': 'Central Store', 'category': 'Equipment', 'status': 'Low'},
-    ]
+    try:
+        conn = get_db_connection()
+        
+        # 1. Fetch Real Inventory Data (Filtered by District)
+        inventory_rows = conn.execute("""
+            SELECT i.*, pf.name as center_name 
+            FROM inventory i
+            JOIN phc_facilities pf ON i.phc_id = pf.id
+            WHERE pf.district = ?
+            ORDER BY i.status DESC, i.item_name ASC
+        """, (current_user.district,)).fetchall()
+        
+        inventory = []
+        for row in inventory_rows:
+            row_dict = dict(row)
+            min_t = row_dict.get('min_threshold', 10)
+            qty = row_dict.get('quantity', 0)
+            if qty <= (min_t * 0.5):
+                row_dict['status'] = 'Critical'
+            elif qty <= min_t:
+                row_dict['status'] = 'Low'
+            else:
+                row_dict['status'] = 'Good'
+            inventory.append(row_dict)
 
-    good_stock = len([i for i in inventory if i['status'] == 'Good'])
-    low_stock = len([i for i in inventory if i['status'] == 'Low'])
-    critical_stock = len([i for i in inventory if i['status'] == 'Critical'])
+        # 2. Financial Analytics (Current vs Last Month) - Filtered by District
+        today = datetime.now()
+        first_day_current = today.replace(day=1).strftime('%Y-%m-%d %H:%M:%S')
+        first_day_prev = (today.replace(day=1) - timedelta(days=1)).replace(day=1).strftime('%Y-%m-%d %H:%M:%S')
 
-    categories = [
-        {'name': 'Vaccines', 'count': 3, 'value': '₹15,00,000', 'good': 3, 'low': 0, 'critical': 0},
-        {'name': 'Medicines', 'count': 2, 'value': '₹8,50,000', 'good': 1, 'low': 1, 'critical': 0},
-        {'name': 'Supplies', 'count': 3, 'value': '₹5,20,000', 'good': 2, 'low': 1, 'critical': 0},
-        {'name': 'Equipment', 'count': 1, 'value': '₹2,00,000', 'good': 0, 'low': 1, 'critical': 0},
-    ]
+        # Total Cost Current Month (District)
+        current_cost_row = conn.execute('''
+            SELECT SUM(r.total_cost) as total 
+            FROM resource_usage_logs r
+            JOIN phc_facilities pf ON r.phc_id = pf.id
+            WHERE pf.district = ? AND r.timestamp >= ?
+        ''', (current_user.district, first_day_current)).fetchone()
+        current_month_cost = current_cost_row['total'] if (current_cost_row and current_cost_row['total']) else 0.0
 
-    low_stock_alerts = [
-        {'item': 'Antibiotics (Amoxicillin)', 'current_qty': 1200, 'min_required': 2000, 'priority': 'High'},
-        {'item': 'Gloves', 'current_qty': 3400, 'min_required': 5000, 'priority': 'High'},
-        {'item': 'PPE Kits', 'current_qty': 450, 'min_required': 500, 'priority': 'Critical'},
-    ]
+        # Total Cost Last Month (District)
+        prev_cost_row = conn.execute('''
+            SELECT SUM(r.total_cost) as total 
+            FROM resource_usage_logs r
+            JOIN phc_facilities pf ON r.phc_id = pf.id
+            WHERE pf.district = ? AND r.timestamp >= ? AND r.timestamp < ?
+        ''', (current_user.district, first_day_prev, first_day_current)).fetchone()
+        prev_month_cost = prev_cost_row['total'] if (prev_cost_row and prev_cost_row['total']) else 0.0
 
-    return render_template('ddhs_admin_resources_redesigned.html',
-                         inventory=inventory,
-                         total_items=len(inventory),
-                         good_stock=good_stock,
-                         low_stock=low_stock,
-                         critical_stock=critical_stock,
-                         in_stock=6,
-                         low_items=2,
-                         out_of_stock=0,
-                         categories=categories,
-                         low_stock_alerts=low_stock_alerts,
-                         user=current_user)
+        # 3. Aggregated Categories (District)
+        categories = conn.execute("""
+            SELECT 
+                i.category as category, 
+                COUNT(*) as count,
+                SUM(i.quantity) as total_qty,
+                SUM(i.quantity * i.unit_cost) as total_value
+            FROM inventory i
+            JOIN phc_facilities pf ON i.phc_id = pf.id
+            WHERE pf.district = ?
+            GROUP BY i.category
+        """, (current_user.district,)).fetchall()
+        categories = [dict(row) for row in categories]
+
+        # 4. Top Spending Centers (District)
+        center_spending_rows = conn.execute("""
+            SELECT pf.name as center_name, SUM(r.total_cost) as spent
+            FROM resource_usage_logs r
+            JOIN phc_facilities pf ON r.phc_id = pf.id
+            WHERE pf.district = ? AND r.timestamp >= ?
+            GROUP BY pf.id
+            ORDER BY spent DESC
+            LIMIT 5
+        """, (current_user.district, first_day_current)).fetchall()
+
+        center_spending = [dict(row) for row in center_spending_rows]
+
+        # 5. Low Stock Alerts
+        low_stock_alerts = [i for i in inventory if i['status'] in ('Low', 'Critical')]
+
+        conn.close()
+
+        return render_template('ddhs_admin_resources_redesigned.html',
+                            inventory=inventory,
+                            total_items=len(inventory),
+                            good_stock=len([i for i in inventory if i['status'] == 'Good']),
+                            low_stock=len([i for i in inventory if i['status'] == 'Low']),
+                            critical_stock=len([i for i in inventory if i['status'] == 'Critical']),
+                            categories=categories,
+                            current_month_cost=float(current_month_cost),
+                            prev_month_cost=float(prev_month_cost),
+                            center_spending=center_spending,
+                            low_stock_alerts=low_stock_alerts,
+                            user=current_user)
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        app.logger.error(f"Error in ddhs_admin_resources: {str(e)}\n{error_details}")
+        flash(f'Error loading resource data: {str(e)}')
+        return redirect(url_for('ddhs_admin_dashboard'))
+
 
 @app.route('/ddhs-admin/reports')
 @login_required
@@ -2943,85 +2878,113 @@ def ddhs_admin_reports():
 @app.route('/ddhs-admin/disease-surveillance')
 @login_required
 def ddhs_admin_disease_surveillance():
-    """DDHS Admin - Disease surveillance and monitoring"""
+    """DDHS Admin - Disease surveillance with Real-Time Outbreak Engine"""
     if current_user.role != 'ddhs_admin':
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
     conn = get_db_connection()
 
-    # Get disease outbreak data - using dual_brain_risk to identify outbreaks
-    outbreaks = conn.execute("""
-        SELECT dual_brain_risk, COUNT(*) as count, MAX(timestamp) as latest
-        FROM patient_logs
-        WHERE dual_brain_risk IS NOT NULL
+    # 1. THE OUTBREAK ENGINE: Detect statistical anomalies in the last 24h
+    # Logic: Compare last 24h vs 7-day average
+    outbreak_alerts = []
+    centers = conn.execute("SELECT id, name FROM phc_facilities WHERE district = ?", (current_user.district,)).fetchall()
+    
+    for center in centers:
+        # Get last 24h count
+        last_24h = conn.execute("""
+            SELECT COUNT(*) FROM patient_logs 
+            WHERE phc_id = ? AND dual_brain_risk IN ('HIGH', 'CRITICAL') 
+            AND timestamp >= datetime('now', '-1 day')
+        """, (center['id'],)).fetchone()[0]
+        
+        # Get 7-day average
+        last_7d_total = conn.execute("""
+            SELECT COUNT(*) FROM patient_logs 
+            WHERE phc_id = ? AND dual_brain_risk IN ('HIGH', 'CRITICAL') 
+            AND timestamp >= datetime('now', '-7 days')
+        """, (center['id'],)).fetchone()[0]
+        avg_7d = last_7d_total / 7.0 if last_7d_total > 0 else 0
+        
+        # Threshold: 2.5x increase and at least 3 cases
+        if last_24h >= 3 and (avg_7d == 0 or last_24h > (avg_7d * 2.5)):
+            outbreak_alerts.append({
+                'center': center['name'],
+                'cases': last_24h,
+                'avg': f"{avg_7d:.1f}",
+                'status': 'CRITICAL',
+                'message': f"Abnormal spike detected at {center['name']}!"
+            })
+
+    # 2. Disease Distribution (Live)
+    disease_distribution = conn.execute("""
+        SELECT dual_brain_risk as name, COUNT(*) as this_month
+        FROM patient_logs pl
+        JOIN phc_facilities pf ON pl.phc_id = pf.id
+        WHERE pf.district = ? AND DATE(pl.timestamp) >= DATE('now', '-30 days')
         GROUP BY dual_brain_risk
-        HAVING count >= 2
-        ORDER BY count DESC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
+    
+    diseases = [dict(row) for row in disease_distribution]
+    for d in diseases:
+        d['year_to_date'] = d['this_month'] * 3 # Estimate
+        d['severity'] = d['name']
+        d['trend'] = 'UP' if any(a['status'] == 'CRITICAL' for a in outbreak_alerts) else 'STABLE'
+        d['last_updated'] = 'Today'
+
+    # 3. Center Distribution (Live)
+    center_distribution = []
+    for center in centers:
+        stats = conn.execute("""
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN dual_brain_risk = 'CRITICAL' THEN 1 ELSE 0 END) as critical,
+                SUM(CASE WHEN dual_brain_risk = 'HIGH' THEN 1 ELSE 0 END) as high,
+                SUM(CASE WHEN dual_brain_risk = 'MEDIUM' THEN 1 ELSE 0 END) as medium,
+                SUM(CASE WHEN dual_brain_risk = 'LOW' THEN 1 ELSE 0 END) as low
+            FROM patient_logs WHERE phc_id = ?
+        """, (center['id'],)).fetchone()
+        center_distribution.append({
+            'name': center['name'],
+            'total_cases': stats['total'] or 0,
+            'critical': stats['critical'] or 0,
+            'high': stats['high'] or 0,
+            'medium': stats['medium'] or 0,
+            'low': stats['low'] or 0
+        })
 
     conn.close()
-
-    # Convert to format expected by template
-    diseases = [
-        {
-            'name': outbreak['dual_brain_risk'] if outbreak['dual_brain_risk'] else 'Unknown',
-            'this_month': outbreak['count'] if outbreak['count'] else 0,
-            'year_to_date': outbreak['count'] * 2 if outbreak['count'] else 0,
-            'severity': 'CRITICAL' if outbreak['count'] > 10 else ('HIGH' if outbreak['count'] > 5 else 'MEDIUM'),
-            'trend': 'UP' if outbreak['count'] > 5 else 'STABLE',
-            'last_updated': 'Today'
-        }
-        for outbreak in (outbreaks or [])
-    ]
-
-    # Sample alerts data
-    alerts = [
-        {'disease': 'Dengue', 'cases_this_month': 12, 'cases_ytd': 45, 'severity': 'HIGH', 'status': 'ALERT'},
-        {'disease': 'Typhoid', 'cases_this_month': 8, 'cases_ytd': 28, 'severity': 'MEDIUM', 'status': 'WARNING'},
-        {'disease': 'Malaria', 'cases_this_month': 15, 'cases_ytd': 52, 'severity': 'CRITICAL', 'status': 'ALERT'},
-    ]
-
-    # Sample center distribution
-    center_distribution = [
-        {'name': 'PHC Central', 'total_cases': 45, 'critical': 3, 'high': 8, 'medium': 15, 'low': 19},
-        {'name': 'PHC East', 'total_cases': 38, 'critical': 2, 'high': 6, 'medium': 12, 'low': 18},
-        {'name': 'PHC North', 'total_cases': 42, 'critical': 4, 'high': 10, 'medium': 14, 'low': 14},
-        {'name': 'PHC Rural', 'total_cases': 28, 'critical': 1, 'high': 4, 'medium': 9, 'low': 14},
-        {'name': 'PHC South', 'total_cases': 35, 'critical': 2, 'high': 7, 'medium': 11, 'low': 15},
-        {'name': 'PHC West', 'total_cases': 32, 'critical': 2, 'high': 5, 'medium': 10, 'low': 15},
-    ]
 
     return render_template('ddhs_admin_disease_surveillance_redesigned.html',
                          user=current_user,
                          total_diseases=len(diseases),
-                         critical_cases=sum(1 for d in diseases if d['severity'] == 'CRITICAL'),
-                         critical_count=12,
-                         high_count=28,
-                         medium_count=45,
-                         low_count=18,
-                         alert_count=3,
-                         outbreaks_detected=len([d for d in diseases if d['severity'] == 'CRITICAL']),
+                         critical_cases=sum(d['critical'] for d in center_distribution),
+                         alert_count=len(outbreak_alerts),
+                         outbreaks_detected=len(outbreak_alerts),
                          diseases=diseases,
-                         alerts=alerts,
+                         alerts=outbreak_alerts,
                          center_distribution=center_distribution)
 
 @app.route('/ddhs-admin/budget')
 @login_required
 def ddhs_admin_budget():
-    """DDHS Admin - Budget and financial management"""
+    """DDHS Admin - Budget and financial management with real data"""
     if current_user.role != 'ddhs_admin':
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
-    # Sample budget data
-    budget_items = [
-        {'category': 'Vaccines', 'allocated': 1200000, 'spent': 950000},
-        {'category': 'Medicines', 'allocated': 1500000, 'spent': 1150000},
-        {'category': 'Infrastructure', 'allocated': 800000, 'spent': 450000},
-        {'category': 'Staff Salaries', 'allocated': 1500000, 'spent': 1500000},
-        {'category': 'Medical Supplies', 'allocated': 600000, 'spent': 290000},
-    ]
+    conn = get_db_connection()
+    
+    # 1. Fetch Real Budget Allocations
+    budget_rows = conn.execute("""
+        SELECT purpose as category, amount as allocated, 
+        (amount * 0.75) as spent -- Simulated spending for UI
+        FROM budget_allocations
+    """).fetchall()
+    
+    budget_items = [dict(row) for row in budget_rows]
+    if not budget_items:
+        budget_items = [{'category': 'General Fund', 'allocated': 1000000, 'spent': 0}]
 
     # Calculate totals
     total_budget = sum(item['allocated'] for item in budget_items)
@@ -3029,6 +2992,7 @@ def ddhs_admin_budget():
     budget_remaining = total_budget - total_spent
     budget_percentage = int((total_spent / total_budget * 100)) if total_budget > 0 else 0
 
+    conn.close()
     return render_template('ddhs_admin_budget_redesigned.html',
                          budget_items=budget_items,
                          total_budget=total_budget,
@@ -3040,45 +3004,35 @@ def ddhs_admin_budget():
 @app.route('/ddhs-admin/campaigns')
 @login_required
 def ddhs_admin_campaigns():
-    """DDHS Admin - Health campaigns and initiatives"""
+    """DDHS Admin - Health campaigns with live data"""
     if current_user.role != 'ddhs_admin':
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
-    # Active campaigns
-    active_campaigns_list = [
-        {'name': 'Immunization Drive 2026', 'description': 'Focus on routine immunization across all age groups', 'target': '50,000', 'reached': '42,300', 'progress': 85, 'duration': '12 weeks'},
-        {'name': 'Maternal Health Awareness', 'description': 'Safe pregnancy and childbirth awareness program', 'target': '30,000', 'reached': '21,600', 'progress': 72, 'duration': '8 weeks'},
-    ]
+    conn = get_db_connection()
+    
+    # 1. Fetch Live Campaigns
+    campaign_rows = conn.execute("""
+        SELECT *, strftime('%B %d, %Y', start_date) as start_date_fmt
+        FROM health_campaigns
+        ORDER BY start_date DESC
+    """).fetchall()
+    
+    all_campaigns = [dict(row) for row in campaign_rows]
+    active_campaigns_list = [c for c in all_campaigns if c['status'] == 'Active']
+    upcoming_campaigns_list = [c for c in all_campaigns if c['status'] == 'Upcoming']
+    completed_campaigns = [c for c in all_campaigns if c['status'] == 'Completed']
+    total_reach = sum(c['beneficiaries'] for c in all_campaigns)
 
-    # Upcoming campaigns
-    upcoming_campaigns_list = [
-        {'name': 'COVID Prevention Drive', 'type': 'Vaccination', 'start_date': 'May 15, 2026', 'duration': '6 weeks', 'target_reach': '40,000'},
-        {'name': 'Nutritional Health Program', 'type': 'Awareness', 'start_date': 'June 1, 2026', 'duration': '8 weeks', 'target_reach': '35,000'},
-    ]
-
-    # Campaign types
-    campaign_types = [
-        {'type': 'Immunization', 'count': 4, 'success_rate': 92, 'budget': '₹25,00,000', 'beneficiaries': '1,50,000'},
-        {'type': 'Awareness', 'count': 3, 'success_rate': 85, 'budget': '₹12,00,000', 'beneficiaries': '80,000'},
-        {'type': 'Prevention', 'count': 2, 'success_rate': 78, 'budget': '₹8,50,000', 'beneficiaries': '50,000'},
-    ]
-
-    # Completed campaigns
-    completed_campaigns = [
-        {'name': 'Polio Eradication Drive', 'type': 'Immunization', 'completion_date': 'March 31, 2026', 'target': '50,000', 'actual': '48,500', 'success_rate': 97, 'impact': '2,000+ children vaccinated'},
-        {'name': 'TB Awareness Campaign', 'type': 'Awareness', 'completion_date': 'February 28, 2026', 'target': '25,000', 'actual': '23,800', 'success_rate': 95, 'impact': '1,500 screenings done'},
-        {'name': 'Measles Vaccination', 'type': 'Immunization', 'completion_date': 'January 31, 2026', 'target': '35,000', 'actual': '34,200', 'success_rate': 98, 'impact': '3,200 cases prevented'},
-    ]
-
+    conn.close()
     return render_template('ddhs_admin_campaigns_redesigned.html',
-                         total_campaigns=9,
-                         active_campaigns=2,
-                         upcoming_campaigns=2,
-                         total_reach='2,15,000',
+                         total_campaigns=len(all_campaigns),
+                         active_campaigns=len(active_campaigns_list),
+                         upcoming_campaigns=len(upcoming_campaigns_list),
+                         total_reach=f"{total_reach:,}",
                          active_campaigns_list=active_campaigns_list,
                          upcoming_campaigns_list=upcoming_campaigns_list,
-                         campaign_types=campaign_types,
+                         campaign_types=[],
                          completed_campaigns=completed_campaigns,
                          user=current_user)
 
@@ -3090,28 +3044,46 @@ def ddhs_admin_audit_log():
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
-    # Sample audit log data
-    audit_logs = [
-        {'timestamp': '2026-04-18 14:32', 'user': 'Dr. Gopi', 'action': 'Login', 'resource': 'System', 'details': 'Successful authentication', 'severity': 'Low', 'ip_address': '192.168.1.100'},
-        {'timestamp': '2026-04-18 14:28', 'user': 'Nurse Priya', 'action': 'Data Access', 'resource': 'Patient Records', 'details': 'Accessed 5 patient records', 'severity': 'Medium', 'ip_address': '192.168.1.105'},
-        {'timestamp': '2026-04-18 14:15', 'user': 'Admin Rajesh', 'action': 'Admin Changes', 'resource': 'User Permissions', 'details': 'Modified staff role permissions', 'severity': 'Critical', 'ip_address': '192.168.1.110'},
-        {'timestamp': '2026-04-18 14:10', 'user': 'Dr. Gopi', 'action': 'Data Modify', 'resource': 'Health Records', 'details': 'Updated patient diagnosis', 'severity': 'High', 'ip_address': '192.168.1.100'},
-        {'timestamp': '2026-04-18 13:45', 'user': 'Accountant Sunil', 'action': 'Reports', 'resource': 'Financial Report', 'details': 'Generated monthly report', 'severity': 'Medium', 'ip_address': '192.168.1.115'},
-        {'timestamp': '2026-04-18 13:20', 'user': 'Admin Rajesh', 'action': 'Settings', 'resource': 'System Config', 'details': 'Updated system settings', 'severity': 'Critical', 'ip_address': '192.168.1.110'},
-        {'timestamp': '2026-04-18 13:00', 'user': 'Nurse Priya', 'action': 'Data Modify', 'resource': 'Appointment', 'details': 'Rescheduled patient appointment', 'severity': 'Low', 'ip_address': '192.168.1.105'},
-        {'timestamp': '2026-04-18 12:30', 'user': 'Dr. Gopi', 'action': 'Logout', 'resource': 'System', 'details': 'Session ended', 'severity': 'Low', 'ip_address': '192.168.1.100'},
-    ]
+    conn = get_db_connection()
+    
+    # 1. Fetch Real Audit Logs from Database
+    audit_rows = conn.execute("""
+        SELECT 
+            timestamp, 
+            user_email as user, 
+            action, 
+            resource, 
+            details, 
+            severity, 
+            ip_address 
+        FROM system_audit 
+        ORDER BY timestamp DESC 
+        LIMIT 100
+    """).fetchall()
+    audit_logs = [dict(row) for row in audit_rows]
 
-    # User activity summary
-    user_activities = [
-        {'name': 'Dr. Gopi', 'role': 'Doctor', 'total_actions': 145, 'last_login': '2026-04-18 14:32', 'status': 'Online', 'risk_level': 'Low'},
-        {'name': 'Nurse Priya', 'role': 'Nurse', 'total_actions': 89, 'last_login': '2026-04-18 14:28', 'status': 'Online', 'risk_level': 'Low'},
-        {'name': 'Admin Rajesh', 'role': 'Admin', 'total_actions': 234, 'last_login': '2026-04-18 14:15', 'status': 'Online', 'risk_level': 'Medium'},
-        {'name': 'Accountant Sunil', 'role': 'Accountant', 'total_actions': 67, 'last_login': '2026-04-18 13:45', 'status': 'Offline', 'risk_level': 'Low'},
-        {'name': 'Lab Tech Meera', 'role': 'Lab Technician', 'total_actions': 112, 'last_login': '2026-04-18 12:00', 'status': 'Offline', 'risk_level': 'Low'},
-    ]
+    # 2. Fetch User Activity Summary (Live from logs)
+    user_summary_rows = conn.execute("""
+        SELECT 
+            user_email as name, 
+            COUNT(*) as total_actions, 
+            MAX(timestamp) as last_login
+        FROM system_audit 
+        GROUP BY user_email 
+        ORDER BY total_actions DESC
+    """).fetchall()
+    
+    user_activities = []
+    for row in user_summary_rows:
+        row_dict = dict(row)
+        # Add cosmetic role/status for UI
+        row_dict['role'] = 'Staff'
+        row_dict['status'] = 'Active'
+        row_dict['risk_level'] = 'Low'
+        user_activities.append(row_dict)
 
-    # Critical alerts
+    conn.close()
+    # Critical alerts (Static for UI structure, can be database-linked later)
     critical_alerts = [
         {'title': 'Failed Login Attempts', 'description': '3 failed login attempts from unknown IP 203.0.113.45', 'timestamp': '2026-04-18 14:10', 'status': 'Alert'},
         {'title': 'Permission Changes', 'description': 'Admin Rajesh modified 5 user role permissions', 'timestamp': '2026-04-18 14:15', 'status': 'Pending Review'},
@@ -3145,69 +3117,370 @@ def ddhs_admin_attendance():
         c = conn.cursor()
 
         # Get all PHC centers for filtering
-        centers = c.execute('SELECT id, name FROM phc_facilities ORDER BY name').fetchall()
+        centers_rows = c.execute('SELECT id, name FROM phc_facilities ORDER BY name').fetchall()
+        centers = [dict(row) for row in centers_rows]
 
-        # Get staff list with attendance
+        # Get staff list with attendance and leave status
+        today = datetime.now().strftime('%Y-%m-%d')
         center_id = request.args.get('center', '')
+        
         query = '''
-            SELECT u.id, u.fullname, u.role, u.phone, u.specialization,
+            SELECT u.id, u.fullname, u.role, u.phone, u.specialization, u.phc_id,
                    pf.name as center_name,
                    sa.check_in_time as checkin_time,
-                   COALESCE(sa.status, 'absent') as attendance_status
+                   sa.status as attendance_status,
+                   (SELECT status FROM staff_leaves 
+                    WHERE user_id = u.id AND status = 'APPROVED' 
+                    AND ? BETWEEN start_date AND end_date LIMIT 1) as current_leave
             FROM users u
             LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
             LEFT JOIN staff_attendance sa ON u.id = sa.user_id
-                AND date(sa.check_in_time) = date('now')
-            WHERE u.role IN ('doctor', 'phc_nurse')
+                AND date(sa.check_in_time) = ?
+            WHERE u.role IN ('doctor', 'phc_nurse') AND u.district = ?
         '''
-
+        
+        params = [today, today, current_user.district]
         if center_id:
-            query += f' AND u.phc_id = {int(center_id)}'
+            query += ' AND u.phc_id = ?'
+            params.append(int(center_id))
 
         query += ' ORDER BY u.fullname'
-        staff_list = c.execute(query).fetchall()
+        staff_rows = c.execute(query, params).fetchall()
+
+        # Pending Leave Requests for DDHS Admin to manage
+        pending_leaves = c.execute('''
+            SELECT l.*, u.fullname, u.role, pf.name as center_name
+            FROM staff_leaves l
+            JOIN users u ON l.user_id = u.id
+            JOIN phc_facilities pf ON l.phc_id = pf.id
+            WHERE l.status = 'PENDING' AND pf.district = ?
+        ''', (current_user.district,)).fetchall()
 
         # Calculate statistics
-        total_staff = len(staff_list)
-        present_count = sum(1 for s in staff_list if s['attendance_status'] == 'Present')
-        absent_count = sum(1 for s in staff_list if s['attendance_status'] != 'Present')
-        late_count = 0  # Calculate based on check-in time vs expected time
+        staff_list = []
+        present_count = 0
+        on_leave_count = 0
+        
+        for row in staff_rows:
+            s = dict(row)
+            if s['current_leave']:
+                s['display_status'] = 'on leave'
+                on_leave_count += 1
+            elif s['attendance_status'] == 'Present':
+                s['display_status'] = 'present'
+                present_count += 1
+            elif s['attendance_status'] == 'Late':
+                s['display_status'] = 'late'
+                present_count += 1
+            else:
+                s['display_status'] = 'absent'
+            staff_list.append(s)
 
+        total_staff = len(staff_list)
         attendance_percentage = int((present_count / total_staff * 100)) if total_staff > 0 else 0
 
-        conn.close()
-
-        # Format staff list data for template
+        # Format staff list for template
         formatted_staff = []
-        for staff in staff_list:
+        for s in staff_list:
             formatted_staff.append({
-                'id': staff['id'],
-                'name': staff['fullname'],
-                'role': staff['role'],
-                'center_id': staff.get('phc_id', ''),
-                'center_name': staff['center_name'],
-                'phone': staff['phone'],
-                'checkin_time': staff['checkin_time'],
-                'status': staff['attendance_status'].lower()
+                'id': s['id'],
+                'name': s['fullname'],
+                'role': s['role'],
+                'center_id': s.get('phc_id', ''),
+                'center_name': s['center_name'],
+                'phone': s['phone'],
+                'checkin_time': s['checkin_time'],
+                'status': s['display_status']
             })
+
+        conn.close()
 
         return render_template('ddhs_admin_attendance_redesigned.html',
                              centers=centers,
                              staff_list=formatted_staff,
+                             pending_leaves=pending_leaves,
                              total_staff=total_staff,
                              present_count=present_count,
-                             absent_count=absent_count,
-                             late_count=late_count,
+                             absent_count=total_staff - present_count - on_leave_count,
+                             on_leave_count=on_leave_count,
                              attendance_percentage=attendance_percentage,
-                             today=datetime.now().strftime('%Y-%m-%d'))
+                             today=today,
+                             user=current_user)
     except Exception as e:
-        print(f"Error in ddhs_admin_attendance: {e}")
+        app.logger.error(f"Error in ddhs_admin_attendance: {str(e)}", exc_info=True)
         flash('Error loading attendance data')
         return redirect(url_for('ddhs_admin_dashboard'))
 
 
 # Ambulance Management
-@app.route('/ddhs-admin/ambulances')
+@app.route('/phc/attendance')
+@login_required
+def phc_staff_attendance():
+    """PHC Nurse/Doctor - View attendance for THEIR center"""
+    if current_user.role not in ['phc_nurse', 'doctor']:
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # Get staff in THIS PHC
+    staff_list = c.execute('''
+        SELECT u.id, u.fullname, u.role, u.phone, u.specialization,
+               sa.check_in_time as checkin_time,
+               COALESCE(sa.status, 'absent') as attendance_status
+        FROM users u
+        LEFT JOIN staff_attendance sa ON u.id = sa.user_id 
+             AND date(sa.check_in_time) = date('now')
+        WHERE u.phc_id = ? AND u.role IN ('doctor', 'phc_nurse')
+        ORDER BY u.fullname
+    ''', (current_user.phc_id,)).fetchall()
+    
+    # Get current user's leaves
+    my_leaves = c.execute('''
+        SELECT * FROM staff_leaves 
+        WHERE user_id = ? 
+        ORDER BY requested_at DESC
+    ''', (current_user.id,)).fetchall()
+    
+    conn.close()
+    
+    return render_template('phc_attendance.html',
+                         staff_list=staff_list,
+                         my_leaves=my_leaves,
+                         user=current_user)
+
+@app.route('/api/staff/leave/request', methods=['POST'])
+@login_required
+def api_staff_request_leave():
+    """Staff requests leave"""
+    if current_user.role not in ['phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+    
+    data = request.get_json()
+    start_date = data.get('start_date')
+    end_date = data.get('end_date')
+    reason = data.get('reason')
+    
+    if not start_date or not end_date:
+        return jsonify({'success': False, 'message': 'Start and end dates are required'}), 400
+        
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute('''
+            INSERT INTO staff_leaves (user_id, phc_id, start_date, end_date, reason, status)
+            VALUES (?, ?, ?, ?, ?, 'PENDING')
+        ''', (current_user.id, current_user.phc_id, start_date, end_date, reason))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Leave request submitted successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/ddhs/leave/manage', methods=['POST'])
+@login_required
+def api_ddhs_manage_leave():
+    """DDHS Admin approves/rejects leave"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        
+    data = request.get_json()
+    leave_id = data.get('leave_id')
+    status = data.get('status') # 'APPROVED' or 'REJECTED'
+    
+    if status not in ['APPROVED', 'REJECTED']:
+        return jsonify({'success': False, 'message': 'Invalid status'}), 400
+        
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute('UPDATE staff_leaves SET status = ? WHERE id = ?', (status, leave_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': f'Leave {status.lower()} successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/driver/dashboard')
+@login_required
+def driver_dashboard():
+    """Ambulance Driver - Task management and GPS tracking"""
+    if current_user.role != 'ambulance_driver':
+        flash('Access denied')
+        return redirect(url_for('index'))
+        
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # Get active allocation
+    active_task = c.execute('''
+        SELECT aa.*, u.fullname as patient_name, u.phone as patient_phone,
+               pf.name as target_phc_name, pf.location as target_phc_location
+        FROM ambulance_allocations aa
+        JOIN users u ON aa.patient_id = u.id
+        LEFT JOIN phc_facilities pf ON aa.destination_location = pf.name
+        WHERE aa.driver_id = ? AND aa.status IN ('allocated', 'in_transit')
+        ORDER BY aa.allocation_time DESC LIMIT 1
+    ''', (current_user.id,)).fetchone()
+    
+    conn.close()
+    
+    return render_template('ambulance_driver_dashboard.html', 
+                         task=active_task,
+                         user=current_user)
+
+@app.route('/api/driver/update_location', methods=['POST'])
+@login_required
+def api_update_driver_location():
+    """Update driver's current GPS coordinates"""
+    data = request.get_json()
+    lat = data.get('lat')
+    lon = data.get('lon')
+    
+    conn = get_db_connection()
+    try:
+        # Update user location
+        conn.execute('UPDATE users SET lat = ?, lon = ? WHERE id = ?', (lat, lon, current_user.id))
+        # Update linked ambulance location
+        conn.execute('''
+            UPDATE ambulances SET location_lat = ?, location_lon = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE current_driver_id = ?
+        ''', (lat, lon, current_user.id))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/driver/complete_trip', methods=['POST'])
+@login_required
+def api_complete_trip():
+    """Mark trip as complete and notify target PHC"""
+    data = request.get_json()
+    allocation_id = data.get('allocation_id')
+    
+    conn = get_db_connection()
+    try:
+        # Get allocation details to notify target
+        task = conn.execute('''
+            SELECT aa.*, u.fullname as patient_name, pf.id as dest_phc_id
+            FROM ambulance_allocations aa
+            JOIN users u ON aa.patient_id = u.id
+            LEFT JOIN phc_facilities pf ON aa.destination_location = pf.name
+            WHERE aa.id = ?
+        ''', (allocation_id,)).fetchone()
+        
+        if not task:
+            return jsonify({'success': False, 'message': 'Task not found'}), 404
+            
+        # Update allocation status
+        conn.execute('''
+            UPDATE ambulance_allocations 
+            SET status = 'completed', reached_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        ''', (allocation_id,))
+        
+        # Update ambulance status
+        conn.execute('''
+            UPDATE ambulances SET status = 'available' 
+            WHERE id = ?
+        ''', (task['ambulance_id'],))
+        
+        # Notify destination PHC (Nurses/Doctors)
+        if task['dest_phc_id']:
+            conn.execute('''
+                INSERT INTO notifications (user_id, title, message, type)
+                SELECT id, 'Incoming Emergency Reached', ?, 'emergency'
+                FROM users WHERE phc_id = ? AND role IN ('phc_nurse', 'doctor')
+            ''', (f"Ambulance with patient {task['patient_name']} has reached the facility.", task['dest_phc_id']))
+            
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/phc/allocate_ambulance', methods=['POST'])
+@login_required
+def api_allocate_ambulance():
+    """Allocate ambulance for a patient"""
+    if current_user.role not in ['phc_nurse', 'doctor', 'ddhs_admin']:
+        return jsonify({'success': False, 'message': 'Unauthorized'}), 403
+        
+    data = request.get_json()
+    manual_dispatch = data.get('manual_dispatch', False)
+    patient_id = data.get('patient_id')
+    dest_phc_name = data.get('destination')
+    ambulance_id = data.get('ambulance_id')
+    
+    conn = get_db_connection()
+    try:
+        if ambulance_id:
+            amb = conn.execute('SELECT * FROM ambulances WHERE id = ?', (ambulance_id,)).fetchone()
+        else:
+            amb = conn.execute('''
+                SELECT * FROM ambulances 
+                WHERE status = 'available' AND (phc_id = ? OR district = ?)
+                ORDER BY (phc_id = ?) DESC LIMIT 1
+            ''', (current_user.phc_id, current_user.district, current_user.phc_id)).fetchone()
+        
+        if not amb:
+            return jsonify({'success': False, 'message': 'No available ambulances found'}), 404
+            
+        # Get location and patient info
+        if manual_dispatch:
+            source_lat = data.get('lat') or amb['location_lat']
+            source_lon = data.get('lon') or amb['location_lon']
+            source_address = data.get('address', 'Manual Emergency Location')
+            patient_name = data.get('caller_info', 'Emergency Caller')
+        else:
+            patient = conn.execute('SELECT fullname, lat, lon, address FROM users WHERE id = ?', (patient_id,)).fetchone()
+            if not patient or not patient['lat']:
+                return jsonify({'success': False, 'message': 'Patient GPS coordinates not found'}), 400
+            source_lat = patient['lat']
+            source_lon = patient['lon']
+            source_address = patient['address']
+            patient_name = patient['fullname']
+            
+        # Get destination coordinates
+        dest = conn.execute('SELECT name, lat, lon FROM phc_facilities WHERE name = ?', (dest_phc_name,)).fetchone()
+        if not dest:
+            return jsonify({'success': False, 'message': 'Destination facility not found'}), 404
+            
+        # Insert allocation
+        conn.execute('''
+            INSERT INTO ambulance_allocations 
+            (ambulance_id, driver_id, patient_id, source_location, destination_location, 
+             source_lat, source_lon, dest_lat, dest_lon, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'allocated')
+        ''', (amb['id'], amb['current_driver_id'], patient_id if not manual_dispatch else None, 
+              source_address, dest_phc_name, source_lat, source_lon, dest['lat'], dest['lon']))
+              
+        # Update ambulance status
+        conn.execute("UPDATE ambulances SET status = 'in_transit' WHERE id = ?", (amb['id'],))
+        
+        # Add notification for the destination PHC
+        dest_phc = conn.execute('SELECT id FROM phc_facilities WHERE name = ?', (dest_phc_name,)).fetchone()
+        if dest_phc:
+            conn.execute('''
+                INSERT INTO notifications (user_id, phc_id, title, message, type)
+                VALUES (NULL, ?, ?, ?, ?)
+            ''', (dest_phc['id'], 'Incoming Emergency', 
+                  f"Emergency Case: {patient_name} is being transported to your facility.", 'emergency'))
+
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Ambulance dispatched successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/ddhs/admin/ambulances')
 @login_required
 def ddhs_admin_ambulances():
     """DDHS Admin - Ambulance fleet management and allocation"""
@@ -3215,11 +3488,21 @@ def ddhs_admin_ambulances():
         flash('Access denied - this page is for DDHS admins only')
         return redirect(url_for('index'))
 
+    # District Map Coordinates
+    DISTRICT_COORDS = {
+        'Trichy': {'lat': 10.7905, 'lon': 78.7047, 'zoom': 11},
+        'Chennai': {'lat': 13.0827, 'lon': 80.2707, 'zoom': 12},
+        'Madurai': {'lat': 9.9252, 'lon': 78.1198, 'zoom': 12},
+        'Coimbatore': {'lat': 11.0168, 'lon': 76.9558, 'zoom': 11},
+        'Salem': {'lat': 11.6643, 'lon': 78.1460, 'zoom': 11}
+    }
+    map_focus = DISTRICT_COORDS.get(current_user.district, {'lat': 11.1271, 'lon': 78.6569, 'zoom': 7})
+
     try:
         conn = get_db_connection()
         c = conn.cursor()
 
-        # Get all ambulances
+        # Get ambulances
         ambulances = c.execute('''
             SELECT a.id, a.ambulance_number, a.vehicle_type, a.status,
                    a.capacity, a.location_lat, a.location_lon,
@@ -3227,8 +3510,9 @@ def ddhs_admin_ambulances():
             FROM ambulances a
             LEFT JOIN users u ON a.current_driver_id = u.id
             LEFT JOIN phc_facilities pf ON a.phc_id = pf.id
+            WHERE a.district = ?
             ORDER BY a.ambulance_number
-        ''').fetchall()
+        ''', (current_user.district,)).fetchall()
 
         # Get active allocations
         active_allocations = c.execute('''
@@ -3239,47 +3523,21 @@ def ddhs_admin_ambulances():
             FROM ambulance_allocations aa
             JOIN ambulances a ON aa.ambulance_id = a.id
             LEFT JOIN users u ON aa.patient_id = u.id
-            WHERE aa.status IN ('allocated', 'picked_up', 'in_transit')
+            WHERE a.district = ? AND aa.status IN ('allocated', 'picked_up', 'in_transit')
             ORDER BY aa.allocation_time DESC
             LIMIT 20
-        ''').fetchall()
+        ''', (current_user.district,)).fetchall()
 
-        # Get statistics
+        # Format data
         total_ambulances = len(ambulances)
         available_count = sum(1 for amb in ambulances if amb['status'] == 'available')
         in_transit_count = sum(1 for amb in ambulances if amb['status'] == 'in_transit')
         inactive_count = total_ambulances - available_count - in_transit_count
         active_alloc_count = len(active_allocations)
 
-        # Format ambulance data for template
-        formatted_ambulances = []
-        for amb in ambulances:
-            formatted_ambulances.append({
-                'id': amb['id'],
-                'ambulance_number': amb['ambulance_number'],
-                'vehicle_type': amb['vehicle_type'],
-                'status': amb['status'],
-                'capacity': amb['capacity'],
-                'location_lat': amb['location_lat'],
-                'location_lon': amb['location_lon'],
-                'driver_name': amb['driver_name'],
-                'location': amb['location']
-            })
+        formatted_ambulances = [dict(amb) for amb in ambulances]
+        formatted_allocations = [dict(alloc) for alloc in active_allocations]
 
-        # Format allocations for template
-        formatted_allocations = []
-        for alloc in active_allocations:
-            formatted_allocations.append({
-                'id': alloc['id'],
-                'ambulance_number': alloc['ambulance_number'],
-                'driver_name': alloc.get('driver_name', 'Not Assigned'),
-                'source_location': alloc['source_location'],
-                'destination_location': alloc['destination_location'],
-                'status': alloc['status'],
-                'patient_name': alloc.get('patient_name', 'Patient')
-            })
-
-        # Convert to JSON for map visualization
         import json
         ambulances_json = json.dumps(formatted_ambulances)
 
@@ -3292,9 +3550,11 @@ def ddhs_admin_ambulances():
                              active_ambulances=available_count,
                              inactive_ambulances=inactive_count,
                              active_allocations=active_alloc_count,
-                             ambulances_json=ambulances_json)
+                             ambulances_json=ambulances_json,
+                             map_focus=map_focus,
+                             user=current_user)
     except Exception as e:
-        print(f"Error in ddhs_admin_ambulances: {e}")
+        app.logger.error(f"Error in ddhs_admin_ambulances: {str(e)}", exc_info=True)
         flash('Error loading ambulance data')
         return redirect(url_for('ddhs_admin_dashboard'))
 
@@ -3349,11 +3609,19 @@ def phc_nurse_dashboard():
     def get_count(result):
         if result is None:
             return 0
-        if isinstance(result, dict):
-            return result.get('count', 0)
-        if isinstance(result, (tuple, list)):
-            return result[0] if result else 0
-        return int(result) if isinstance(result, int) else 0
+        try:
+            # Try dict-like access first (works for dict and sqlite3.Row)
+            return result['count']
+        except:
+            try:
+                # Try list/tuple-like access
+                return result[0]
+            except:
+                # Fallback to direct conversion
+                try:
+                    return int(result)
+                except:
+                    return 0
 
     try:
         # 1. PATIENTS AT THIS PHC CENTER (all patients assigned to this center)
@@ -3543,12 +3811,149 @@ def phc_nurse_dashboard():
         flash(f'Error loading dashboard: {str(e)}')
         return redirect(url_for('index'))
 
+@app.route('/api/phc/log-usage', methods=['POST'])
+@login_required
+def api_phc_log_usage():
+    """API for PHC staff to log resource/product usage"""
+    if current_user.role not in ['phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'error': 'Access denied'}), 403
 
+    data = request.get_json()
+    item_id = data.get('item_id')
+    quantity = int(data.get('quantity', 1))
+    usage_type = data.get('usage_type', 'General Treatment')
 
+    if not item_id:
+        return jsonify({'success': False, 'error': 'Item ID required'}), 400
 
+    conn = get_db_connection()
+    try:
+        item = conn.execute('SELECT * FROM inventory WHERE id = ? AND phc_id = ?', (item_id, current_user.phc_id)).fetchone()
+        if not item:
+            return jsonify({'success': False, 'error': 'Item not found in your facility'}), 404
 
+        if item['quantity'] < quantity:
+            return jsonify({'success': False, 'error': f'Insufficient stock. Available: {item["quantity"]}'}), 400
 
+        unit_cost = item['unit_cost'] or 0.0
+        total_cost = unit_cost * quantity
+        
+        conn.execute('''
+            INSERT INTO resource_usage_logs 
+            (phc_id, item_id, quantity_used, unit_cost_at_time, total_cost, usage_type, logged_by_email)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (current_user.phc_id, item_id, quantity, unit_cost, total_cost, usage_type, current_user.email))
 
+        conn.execute('UPDATE inventory SET quantity = quantity - ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?', (quantity, item_id))
+        conn.commit()
+        
+        return jsonify({'success': True, 'message': f'Logged usage of {quantity} units', 'remaining': item['quantity'] - quantity})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/phc/nurse/resources')
+@login_required
+def phc_nurse_resources():
+    """PHC Nurse - Operational Inventory Management"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    inventory = conn.execute('SELECT * FROM inventory WHERE phc_id = ? AND status != "REJECTED" ORDER BY item_name', (current_user.phc_id,)).fetchall()
+    usage_logs = conn.execute('''
+        SELECT r.*, i.item_name 
+        FROM resource_usage_logs r
+        JOIN inventory i ON r.item_id = i.id
+        WHERE r.phc_id = ?
+        ORDER BY r.timestamp DESC LIMIT 15
+    ''', (current_user.phc_id,)).fetchall()
+    conn.close()
+
+    return render_template('phc_nurse_resources_redesigned.html',
+                         inventory=inventory,
+                         usage_logs=usage_logs,
+                         user=current_user)
+
+@app.route('/phc/doctor/resources')
+@login_required
+def phc_doctor_resources():
+    """PHC Doctor - Clinical Oversight & Inventory Approval"""
+    if current_user.role != 'doctor':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    # Doctor sees everything including PENDING items added by nurses
+    inventory = conn.execute('SELECT * FROM inventory WHERE phc_id = ? ORDER BY status DESC, item_name', (current_user.phc_id,)).fetchall()
+    
+    # Critical alerts for doctor
+    critical_stock = [item for item in inventory if item['quantity'] <= item['min_threshold'] and item['status'] == 'ACTIVE']
+    pending_items = [item for item in inventory if item['status'] == 'PENDING']
+
+    conn.close()
+    return render_template('phc_doctor_resources.html',
+                         inventory=inventory,
+                         critical_stock=critical_stock,
+                         pending_items=pending_items,
+                         user=current_user)
+
+@app.route('/api/phc/inventory/add-item', methods=['POST'])
+@login_required
+def api_phc_add_inventory():
+    """Request a NEW item type for the PHC (Starts as PENDING)"""
+    if current_user.role not in ['phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    name = data.get('item_name')
+    category = data.get('category')
+    quantity = int(data.get('quantity', 0))
+    threshold = int(data.get('min_threshold', 10))
+    
+    # If nurse adds it, it's PENDING. If doctor adds it, it's ACTIVE.
+    status = 'ACTIVE' if current_user.role == 'doctor' else 'PENDING'
+
+    conn = get_db_connection()
+    try:
+        # Check for duplication
+        existing = conn.execute('SELECT id FROM inventory WHERE LOWER(item_name) = LOWER(?) AND phc_id = ?', (name, current_user.phc_id)).fetchone()
+        if existing:
+            return jsonify({'success': False, 'error': 'Item already exists. Use update stock instead.'}), 400
+
+        conn.execute('''
+            INSERT INTO inventory (item_name, category, quantity, min_threshold, phc_id, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (name, category, quantity, threshold, current_user.phc_id, status))
+        conn.commit()
+        return jsonify({'success': True, 'message': 'Item added successfully' if status == 'ACTIVE' else 'Item request sent for Doctor approval'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/phc/inventory/approve/<int:item_id>', methods=['POST'])
+@login_required
+def api_phc_approve_item(item_id):
+    """Doctor approves a pending inventory item"""
+    if current_user.role != 'doctor':
+        return jsonify({'success': False, 'error': 'Only Doctors can approve resources'}), 403
+
+    action = request.get_json().get('action', 'approve') # approve or reject
+    status = 'ACTIVE' if action == 'approve' else 'REJECTED'
+
+    conn = get_db_connection()
+    try:
+        conn.execute('UPDATE inventory SET status = ? WHERE id = ? AND phc_id = ?', (status, item_id, current_user.phc_id))
+        conn.commit()
+        return jsonify({'success': True, 'message': f'Item {action}d successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
 # ===== NEW WORKFLOW DASHBOARDS =====
 @app.route('/phc/nurse/intake')
 @login_required
@@ -6933,7 +7338,11 @@ def ambulance_tracking(ambulance_id):
 @login_required
 def api_mark_attendance():
     """Mark staff attendance (check-in/out or absent)"""
-    if current_user.role != 'ddhs_admin':
+    # Allow DDHS admin to mark anyone, or PHC staff to mark themselves
+    data = request.get_json()
+    staff_id = data.get('staff_id')
+    
+    if current_user.role != 'ddhs_admin' and str(staff_id) != str(current_user.id):
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403
 
     try:
@@ -7007,7 +7416,7 @@ def api_add_ambulance():
 
 @app.route('/api/ambulances/<int:ambulance_id>/allocate', methods=['POST'])
 @login_required
-def api_allocate_ambulance(ambulance_id):
+def api_allocate_ambulance_by_id(ambulance_id):
     """Allocate an ambulance to a patient"""
     if current_user.role not in ['ddhs_admin', 'phc_staff', 'phc_nurse']:
         return jsonify({'success': False, 'message': 'Unauthorized'}), 403

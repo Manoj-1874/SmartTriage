@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management — PHC Nurse</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --brand-dark: #087A60;
+            --brand-light: #34C9A5;
+            --canvas: #EEF6F2;
+            --base: #FFFFFF;
+            --surface: #F5FBF8;
+            --border: #D9EDE5;
+            --t-head: #0A2218;
+            --t-body: #2C4A3C;
+            --t-muted: #5E8C7A;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--canvas);
+            color: var(--t-body);
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--base);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            margin-bottom: 24px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--brand);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--brand-dark);
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .inventory-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .item-info h4 {
+            margin: 0;
+            color: var(--t-head);
+        }
+
+        .item-info span {
+            font-size: 12px;
+            color: var(--t-muted);
+        }
+
+        .stock-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .stock-low { background: #fee2e2; color: #dc2626; }
+        .stock-good { background: #dcfce7; color: #16a34a; }
+        .stock-pending { background: #fef3c7; color: #d97706; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px;
+            color: var(--t-muted);
+            font-size: 13px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 15px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: #fff;
+            padding: 30px;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 450px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0 20px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <div>
+            <h1 style="margin:0; color: var(--t-head);">Inventory Management</h1>
+            <p style="margin:5px 0 0; color: var(--t-muted);">Logged in as: {{ user.fullname }}</p>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()">+ Request New Item Type</button>
+    </div>
+
+    <!-- Quick Usage -->
+    <div class="card">
+        <h3 style="margin-top:0;">🚀 Quick Log Usage</h3>
+        <p style="color:var(--t-muted); font-size:14px;">Select an item to record consumption (decrements stock by 1).</p>
+        <div class="grid">
+            {% for item in inventory if item.status == 'ACTIVE' or item.status == 'Good' %}
+            <div class="inventory-item">
+                <div class="item-info">
+                    <h4>{{ item.item_name }}</h4>
+                    <span>Stock: <strong>{{ item.quantity }}</strong></span>
+                </div>
+                <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="logUsage({{ item.id }}, '{{ item.item_name }}')">Log Use</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
+        <!-- Detailed Table -->
+        <div class="card">
+            <h3 style="margin-top:0;">📋 Master Inventory List</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Category</th>
+                        <th>Stock</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in inventory %}
+                    <tr>
+                        <td style="font-weight:600;">{{ item.item_name }}</td>
+                        <td>{{ item.category }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>
+                            {% if item.status == 'PENDING' %}
+                                <span class="stock-badge stock-pending">Awaiting Doctor Approval</span>
+                            {% elif item.quantity <= item.min_threshold %}
+                                <span class="stock-badge stock-low">Low Stock</span>
+                            {% else %}
+                                <span class="stock-badge stock-good">Healthy</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Recent Logs -->
+        <div class="card">
+            <h3 style="margin-top:0;">🕒 Recent Usage</h3>
+            {% for log in usage_logs %}
+            <div style="margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between;">
+                    <span style="font-weight:600;">{{ log.item_name }}</span>
+                    <span style="color:var(--brand); font-weight:700;">-{{ log.quantity_used }}</span>
+                </div>
+                <div style="font-size:11px; color:var(--t-muted); margin-top:3px;">
+                    {{ log.timestamp }} • {{ log.usage_type }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal for New Item -->
+<div id="itemModal" class="modal">
+    <div class="modal-content">
+        <h2 style="margin-top:0;">Request New Resource</h2>
+        <p style="font-size:14px; color:var(--t-muted);">This item will be visible to everyone after the PHC Doctor approves it.</p>
+        
+        <label>Item Name</label>
+        <input type="text" id="newName" placeholder="e.g. Saline Solution">
+        
+        <label>Category</label>
+        <select id="newCategory">
+            <option value="Medicine">Medicine</option>
+            <option value="Surgical">Surgical</option>
+            <option value="General">General Supply</option>
+            <option value="Equipment">Equipment</option>
+        </select>
+
+        <label>Initial Quantity</label>
+        <input type="number" id="newQty" value="0">
+
+        <label>Alert Threshold (Low Stock level)</label>
+        <input type="number" id="newThreshold" value="10">
+
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-primary" style="flex:1;" onclick="submitNewItem()">Submit Request</button>
+            <button class="btn" style="background:#eee;" onclick="closeModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function openModal() { document.getElementById('itemModal').style.display = 'flex'; }
+function closeModal() { document.getElementById('itemModal').style.display = 'none'; }
+
+function logUsage(itemId, itemName) {
+    if(!confirm(`Log usage for ${itemName}?`)) return;
+    fetch('/api/phc/log-usage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item_id: itemId, quantity: 1, usage_type: 'Manual Log' })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) location.reload();
+        else alert('Error: ' + data.error);
+    });
+}
+
+function submitNewItem() {
+    const payload = {
+        item_name: document.getElementById('newName').value,
+        category: document.getElementById('newCategory').value,
+        quantity: document.getElementById('newQty').value,
+        min_threshold: document.getElementById('newThreshold').value
+    };
+
+    fetch('/api/phc/inventory/add-item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    });
+}
+</script>
+</body>
+</html>

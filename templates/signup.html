@@ -247,7 +247,7 @@
         box-shadow:var(--sh-panel);
         width:100%;max-width:1240px;
         display:grid;
-        grid-template-columns:420px 1fr;
+        grid-template-columns: 400px minmax(0, 1fr);
         overflow:hidden;
         transition:background var(--t-base),border-color var(--t-base),box-shadow var(--t-base);
         animation:panelIn .7s var(--ease) both;
@@ -371,6 +371,7 @@
     .panel-right{
         padding:44px 48px;
         display:flex;flex-direction:column;
+        flex: 1; min-width: 0;
         overflow-y:auto;
         max-height:90vh;
         animation:fadeUp .7s var(--ease) .12s both;
@@ -422,11 +423,11 @@
 
     /* Role selector */
     .form-label{display:block;font-size:12.5px;font-weight:700;color:var(--t-head);margin-bottom:8px;letter-spacing:.2px;}
-    .role-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
+    .role-grid{display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;margin-bottom:20px;}
     .role-opt input[type="radio"]{position:absolute;opacity:0;pointer-events:none}
     .role-opt label{
         display:flex;flex-direction:column;align-items:center;justify-content:center;
-        gap:9px;padding:18px 14px;
+        gap:6px;padding:12px 8px;
         background:var(--input-bg);border:2px solid var(--input-border);
         border-radius:var(--radius-md);cursor:pointer;
         transition:all var(--t-base) var(--ease);
@@ -439,10 +440,10 @@
     }
     .role-opt input:checked + label{background:var(--base);border-color:var(--brand);box-shadow:0 0 0 3px rgba(11,155,122,.12);transform:scale(1.02);}
     .role-opt input:checked + label::before{opacity:.06}
-    .role-opt label i{font-size:28px;color:var(--brand);position:relative;z-index:1;transition:transform var(--t-base),filter var(--t-base);}
+    .role-opt label i{font-size:22px;color:var(--brand);position:relative;z-index:1;transition:transform var(--t-base),filter var(--t-base);}
     [data-theme="dark"] .role-opt label i{color:var(--brand-light)}
-    .role-opt input:checked + label i{transform:scale(1.12);filter:drop-shadow(0 3px 10px rgba(11,155,122,.4));}
-    .role-opt label span{font-size:13.5px;font-weight:700;color:var(--t-head);position:relative;z-index:1;}
+    .role-opt input:checked + label i{transform:scale(1.1);filter:drop-shadow(0 3px 10px rgba(11,155,122,.4));}
+    .role-opt label span{font-size:12px;font-weight:700;color:var(--t-head);position:relative;z-index:1;}
 
     /* Field grid */
     .field{margin-bottom:16px}
@@ -761,6 +762,13 @@
                                 <span>PHC Nurse</span>
                             </label>
                         </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="roleAmbulanceDriver" value="ambulance_driver" onchange="handleRoleChange()">
+                            <label for="roleAmbulanceDriver">
+                                <i class="fas fa-ambulance"></i>
+                                <span>Driver</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -790,16 +798,28 @@
                     </div>
                 </div>
 
-                <!-- Location Field (For Real-World PHC Assignment) -->
-                <div class="field" style="margin-top:16px">
-                    <label class="form-label" for="location">Location / Ward / Service Area *</label>
-                    <div class="input-wrap">
-                        <input type="text" id="location" name="location" class="pm-input" placeholder="e.g., North Ward, Central Area, East Sub-district" required>
-                        <i class="fas fa-map-marker-alt field-ico"></i>
-                    </div>
                     <small style="color: #666; margin-top: 4px; display: block;">
                         We'll automatically assign you to the nearest PHC facility based on your location
                     </small>
+
+                <!-- GPS Section (Visible for Patient & Driver) -->
+                <div id="gpsSection" style="display:none; background:var(--brand-pale); padding:16px; border-radius:var(--radius-md); border:1px dashed var(--brand); margin-top:16px;">
+                    <div class="professional-section-label" style="margin-bottom:10px;">
+                        <i class="fas fa-location-crosshairs"></i>
+                        Live Location (Required for Dispatch)
+                    </div>
+                    <div style="display:flex; gap:10px; margin-bottom:10px;">
+                        <div class="input-wrap" style="flex:1;">
+                            <input type="text" id="address" name="address" class="pm-input" placeholder="House No, Street, Landmark">
+                            <i class="fas fa-map-marker-alt field-ico"></i>
+                        </div>
+                        <button type="button" onclick="getLocation()" style="padding:0 15px; background:var(--brand); color:#fff; border:none; border-radius:var(--radius-md); font-weight:700; font-size:12px;">
+                            <i class="fas fa-crosshairs"></i> GET GPS
+                        </button>
+                    </div>
+                    <input type="hidden" id="lat" name="lat">
+                    <input type="hidden" id="lon" name="lon">
+                    <div id="gpsStatus" style="font-size:11px; color:var(--brand); font-weight:700; min-height:14px;"></div>
                 </div>
 
                 <!-- Email -->
@@ -901,6 +921,10 @@
                 Already have an account? <a href="/login">Sign In</a>
             </div>
 
+            <div style="text-align:center; margin-top:14px; font-size:12.5px; color:var(--t-muted); font-weight:500;">
+                Representing a Medical Facility? <a href="/register-phc" style="color:var(--brand); font-weight:700;">Register Center</a>
+            </div>
+
         </div><!-- /panel-right -->
     </div><!-- /panel -->
 </div>
@@ -971,7 +995,10 @@ function handleRoleChange() {
     const selected = document.querySelector('input[name="role"]:checked')?.value || 'patient';
     const isHealthcare = ['phc_nurse', 'doctor'].includes(selected);
     const isDdhs = selected === 'ddhs_admin';
+    const isGpsNeeded = selected === 'patient';
+    
     const section = document.getElementById('professionalSection');
+    const gpsSection = document.getElementById('gpsSection');
     const ico     = document.getElementById('formIcoIcon');
     const wrap    = document.getElementById('formIco');
     const title   = document.getElementById('formTitle');
@@ -980,10 +1007,14 @@ function handleRoleChange() {
     const lic     = document.getElementById('license');
     const exp     = document.getElementById('experience');
     const phcId   = document.getElementById('phc_id');
+    const address = document.getElementById('address');
 
     section.classList.toggle('active', isHealthcare);
+    gpsSection.style.display = isGpsNeeded ? 'block' : 'none';
+    
     spec.required = lic.required = exp.required = isHealthcare;
     phcId.required = isHealthcare || isDdhs;
+    address.required = isGpsNeeded;
 
     if(selected === 'doctor') {
         ico.className   = 'fas fa-user-md';
@@ -997,6 +1028,10 @@ function handleRoleChange() {
         ico.className   = 'fas fa-user-shield';
         title.textContent = 'DDHS Admin Registration';
         sub.textContent   = 'Create access for workforce command center';
+    } else if(selected === 'ambulance_driver') {
+        ico.className   = 'fas fa-ambulance';
+        title.textContent = 'Ambulance Driver';
+        sub.textContent   = 'Register as an emergency response driver';
     } else {
         ico.className   = 'fas fa-user-plus';
         title.textContent = 'Create Account';
@@ -1004,6 +1039,52 @@ function handleRoleChange() {
     }
     wrap.classList.add('role-bounce');
     setTimeout(() => wrap.classList.remove('role-bounce'), 700);
+}
+
+function getLocation() {
+    const status = document.getElementById('gpsStatus');
+    status.style.color = "var(--brand)";
+    status.textContent = "Requesting permission...";
+    
+    // Check for Secure Context (Geolocation requires HTTPS or localhost)
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        status.style.color = "var(--clr-red)";
+        status.textContent = "Error: Geolocation requires HTTPS. Please type address manually.";
+        return;
+    }
+
+    if (navigator.geolocation) {
+        const options = {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0
+        };
+        
+        navigator.geolocation.getCurrentPosition((pos) => {
+            document.getElementById('lat').value = pos.coords.latitude;
+            document.getElementById('lon').value = pos.coords.longitude;
+            status.innerHTML = `<i class="fas fa-check"></i> GPS Fixed: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+            status.style.color = "var(--clr-green)";
+        }, (err) => {
+            status.style.color = "var(--clr-red)";
+            let msg = `Error (Code ${err.code}): `;
+            switch(err.code) {
+                case err.PERMISSION_DENIED: 
+                    msg += "Permission denied. Please check your browser's site settings (Lock icon)."; 
+                    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+                        msg = "Error: Geolocation blocked on non-secure (HTTP) sites.";
+                    }
+                    break;
+                case err.POSITION_UNAVAILABLE: msg += "Location info unavailable (Hardware issue?)."; break;
+                case err.TIMEOUT: msg += "Request timed out."; break;
+                default: msg += "Unknown error occurred.";
+            }
+            status.textContent = msg + " Please type address.";
+            console.error("GPS Error:", err);
+        }, options);
+    } else {
+        status.textContent = "Geolocation not supported by this browser.";
+    }
 }
 
 /* ─── PASSWORD TOGGLE ─── */
@@ -1061,6 +1142,9 @@ document.querySelectorAll('.pm-input, .pm-select').forEach(el => {
     el.addEventListener('focus',  () => el.closest('.input-wrap').style.transform = 'translateY(-1px)');
     el.addEventListener('blur',   () => el.closest('.input-wrap').style.transform = '');
 });
+
+// Initialize role state on load
+document.addEventListener('DOMContentLoaded', handleRoleChange);
 </script>
 </body>
 </html>

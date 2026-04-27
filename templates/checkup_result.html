@@ -492,7 +492,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
           <div class="s-icon"><i class="fas fa-th-large"></i></div>
           <span class="s-label">Dashboard</span>
         </a>
-        {% if user.role != 'doctor' %}
+        {% if user.role != 'doctor' and user.role != 'patient' %}
         <a href="/health-report" class="s-link">
           <div class="s-icon"><i class="fas fa-chart-line"></i></div>
           <span class="s-label">Health Progress</span>
@@ -520,6 +520,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
       <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
       <span class="t-breadcrumb-active">Results</span>
     </div>
+    {% if user and user.role != 'doctor' %}
     <div class="t-right">
       <div class="t-clock" id="liveClock">--:-- --</div>
       <div class="theme-pill" id="themeToggle">
@@ -529,6 +530,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
       <button class="t-btn"><i class="fas fa-bell"></i><div class="t-badge"></div></button>
       <button class="t-btn" onclick="window.print()"><i class="fas fa-print"></i></button>
     </div>
+    {% endif %}
   </header>
 
   <div class="page">
@@ -649,7 +651,6 @@ function buildResult(result) {
 
   const nextSteps = [
     {ico:'fa-calendar-check',color:'#3B82F6',bg:'rgba(59,130,246,.1)',title:'Book Appointment',sub:'Schedule with a specialist',href:'/appointments'},
-    {ico:'fa-chart-line',color:'#16A34A',bg:'rgba(22,163,74,.1)',title:'View Health Progress',sub:'Track your wellness trends',href:'/health-report'},
     {ico:'fa-rotate-left',color:'#8B5CF6',bg:'rgba(139,92,246,.1)',title:'Retake Checkup',sub:'Update your assessment',href:'/checkup'},
     {ico:'fa-home',color:'#F59E0B',bg:'rgba(245,158,11,.1)',title:'Return to Dashboard',sub:'Back to your overview',href:'/patient/dashboard'},
   ];
