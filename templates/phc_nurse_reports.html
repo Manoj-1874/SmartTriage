@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facility Patient Reports — PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+    :root {
+        --brand:        #0B9B7A;
+        --brand-dark:   #087A60;
+        --brand-light:  #34C9A5;
+        --brand-faint:  #E6F7F3;
+        --sidebar-w:     272px;
+        --sidebar-col:   72px;
+        --radius-md:     12px;
+        --radius-lg:     16px;
+        --radius-xl:     22px;
+        --ease:          cubic-bezier(.4,0,.2,1);
+        --t-base:        .28s;
+        --clr-green:    #16A34A;
+        --clr-green-bg: #DCFCE7;
+        --clr-amber:    #D97706;
+        --clr-amber-bg: #FEF3C7;
+        --clr-red:      #DC2626;
+        --clr-red-bg:   #FEE2E2;
+        --clr-blue:     #2563EB;
+        --clr-blue-bg:  #DBEAFE;
+    }
+    [data-theme="light"] {
+        --canvas:       #EEF6F2;
+        --base:         #FFFFFF;
+        --surface:      #F5FBF8;
+        --hover:        #EBF7F2;
+        --border:       #D9EDE5;
+        --t-head:       #0A2218;
+        --t-body:       #2C4A3C;
+        --t-muted:      #5E8C7A;
+        --sidebar-bg:   #FFFFFF;
+        --sidebar-line: #D9EDE5;
+        --sh-md: 0 4px 14px rgba(0,0,0,.08);
+    }
+    [data-theme="dark"] {
+        --canvas:       #0B1812;
+        --base:         #101F18;
+        --surface:      #152A20;
+        --hover:        #1A3328;
+        --border:       #1D3528;
+        --t-head:       #E4F2EB;
+        --t-body:       #9ABFAE;
+        --t-muted:      #527A65;
+        --sidebar-bg:   #0D1B14;
+        --sidebar-line: #1D3528;
+        --clr-green-bg: rgba(22,163,74,.14);
+        --clr-amber-bg: rgba(217,119,6,.14);
+        --clr-red-bg:   rgba(220,38,38,.14);
+        --clr-blue-bg:  rgba(37,99,235,.14);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+        font-family: 'Outfit', sans-serif;
+        background: var(--canvas);
+        color: var(--t-body);
+        transition: background var(--t-base), color var(--t-base);
+    }
+
+    .shell { display: flex; min-height: 100vh; }
+
+    /* SIDEBAR (Copied from dashboard for consistency) */
+    .sidebar {
+        width: var(--sidebar-w); background: var(--sidebar-bg);
+        border-right: 1px solid var(--sidebar-line);
+        position: fixed; top: 0; left: 0; bottom: 0; z-index: 300;
+        display: flex; flex-direction: column; overflow: hidden;
+        transition: width var(--t-base) var(--ease);
+    }
+    .sidebar.collapsed { width: var(--sidebar-col); }
+    .s-brand { display: flex; align-items: center; gap: 11px; padding: 20px 18px 16px; border-bottom: 1px solid var(--sidebar-line); }
+    .s-logo-box { width: 36px; height: 36px; background: linear-gradient(140deg, var(--brand), var(--brand-light)); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; }
+    .s-toggle { position: absolute; top: 22px; right: -13px; width: 26px; height: 26px; background: var(--base); border: 1px solid var(--border); border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; z-index: 10; }
+    .s-nav { flex: 1; padding: 6px 8px; overflow-y: auto; }
+    .s-link { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 8px; color: var(--t-muted); text-decoration: none; font-size: 13.5px; font-weight: 500; margin-bottom: 2px; }
+    .s-link:hover { background: var(--hover); color: var(--t-head); }
+    .s-link.active { background: var(--brand-faint); color: var(--brand-dark); font-weight: 700; }
+    .s-icon { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; }
+
+    .main { margin-left: var(--sidebar-w); flex: 1; transition: margin-left var(--t-base) var(--ease); }
+    .sidebar.collapsed ~ .main { margin-left: var(--sidebar-col); }
+
+    .topbar {
+        height: 60px; padding: 0 28px; background: var(--base); border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 200;
+    }
+    .t-breadcrumb { font-size: 12.5px; color: var(--t-muted); display: flex; align-items: center; gap: 6px; }
+    .t-active { color: var(--t-head); font-weight: 600; }
+
+    .page { padding: 28px; }
+    .header-box { margin-bottom: 24px; }
+    .header-box h1 { font-size: 24px; color: var(--t-head); margin-bottom: 4px; }
+    .header-box p { font-size: 14px; color: var(--t-muted); }
+
+    .reports-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+    .report-card {
+        background: var(--base); border: 1px solid var(--border); border-radius: var(--radius-lg);
+        padding: 20px; transition: transform 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .report-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); border-color: var(--brand); }
+    
+    .card-top { display: flex; justify-content: space-between; margin-bottom: 16px; }
+    .patient-meta h3 { font-size: 16px; color: var(--t-head); margin-bottom: 2px; }
+    .patient-meta p { font-size: 12px; color: var(--t-muted); }
+    
+    .score-box { text-align: right; }
+    .score-val { font-size: 22px; font-weight: 800; color: var(--brand); line-height: 1; }
+    .score-lbl { font-size: 10px; color: var(--t-faint); text-transform: uppercase; font-weight: 700; }
+
+    .risk-pill {
+        display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px;
+        font-size: 11px; font-weight: 700; margin-bottom: 12px;
+    }
+    .risk-LOW { background: var(--clr-green-bg); color: var(--clr-green); }
+    .risk-MEDIUM { background: var(--clr-amber-bg); color: var(--clr-amber); }
+    .risk-HIGH { background: var(--clr-red-bg); color: var(--clr-red); }
+    .risk-CRITICAL { background: var(--clr-red-bg); color: var(--clr-red); box-shadow: 0 0 0 1px var(--clr-red); }
+
+    .stats-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .stat-item { background: var(--surface); padding: 10px; border-radius: 8px; }
+    .stat-lbl { font-size: 10px; color: var(--t-faint); font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+    .stat-val { font-size: 13px; font-weight: 600; color: var(--t-head); }
+
+    .symptoms-box { font-size: 12.5px; color: var(--t-body); margin-bottom: 16px; min-height: 40px; }
+    .symptoms-box strong { color: var(--t-head); }
+
+    .btn-view {
+        width: 100%; padding: 10px; background: var(--brand-faint); color: var(--brand-dark);
+        border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer;
+        transition: background 0.2s; text-align: center; display: block; text-decoration: none;
+    }
+    .btn-view:hover { background: var(--brand); color: #fff; }
+
+    .empty-state { text-align: center; padding: 60px; color: var(--t-faint); }
+    .empty-state i { font-size: 48px; margin-bottom: 16px; }
+
+    </style>
+</head>
+<body data-theme="light">
+<div class="shell">
+    <aside class="sidebar" id="sidebar">
+        <div class="s-brand">
+            <div class="s-logo-box"><i class="fas fa-hospital"></i></div>
+            <div class="s-brand-text" style="margin-left:10px">
+                <div style="font-weight:800; font-size:16px; color:var(--t-head)">PriorityMed</div>
+                <div style="font-size:10px; color:var(--brand); font-weight:600">PHC Nurse Center</div>
+            </div>
+        </div>
+        <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
+        <nav class="s-nav">
+            <a href="/phc/nurse/dashboard" class="s-link">
+                <div class="s-icon"><i class="fas fa-th-large"></i></div>
+                <span>Dashboard</span>
+            </a>
+            <a href="/phc/nurse/patients" class="s-link">
+                <div class="s-icon"><i class="fas fa-users"></i></div>
+                <span>Patients</span>
+            </a>
+            <a href="/phc/nurse/appointments" class="s-link">
+                <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+                <span>Appointments</span>
+            </a>
+            <a href="/phc/nurse/intake" class="s-link">
+                <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
+                <span>Patient Intake</span>
+            </a>
+            <a href="/phc/nurse/reports" class="s-link active">
+                <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
+                <span>Reports</span>
+            </a>
+            <a href="/logout" class="s-link" style="margin-top:auto">
+                <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
+                <span>Sign Out</span>
+            </a>
+        </nav>
+    </aside>
+
+    <div class="main">
+        <header class="topbar">
+            <div class="t-breadcrumb">
+                <span>PriorityMed</span> <i class="fas fa-chevron-right" style="font-size:8px; opacity:0.5"></i>
+                <span class="t-active">Patient Health Reports</span>
+            </div>
+            <div class="t-user" style="font-size:13px; font-weight:600">
+                {{ user.fullname }}
+            </div>
+        </header>
+
+        <div class="page">
+            <div class="header-box">
+                <h1>Facility Health Reports</h1>
+                <p>AI-driven health assessment summaries for all patients at {{ dashboard_data.center_name }}</p>
+            </div>
+
+            {% if patient_reports %}
+            <div class="reports-grid">
+                {% for report in patient_reports %}
+                <div class="report-card">
+                    <div class="card-top">
+                        <div class="patient-meta">
+                            <h3>{{ report.fullname }}</h3>
+                            <p>{{ report.email or 'No email' }}</p>
+                        </div>
+                        <div class="score-box">
+                            <div class="score-val">{{ report.health_score }}%</div>
+                            <div class="score-lbl">Health Score</div>
+                        </div>
+                    </div>
+
+                    <div class="risk-pill risk-{{ report.risk_level }}">
+                        <i class="fas fa-shield-virus"></i> {{ report.risk_level }} RISK
+                    </div>
+
+                    <div class="stats-row">
+                        <div class="stat-item">
+                            <div class="stat-lbl">Heart Rate</div>
+                            <div class="stat-val">{{ report.vitals.hr }} BPM</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-lbl">Blood Pressure</div>
+                            <div class="stat-val">{{ report.vitals.bp }}</div>
+                        </div>
+                    </div>
+
+                    <div class="symptoms-box">
+                        <strong>Recent Symptoms:</strong><br>
+                        {{ report.symptoms | truncate(80) }}
+                    </div>
+
+                    <div style="font-size: 11px; color: var(--t-faint); margin-bottom: 14px;">
+                        <i class="far fa-clock"></i> Last Assessment: {{ report.last_checkup }}
+                    </div>
+
+                    <a href="/patients" class="btn-view">View Full History ({{ report.total_records }})</a>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h2>No Reports Available</h2>
+                <p>Register patients and perform checkups to generate reports.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+    const sidebar = document.getElementById('sidebar');
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+    });
+    
+    // Theme support (minimal)
+    if(localStorage.getItem('pmTheme') === 'dark') document.body.setAttribute('data-theme', 'dark');
+</script>
+</body>
+</html>

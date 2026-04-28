@@ -179,7 +179,7 @@ class IntegratedDualBrainRisk:
         }
 
         for category, category_symp in category_symptoms.items():
-            if category in disease_name:
+            if category in disease_name or (category == 'respiratory' and 'pulmonary' in disease_name) or (category == 'cardiovascular' and 'arterial' in disease_name):
                 symptoms.extend(category_symp)
                 break
 
@@ -201,29 +201,35 @@ class IntegratedDualBrainRisk:
         if not symptoms_text or not symptoms_text.strip():
             result.update({'risk_label': 'LOW', 'risk_score': 0.2})
             return result
-        if not self.bert_model: return result
-
         try:
-            try:
-                prediction = self.bert_model(symptoms_text, top_k=3)
-            except Exception as e:
-                if 'token_type_ids' in str(e):
-                    critical_keywords = ['severe', 'critical', 'emergency', 'intense', 'unbearable', 'bleeding', 'chest pain', 'morquio']
-                    text_lower = symptoms_text.lower()
-                    if any(word in text_lower for word in critical_keywords):
-                        result.update({'risk_label': 'CRITICAL', 'risk_score': 0.88})
-                    elif 'fever' in text_lower or 'pain' in text_lower:
-                        result.update({'risk_label': 'MEDIUM', 'risk_score': 0.55})
-                    return result
-                raise e
+            # 1. KEYWORD-BASED SEMANTIC OVERRIDE (Ensures resilience if AI model is off)
+            text_lower = symptoms_text.lower()
+            critical_keywords = ['emergency', 'critical', 'unbearable', 'severe bleeding', 'crushing chest pain', 'stroke', 'cardiac arrest', 'failure', 'aortic dissection']
+            high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'progressive', 'severe', 'chronic', 'serious', 'metabolic', 'genetic', 'deficiency', 'disorder', 'xanthomatosis', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+            
+            # 2. AI MODEL PREDICTION (if available)
+            if self.bert_model:
+                try:
+                    prediction = self.bert_model(symptoms_text, top_k=3)
+                    if prediction:
+                        top = prediction[0]
+                        label = top.get('label', 'MEDIUM').upper()
+                        # Map internal labels to risk
+                        score = {'CRITICAL': 0.95, 'HIGH': 0.80, 'MEDIUM': 0.55, 'LOW': 0.30}.get(label, 0.55)
+                        result.update({'risk_label': label, 'confidence': top.get('score', 0.5), 'risk_score': score})
+                except Exception as e:
+                    logger.warning(f"BERT AI model failed, falling back to keywords: {e}")
 
-            if prediction:
-                top = prediction[0]
-                label = top.get('label', 'MEDIUM').upper()
-                result.update({'risk_label': label, 'confidence': top.get('score', 0.5), 
-                               'risk_score': {'CRITICAL': 0.95, 'HIGH': 0.80, 'MEDIUM': 0.55, 'LOW': 0.30}.get(label, 0.55)})
+            # 3. APPLY KEYWORD BOOST (Overrides AI if keywords are more severe)
+            if any(k in text_lower for k in critical_keywords):
+                if result['risk_score'] < 0.90:
+                    result.update({'risk_label': 'CRITICAL', 'risk_score': 0.92, 'confidence': 0.99})
+            elif any(k in text_lower for k in high_keywords):
+                if result['risk_score'] < 0.75:
+                    result.update({'risk_label': 'HIGH', 'risk_score': 0.82, 'confidence': 0.95})
+                    
         except Exception as e:
-            logger.error(f"BERT error: {str(e)}")
+            logger.error(f"Semantic analysis error: {str(e)}")
         return result
 
     def _analyze_vitals_with_xgboost(self, age, gender, symptoms, sys_bp, dia_bp, hr, temp_f, pre_conditions=None) -> Dict:
@@ -257,41 +263,47 @@ class IntegratedDualBrainRisk:
         xgb_score = xgb_result.get('risk_score', 0.5)
         disease_score = disease_context.get('risk_score', 0.5)
         
-        # Acute Event Prioritization
-        is_emergency = disease_context.get('risk_category') == 'CRITICAL' or disease_score >= 0.90
-        is_priority = disease_context.get('risk_category') == 'HIGH' or disease_score >= 0.80
+        # Acute Event Prioritization (Knowledge or Symptom detection)
+        is_emergency = (disease_context.get('risk_category') == 'CRITICAL' or disease_score >= 0.85 or bert_result.get('risk_label') == 'CRITICAL')
+        is_priority = (disease_context.get('risk_category') == 'HIGH' or disease_score >= 0.75 or bert_result.get('risk_label') == 'HIGH')
 
-        final_score = (xgb_score * 0.40 + bert_score * 0.35 + disease_score * 0.25)
+        # DYNAMIC WEIGHTING: If any brain detects a crisis, ignore "normal" vitals
+        if is_emergency:
+            # Shift weight heavily (60% Knowledge/Symptoms, 20% Vitals, 20% Max of any brain)
+            final_score = (max(disease_score, bert_score) * 0.70 + xgb_score * 0.30)
+        elif is_priority:
+            # Shift weight moderately
+            final_score = (max(disease_score, bert_score) * 0.60 + xgb_score * 0.40)
+        else:
+            # Standard fusion
+            final_score = (xgb_score * 0.40 + bert_score * 0.35 + disease_score * 0.25)
         
-        # Vitals multipliers
+        # Vitals multipliers (Physical instability ALWAYS boosts risk)
         v_mult = 1.0
         if sys_bp < 90 or dia_bp < 60: v_mult *= 1.3
         if spo2 < 92: v_mult *= 1.4
         if temp_f > 103.5: v_mult *= 1.3
         
-        # Safety Floor: Rare diseases shouldn't be LOW risk just because vitals are perfect
-        if is_priority:
-            final_score = max(final_score, 0.55) # Floor at MEDIUM/PRIORITY
-        
-        # Emergency Escalation
+        # Safety Floor: If Knowledge OR Symptoms detect a crisis, result MUST NOT be LOW
         if is_emergency:
-            final_score = max(final_score, 0.92)
-            final_score *= 1.1 
+            final_score = max(final_score, 0.90)
+        elif is_priority:
+            final_score = max(final_score, 0.70) # Floor at HIGH
         
         final_score = min(1.0, max(0.0, final_score * v_mult))
         
-        if final_score >= 0.88 or is_emergency: cat, urg = 'CRITICAL', 'IMMEDIATE EMERGENCY'
+        if final_score >= 0.85 or is_emergency: cat, urg = 'CRITICAL', 'IMMEDIATE EMERGENCY'
         elif final_score >= 0.70: cat, urg = 'HIGH', 'URGENT'
         elif final_score >= 0.50: cat, urg = 'MEDIUM', 'PRIORITY'
         else: cat, urg = 'LOW', 'ROUTINE'
 
-        # SPECIALIST MAPPING (New Workflow Integration)
+        # SPECIALIST MAPPING
         disease_name = str(disease_context.get('disease_identified', '')).lower()
         specialist = "General Physician"
         if any(k in disease_name for k in ['stroke', 'neurological', 'brain', 'seizure']): specialist = "Neurologist"
-        elif any(k in disease_name for k in ['heart', 'infarction', 'cardiac', 'bp']): specialist = "Cardiologist"
+        elif any(k in disease_name for k in ['pulmonary', 'respiratory', 'lung', 'bronchitis']): specialist = "Pulmonologist"
+        elif any(k in disease_name for k in ['heart', 'infarction', 'cardiac', 'hypertension', 'bp']): specialist = "Cardiologist"
         elif any(k in disease_name for k in ['alkaptonuria', 'ochronosis', 'metabolic']): specialist = "Metabolic Specialist / Geneticist"
-        elif any(k in disease_name for k in ['pneumonia', 'bronchitis', 'respiratory']): specialist = "Pulmonologist"
         elif any(k in disease_name for k in ['diabetes', 'thyroid']): specialist = "Endocrinologist"
         elif any(k in disease_name for k in ['malaria', 'dengue', 'sepsis']): specialist = "Infectious Disease Specialist"
 

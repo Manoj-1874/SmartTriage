@@ -449,6 +449,7 @@ def init_db():
                 user_id INTEGER NOT NULL,
                 phc_id INTEGER NOT NULL,
                 check_in_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                check_out_time DATETIME,
                 status TEXT NOT NULL DEFAULT 'Present' CHECK(status IN ('Present', 'Absent')),
                 geo_location TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id),
@@ -622,7 +623,8 @@ def init_db():
             'ambulance_allocations': ['source_lat', 'source_lon', 'dest_lat', 'dest_lon', 'driver_id', 'reached_at'],
             'inventory': ['unit_cost', 'last_updated', 'status'],
             'resource_usage_logs': ['unit_cost_at_time', 'logged_by_email', 'usage_type'],
-            'patient_logs': ['user_id', 'phc_id', 'recommended_specialist', 'risk_score', 'respiration_rate', 'spo2', 'news2_score', 'actual_outcome', 'outcome_confirmed_by', 'outcome_confirmed_at', 'outcome_notes', 'pain_intensity', 'symptom_duration', 'temp', 'hr', 'sys_bp', 'dia_bp']
+            'patient_logs': ['user_id', 'phc_id', 'recommended_specialist', 'risk_score', 'respiration_rate', 'spo2', 'news2_score', 'actual_outcome', 'outcome_confirmed_by', 'outcome_confirmed_at', 'outcome_notes', 'pain_intensity', 'symptom_duration', 'temp', 'hr', 'sys_bp', 'dia_bp'],
+            'staff_attendance': ['check_out_time']
         }
 
         for table, columns in tables_to_check.items():
@@ -1333,6 +1335,26 @@ def login():
                 district=district
             )
             login_user(user, remember=request.form.get('remember'))
+            
+            # AUTO-ATTENDANCE: Mark present on login for medical staff
+            if user.role in ['doctor', 'phc_nurse'] and user.phc_id:
+                try:
+                    conn = get_db_connection()
+                    # Check if already checked in today
+                    existing = conn.execute('''
+                        SELECT id FROM staff_attendance 
+                        WHERE user_id = ? AND date(check_in_time) = date('now', 'localtime')
+                    ''', (user.id,)).fetchone()
+                    
+                    if not existing:
+                        conn.execute('''
+                            INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time)
+                            VALUES (?, ?, 'Present', datetime('now', 'localtime'))
+                        ''', (user.id, user.phc_id))
+                        conn.commit()
+                    conn.close()
+                except Exception as e:
+                    app.logger.error(f"Failed to auto-mark attendance for {user.email}: {e}")
 
             # Redirect based on role - ROLE-SPECIFIC URLs
             if user.role == 'ddhs_admin':
@@ -1457,6 +1479,21 @@ def logout():
         )
 
     app.logger.info(f"User logged out - Email: {current_user.email} | Role: {current_user.role}")
+    
+    # AUTO-ATTENDANCE: Mark check-out time on logout
+    if current_user.role in ['doctor', 'phc_nurse']:
+        try:
+            conn = get_db_connection()
+            conn.execute('''
+                UPDATE staff_attendance 
+                SET check_out_time = datetime('now', 'localtime') 
+                WHERE user_id = ? AND date(check_in_time) = date('now', 'localtime')
+            ''', (current_user.id,))
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            app.logger.error(f"Failed to mark check-out for {current_user.email}: {e}")
+
     logout_user()
     flash("You have been logged out successfully.", "info")
     return redirect(url_for('login'))
@@ -1745,19 +1782,41 @@ def patient_dashboard():
 @app.route('/patient/report/<int:report_id>')
 @login_required
 def patient_view_report(report_id):
-    """Patient - View their own AI assessment report"""
-    if current_user.role != 'patient':
-        flash('Access denied')
-        return redirect(url_for('index'))
-
+    """View assessment report with doctor note support"""
+    # Allow patients to see their own, and doctors/nurses to see any
     conn = get_db_connection()
-    report = conn.execute('''
-        SELECT id, age, gender, symptoms, sys_bp, dia_bp, hr, temp, spo2, respiration_rate,
-               history, dual_brain_risk, routing, recommended_specialist, timestamp
-        FROM patient_logs
-        WHERE id = ? AND user_id = ?
-    ''', (report_id, current_user.id)).fetchone()
+    
+    # Check permission and get report
+    if current_user.role == 'patient':
+        report = conn.execute('''
+            SELECT * FROM patient_logs WHERE id = ? AND user_id = ?
+        ''', (report_id, current_user.id)).fetchone()
+    else:
+        report = conn.execute('''
+            SELECT * FROM patient_logs WHERE id = ?
+        ''', (report_id,)).fetchone()
 
+    if not report:
+        conn.close()
+        flash('Report not found or access denied')
+        return redirect(get_role_dashboard_redirect())
+
+    report = dict(report)
+    user_id = report['user_id']
+    
+    # Fetch patient name
+    patient = conn.execute('SELECT fullname FROM users WHERE id = ?', (user_id,)).fetchone()
+    report['patient_name'] = patient['fullname'] if patient else 'Unknown'
+
+    # Fetch history of notes for this patient
+    history = conn.execute('''
+        SELECT l.timestamp, l.actual_outcome, l.outcome_notes, u.fullname as doctor_name
+        FROM patient_logs l
+        LEFT JOIN users u ON l.outcome_confirmed_by = u.id
+        WHERE l.user_id = ? AND l.id != ? AND l.outcome_notes IS NOT NULL
+        ORDER BY l.timestamp DESC
+    ''', (user_id, report_id)).fetchall()
+    
     conn.close()
 
     if not report:
@@ -1786,20 +1845,21 @@ def patient_view_report(report_id):
     # Determine risk color
     risk = report['dual_brain_risk']
     if risk == 'CRITICAL':
-        report['risk_color'] = '#dc2626'
+        report['risk_class'] = 'critical'
         report['risk_icon'] = '🔴'
     elif risk == 'HIGH':
-        report['risk_color'] = '#f97316'
+        report['risk_class'] = 'high'
         report['risk_icon'] = '🟠'
     elif risk == 'MEDIUM':
-        report['risk_color'] = '#eab308'
+        report['risk_class'] = 'medium'
         report['risk_icon'] = '🟡'
     else:
-        report['risk_color'] = '#16a34a'
+        report['risk_class'] = 'low'
         report['risk_icon'] = '🟢'
 
     return render_template('patient_report_detail.html',
                          report=report,
+                         history=history,
                          user=current_user)
 
 @app.route('/api/nurse/patient-reports/<int:patient_id>')
@@ -2116,11 +2176,15 @@ def phc_nurse_patients():
     patients = [dict(row) for row in patients]
 
     # Fetch available ambulances for this district
-    # We join with users to get the current driver's name if needed, or use driver_name column
+    # We join with users to get the current driver's name and contact
     available_ambulances = conn.execute("""
-        SELECT id, ambulance_number, vehicle_type, driver_name, driver_contact, location
-        FROM ambulances
-        WHERE status = 'available' AND district = ?
+        SELECT a.id, a.ambulance_number, a.vehicle_type, 
+               COALESCE(u.fullname, a.driver_name, 'Unknown Driver') as driver_name,
+               COALESCE(u.phone, a.driver_contact, 'N/A') as driver_contact,
+               COALESCE(a.location, 'Main PHC Base') as location
+        FROM ambulances a
+        LEFT JOIN users u ON a.current_driver_id = u.id
+        WHERE a.status = 'available' AND a.district = ?
     """, (current_user.district or 'Trichy',)).fetchall()
     available_ambulances = [dict(row) for row in available_ambulances]
 
@@ -2263,11 +2327,10 @@ def phc_nurse_reports():
 
     conn.close()
 
-    return render_template('phc_nurse_dashboard.html',
+    return render_template('phc_nurse_reports.html',
                          patient_reports=patient_reports,
                          stats=stats,
                          dashboard_data=dashboard_data,
-                         current_page='reports',
                          user=current_user)
 
 @app.route('/phc/nurse/messages')
@@ -2613,6 +2676,105 @@ def ddhs_admin_staff_assignment():
                          assigned_staff=assigned_staff,
                          centers=centers,
                          user=current_user)
+
+@app.route('/api/ddhs-admin/update-phc', methods=['POST'])
+@login_required
+def update_phc():
+    """API endpoint to update PHC center details"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    data = request.get_json()
+    phc_id = data.get('id')
+    name = data.get('name')
+    location = data.get('location')
+    contact = data.get('contact')
+
+    if not phc_id or not name:
+        return jsonify({'success': False, 'message': 'ID and Name are required'}), 400
+
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            UPDATE phc_facilities 
+            SET name = ?, location = ?, contact = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (name, location, contact, phc_id))
+        conn.commit()
+        
+        app.logger.info(f"Health Center {phc_id} updated by {current_user.email}")
+        return jsonify({'success': True, 'message': 'Health center updated successfully'})
+    except Exception as e:
+        app.logger.error(f"Error updating health center: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/ddhs-admin/update-ambulance', methods=['POST'])
+@login_required
+def update_ambulance():
+    """API endpoint to update ambulance details"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    data = request.get_json()
+    amb_id = data.get('id')
+    amb_number = data.get('ambulance_number')
+    vehicle_type = data.get('vehicle_type')
+    status = data.get('status')
+
+    if not amb_id or not amb_number:
+        return jsonify({'success': False, 'message': 'ID and Number are required'}), 400
+
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            UPDATE ambulances 
+            SET ambulance_number = ?, vehicle_type = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+        ''', (amb_number, vehicle_type, status, amb_id))
+        conn.commit()
+        
+        app.logger.info(f"Ambulance {amb_id} updated by {current_user.email}")
+        return jsonify({'success': True, 'message': 'Ambulance updated successfully'})
+    except Exception as e:
+        app.logger.error(f"Error updating ambulance: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/ddhs-admin/update-staff', methods=['POST'])
+@login_required
+def update_staff():
+    """API endpoint to update staff details"""
+    if current_user.role != 'ddhs_admin':
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+
+    data = request.get_json()
+    staff_id = data.get('id')
+    fullname = data.get('fullname')
+    specialization = data.get('specialization')
+    phone = data.get('phone')
+
+    if not staff_id or not fullname:
+        return jsonify({'success': False, 'message': 'ID and Name are required'}), 400
+
+    conn = get_db_connection()
+    try:
+        conn.execute('''
+            UPDATE users 
+            SET fullname = ?, specialization = ?, phone = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? AND role IN ('doctor', 'phc_nurse')
+        ''', (fullname, specialization, phone, staff_id))
+        conn.commit()
+        
+        app.logger.info(f"Staff {staff_id} updated by {current_user.email}")
+        return jsonify({'success': True, 'message': 'Staff member updated successfully'})
+    except Exception as e:
+        app.logger.error(f"Error updating staff: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/api/ddhs-admin/assign-staff', methods=['POST'])
 @login_required
@@ -3128,6 +3290,7 @@ def ddhs_admin_attendance():
             SELECT u.id, u.fullname, u.role, u.phone, u.specialization, u.phc_id,
                    pf.name as center_name,
                    sa.check_in_time as checkin_time,
+                   sa.check_out_time as checkout_time,
                    sa.status as attendance_status,
                    (SELECT status FROM staff_leaves 
                     WHERE user_id = u.id AND status = 'APPROVED' 
@@ -3190,6 +3353,7 @@ def ddhs_admin_attendance():
                 'center_name': s['center_name'],
                 'phone': s['phone'],
                 'checkin_time': s['checkin_time'],
+                'checkout_time': s.get('checkout_time'),
                 'status': s['display_status']
             })
 
@@ -3228,7 +3392,8 @@ def phc_staff_attendance():
     staff_list = c.execute('''
         SELECT u.id, u.fullname, u.role, u.phone, u.specialization,
                sa.check_in_time as checkin_time,
-               COALESCE(sa.status, 'absent') as attendance_status
+               sa.check_out_time as checkout_time,
+               COALESCE(sa.status, 'Absent') as status
         FROM users u
         LEFT JOIN staff_attendance sa ON u.id = sa.user_id 
              AND date(sa.check_in_time) = date('now')
@@ -7359,13 +7524,26 @@ def api_mark_attendance():
         if not staff:
             return jsonify({'success': False, 'message': 'Staff not found'}), 404
 
-        # Insert attendance record
-        status_val = 'Present' if status == 'present' else 'Absent'
-        c.execute('''
-            INSERT OR REPLACE INTO staff_attendance
-            (user_id, phc_id, check_in_time, status)
-            VALUES (?, ?, CURRENT_TIMESTAMP, ?)
-        ''', (staff_id, staff['phc_id'], status_val))
+        # Insert or update attendance record for today
+        status_val = status.title() if status in ['present', 'absent', 'late'] else 'Present'
+        
+        # Check if record for today exists
+        existing = c.execute('''
+            SELECT id FROM staff_attendance 
+            WHERE user_id = ? AND date(check_in_time) = date('now', 'localtime')
+        ''', (staff_id,)).fetchone()
+        
+        if existing:
+            c.execute('''
+                UPDATE staff_attendance 
+                SET status = ? 
+                WHERE id = ?
+            ''', (status_val, existing['id']))
+        else:
+            c.execute('''
+                INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time)
+                VALUES (?, ?, ?, datetime('now', 'localtime'))
+            ''', (staff_id, staff['phc_id'], status_val))
 
         conn.commit()
         conn.close()

@@ -21,7 +21,19 @@ class EmergencyManifest:
         'myocardial infarction': ('Myocardial Infarction', 0.98, 'CRITICAL'),
         'alkaptonuria': ('Alkaptonuria (Metabolic Disorder)', 0.85, 'HIGH'),
         'ochronosis': ('Ochronosis (Metabolic Manifestation)', 0.85, 'HIGH'),
-        'morquio syndrome': ('Morquio Syndrome (Mucopolysaccharidosis)', 0.90, 'CRITICAL')
+        'morquio syndrome': ('Morquio Syndrome (Mucopolysaccharidosis)', 0.90, 'CRITICAL'),
+        'pulmonary hypertension': ('Pulmonary Arterial Hypertension', 0.88, 'CRITICAL'),
+        'idiopathic pulmonary arterial hypertension': ('IPAH', 0.92, 'CRITICAL'),
+        'hypertension': ('Hypertension', 0.65, 'MEDIUM'),
+        'heart failure': ('Congestive Heart Failure', 0.90, 'CRITICAL'),
+        'pulmonary embolism': ('Pulmonary Embolism', 0.95, 'CRITICAL'),
+        'aneurysm': ('Aortic Aneurysm', 0.92, 'CRITICAL'),
+        'sepsis': ('Sepsis / Septic Shock', 0.96, 'CRITICAL'),
+        'ventricular fibrillation': ('Ventricular Fibrillation', 0.99, 'CRITICAL'),
+        'acute aortic dissection': ('Acute Aortic Dissection', 0.99, 'CRITICAL'),
+        'myocardial rupture': ('Myocardial Rupture', 0.99, 'CRITICAL'),
+        'cholangiocarcinoma': ('Bile Duct Cancer', 0.88, 'CRITICAL'),
+        'bile duct cancer': ('Bile Duct Cancer', 0.88, 'CRITICAL')
     }
 
     @staticmethod
@@ -67,10 +79,16 @@ class MedicalDiseaseAPI:
     def get_disease_from_web(disease_name: str) -> Dict:
         try:
             url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{disease_name.replace(' ', '_')}"
-            resp = requests.get(url, timeout=2.5)
+            headers = {
+                'User-Agent': 'SmartTriageBot/1.0 (https://smarttriage.phc; admin@smarttriage.phc) requests/2.25.1',
+                'Accept': 'application/json'
+            }
+            resp = requests.get(url, headers=headers, timeout=3.0)
             if resp.status_code == 200:
-                return {'source': 'Wikipedia', 'description': resp.json().get('extract', '')}
-        except: pass
+                data = resp.json()
+                return {'source': 'Wikipedia', 'description': data.get('extract', '')}
+        except Exception as e:
+            logger.error(f"Wikipedia API error for {disease_name}: {e}")
         return None
 
 class UniversalDiseaseRiskAssessment:
@@ -86,7 +104,11 @@ class UniversalDiseaseRiskAssessment:
         # Tokenize using regex to split by commas, dots, and the word 'and'
         potential_terms = []
         for p in re.split(r'[,.]|\band\b', raw_text, flags=re.IGNORECASE):
-            clean = p.strip()
+            # Clean: Remove parentheses and content inside if dangling, or just strip them
+            clean = re.sub(r'\(.*?\)', '', p).strip().strip('()[]{}')
+            # Handle cases like "Disease (CTX" where parenthesis is not closed
+            clean = clean.replace('(', '').replace(')', '').strip()
+            
             if len(clean) > 3 and clean.lower() not in ['none', 'null', 'nan', 'unknown']:
                 if clean not in potential_terms: potential_terms.append(clean)
         
@@ -95,47 +117,66 @@ class UniversalDiseaseRiskAssessment:
 
         all_findings = []
 
-        def investigate_term(term):
+        for term in potential_terms:
             # Step 0: Priority Manifest
             pri_hit = EmergencyManifest.check(term)
-            if pri_hit: return pri_hit
+            if pri_hit:
+                all_findings.append(pri_hit)
 
             # Step 1: Local
             local_hit = self.local_db.search_disease(term)
             if local_hit:
-                return {
+                all_findings.append({
                     'disease_identified': local_hit['disease_name'],
                     'risk_score': 0.80 if local_hit['severity'] == 'HIGH' else 0.55,
                     'risk_category': local_hit['severity'],
                     'description': f"Local Diagnosis: {local_hit['severity']}",
                     'source': 'Local AI', 'term': term
-                }
+                })
 
             # Step 2: SNOMED
             if term.lower() not in ['fatigue', 'pain', 'fever', 'cough']:
                 snomed = SNOMEDIntegration.search_disease(term)
                 if snomed.get('found'):
-                    return {
-                        'disease_identified': snomed['preferred_term'], 'risk_score': 0.65, 'risk_category': 'MEDIUM',
+                    snomed_term = snomed['preferred_term'].lower()
+                    score, cat = 0.65, 'MEDIUM'
+                    
+                    # CRITICAL KEYWORDS BOOSTER
+                    critical_keywords = ['failure', 'infarction', 'stroke', 'hemorrhage', 'rupture', 'sepsis', 'shock', 'arrest', 'acute', 'ischemia', 'embolism', 'aneurysm']
+                    high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'syndrome', 'disease', 'disorder', 'toxicity', 'poisoning', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+                    
+                    if any(w in snomed_term for w in critical_keywords):
+                        score, cat = 0.90, 'CRITICAL'
+                    elif any(w in snomed_term for w in high_keywords):
+                        score, cat = 0.82, 'HIGH'
+                        
+                    all_findings.append({
+                        'disease_identified': snomed['preferred_term'], 'risk_score': score, 'risk_category': cat,
                         'description': f"Clinical Match via {snomed['source']}",
                         'source': 'SNOMED-CT', 'term': term
-                    }
+                    })
 
             # Step 3: Web
             web = MedicalDiseaseAPI.get_disease_from_web(term)
             if web:
-                return {
-                    'disease_identified': term, 'risk_score': 0.60, 'risk_category': 'MEDIUM',
-                    'description': 'Description from Wikipedia.',
-                    'source': 'Wikipedia', 'term': term
-                }
-            return None
-
-        with ThreadPoolExecutor(max_workers=5) as executor:
-            futures = {executor.submit(investigate_term, t): t for t in potential_terms}
-            for f in as_completed(futures):
-                res = f.result()
-                if res: all_findings.append(res)
+                desc = web.get('description', '').lower()
+                # Dynamic severity boost based on description
+                score, cat = 0.60, 'MEDIUM'
+                
+                # CRITICAL DESCRIPTOR BOOSTER
+                critical_desc = ['fatal', 'emergency', 'life-threatening', 'sudden death', 'critical', 'organ failure', 'severe hemorrhage', 'respiratory failure', 'aortic dissection']
+                high_desc = ['cancer', 'carcinoma', 'malignant', 'progressive', 'severe', 'chronic', 'serious', 'tumor', 'metabolic', 'genetic', 'disorder', 'syndrome', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+                
+                if any(w in desc for w in critical_desc):
+                    score, cat = 0.92, 'CRITICAL'
+                elif any(w in desc for w in high_desc):
+                    score, cat = 0.80, 'HIGH'
+                    
+                all_findings.append({
+                    'disease_identified': term, 'risk_score': score, 'risk_category': cat,
+                    'description': web.get('description', 'Medical knowledge result.'),
+                    'source': 'Medical Knowledge API', 'term': term
+                })
 
         result['all_findings'] = all_findings
         if all_findings:

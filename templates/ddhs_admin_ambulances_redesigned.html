@@ -101,22 +101,29 @@
 {% block content %}
 
 <!-- Fleet Stats -->
-<div class="ambulance-stats">
-    <div class="ambulance-stat active">
-        <div class="ambulance-stat-value">{{ ambulances|length }}</div>
-        <div class="ambulance-stat-label">Total Ambulances</div>
+</div>
+
+<!-- Search & Filter -->
+<div class="section-card">
+    <div class="section-card-header">
+        <h3>🔍 Search & Filter</h3>
     </div>
-    <div class="ambulance-stat active">
-        <div class="ambulance-stat-value">{{ active_ambulances }}</div>
-        <div class="ambulance-stat-label">Active</div>
-    </div>
-    <div class="ambulance-stat inactive">
-        <div class="ambulance-stat-value">{{ inactive_ambulances }}</div>
-        <div class="ambulance-stat-label">Inactive</div>
-    </div>
-    <div class="ambulance-stat">
-        <div class="ambulance-stat-value">{{ active_allocations }}</div>
-        <div class="ambulance-stat-label">In Transit</div>
+    <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; padding: 20px;">
+        <div>
+            <input type="text" id="ambulanceSearchInput" placeholder="Search by ambulance number or driver..."
+                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
+        </div>
+        <div>
+            <select id="ambulanceStatusFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
+                <option value="">All Statuses</option>
+                <option value="available">Available</option>
+                <option value="in_transit">In Transit</option>
+                <option value="maintenance">Maintenance</option>
+            </select>
+        </div>
+        <button onclick="performAmbulanceSearch()" style="padding: 10px 20px; background: var(--brand); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            Search
+        </button>
     </div>
 </div>
 
@@ -191,7 +198,7 @@
     <div class="section-body">
         {% if ambulances %}
             {% for ambulance in ambulances %}
-            <div class="ambulance-card">
+            <div class="ambulance-card" data-number="{{ ambulance.ambulance_number|lower }}" data-driver="{{ (ambulance.driver_name or 'unassigned')|lower }}" data-status="{{ ambulance.status }}">
                 <div class="ambulance-icon">
                     <i class="fas fa-ambulance"></i>
                 </div>
@@ -217,9 +224,14 @@
                             </span>
                         {% endif %}
                     </div>
-                    <button class="btn btn-secondary btn-sm" onclick="allocateAmbulance({{ ambulance.id }})">
-                        <i class="fas fa-tasks"></i> Allocate
-                    </button>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-secondary btn-sm" onclick="viewAmbulanceById({{ ambulance.id }})">
+                            <i class="fas fa-eye"></i> View
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="editAmbulanceById({{ ambulance.id }})">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                    </div>
                 </div>
             </div>
             {% endfor %}
@@ -234,10 +246,137 @@
     </div>
 </div>
 
-<!-- Scripts -->
+</div>
+
+<!-- View Ambulance Modal -->
+<div id="viewAmbulanceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: var(--base); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 id="viewAmbulanceTitle" style="margin: 0; color: var(--brand);">Ambulance Details</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <div id="viewAmbulanceContent" style="display: grid; gap: 15px;">
+            <!-- Content populated by JS -->
+        </div>
+        <button onclick="closeModals()" style="margin-top: 25px; width: 100%; padding: 12px; background: var(--brand); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Close</button>
+    </div>
+</div>
+
+<!-- Edit Ambulance Modal -->
+<div id="editAmbulanceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: var(--base); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: var(--brand);">Edit Ambulance</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <form id="editAmbulanceForm">
+            <input type="hidden" id="editAmbId">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Ambulance Number</label>
+                <input type="text" id="editAmbNumber" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-head);" required>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Vehicle Type</label>
+                <input type="text" id="editAmbType" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-head);">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Status</label>
+                <select id="editAmbStatus" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-head);">
+                    <option value="available">Available</option>
+                    <option value="in_transit">In Transit</option>
+                    <option value="maintenance">Maintenance</option>
+                </select>
+            </div>
+            <button type="submit" style="width: 100%; padding: 12px; background: var(--brand); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
-// Initialize map with district-specific focus
+const ambulancesData = {{ ambulances_json|safe }};
+
+function performAmbulanceSearch() {
+    const query = document.getElementById('ambulanceSearchInput').value.toLowerCase();
+    const statusFilter = document.getElementById('ambulanceStatusFilter').value;
+    
+    const cards = document.querySelectorAll('.ambulance-card');
+    cards.forEach(card => {
+        const number = card.dataset.number;
+        const driver = card.dataset.driver;
+        const status = card.dataset.status;
+        
+        let matches = (number.includes(query) || driver.includes(query));
+        if (statusFilter && status !== statusFilter) matches = false;
+        
+        card.style.display = matches ? 'flex' : 'none';
+    });
+}
+
+document.getElementById('ambulanceSearchInput').addEventListener('input', performAmbulanceSearch);
+document.getElementById('ambulanceStatusFilter').addEventListener('change', performAmbulanceSearch);
+
+function closeModals() {
+    document.getElementById('viewAmbulanceModal').style.display = 'none';
+    document.getElementById('editAmbulanceModal').style.display = 'none';
+}
+
+function viewAmbulanceById(id) {
+    const amb = ambulancesData.find(a => a.id === id);
+    if (!amb) return;
+    document.getElementById('viewAmbulanceTitle').textContent = amb.ambulance_number;
+    const content = document.getElementById('viewAmbulanceContent');
+    content.innerHTML = `
+        <div><strong>Type:</strong> ${amb.vehicle_type || 'Basic'}</div>
+        <div><strong>Driver:</strong> ${amb.driver_name || 'Unassigned'}</div>
+        <div><strong>Status:</strong> ${amb.status.toUpperCase()}</div>
+        <div><strong>Last Location:</strong> ${amb.location_lat ? amb.location_lat + ', ' + amb.location_lon : 'Unknown'}</div>
+    `;
+    document.getElementById('viewAmbulanceModal').style.display = 'flex';
+}
+
+function editAmbulanceById(id) {
+    const amb = ambulancesData.find(a => a.id === id);
+    if (!amb) return;
+    document.getElementById('editAmbId').value = amb.id;
+    document.getElementById('editAmbNumber').value = amb.ambulance_number;
+    document.getElementById('editAmbType').value = amb.vehicle_type || '';
+    document.getElementById('editAmbStatus').value = amb.status;
+    document.getElementById('editAmbulanceModal').style.display = 'flex';
+}
+
+document.getElementById('editAmbulanceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editAmbId').value;
+    const payload = {
+        id: id,
+        ambulance_number: document.getElementById('editAmbNumber').value,
+        vehicle_type: document.getElementById('editAmbType').value,
+        status: document.getElementById('editAmbStatus').value
+    };
+
+    try {
+        const res = await fetch('/api/ddhs-admin/update-ambulance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Ambulance updated successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+});
+
+// Initialize map... (Existing code follows)
 const mapFocus = {{ map_focus|tojson }};
 const map = L.map('ambulance-map').setView([mapFocus.lat, mapFocus.lon], mapFocus.zoom);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -245,20 +384,17 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19
 }).addTo(map);
 
-// Add District Boundary Highlight (Simplified for Demo)
 const districtBoundary = L.circle([mapFocus.lat, mapFocus.lon], {
     color: 'var(--brand)',
     fillColor: 'var(--brand)',
     fillOpacity: 0.05,
-    radius: 15000, // 15km radius approx
+    radius: 15000,
     dashArray: '10, 10'
 }).addTo(map);
 
 districtBoundary.bindTooltip("Your Command: {{ user.district }}", {permanent: true, direction: 'top'});
 
-// Add ambulance markers
-const ambulances = {{ ambulances_json|safe }};
-ambulances.forEach(ambulance => {
+ambulancesData.forEach(ambulance => {
     if (ambulance.location_lat && ambulance.location_lon) {
         const color = ambulance.status === 'available' ? 'red' :
                      ambulance.status === 'in_transit' ? 'blue' : 'gray';
@@ -272,21 +408,5 @@ ambulances.forEach(ambulance => {
         }).bindPopup(`<strong>${ambulance.ambulance_number}</strong><br>Status: ${ambulance.status}`).addTo(map);
     }
 });
-
-function allocateAmbulance(ambulanceId) {
-    alert('Allocate ambulance: ' + ambulanceId);
-    // TODO: Open allocation modal
-}
-
-function completeAllocation(allocationId) {
-    alert('Complete allocation: ' + allocationId);
-    // TODO: Mark allocation as complete
-}
-
-function openAddAmbulanceModal() {
-    alert('Open add ambulance modal');
-    // TODO: Implement modal
-}
 </script>
-
 {% endblock %}

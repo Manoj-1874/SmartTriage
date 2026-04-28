@@ -53,7 +53,7 @@
                     <option value="has_nurses">Has Nurses</option>
                 </select>
             </div>
-            <button style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            <button onclick="performSearch()" style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 Search
             </button>
         </div>
@@ -67,7 +67,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; padding: 20px;">
             {% if centers %}
                 {% for center in centers %}
-                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
+                <div class="phc-card" data-name="{{ center.name|lower }}" data-location="{{ center.location|lower }}" data-has-doctors="{{ 'true' if center.doctor_count > 0 else 'false' }}" data-has-nurses="{{ 'true' if center.nurse_count > 0 else 'false' }}" style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
                         <h4 style="color: #0B9B7A; font-size: 16px; margin: 0;">{{ center.name }}</h4>
                         <span style="background: #F0FAF7; color: #0B9B7A; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
@@ -109,10 +109,10 @@
 
                     <!-- Action Buttons -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <button style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                        <button onclick="viewCenterById({{ center.id }})" style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
                             <i class="fas fa-eye"></i> View
                         </button>
-                        <button style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
+                        <button onclick="editCenterById({{ center.id }})" style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s;">
                             <i class="fas fa-edit"></i> Edit
                         </button>
                     </div>
@@ -146,7 +146,7 @@
                 </thead>
                 <tbody>
                     {% for center in centers %}
-                    <tr style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
+                    <tr class="phc-table-row" data-name="{{ center.name|lower }}" data-location="{{ center.location|lower }}" data-has-doctors="{{ 'true' if center.doctor_count > 0 else 'false' }}" data-has-nurses="{{ 'true' if center.nurse_count > 0 else 'false' }}" style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
                         <td style="padding: 15px; color: #333; font-weight: 500;">{{ center.name }}</td>
                         <td style="padding: 15px; color: #666;">{{ center.location or 'N/A' }}</td>
                         <td style="padding: 15px; text-align: center; color: #0B9B7A; font-weight: 600;">{{ center.staff_count }}</td>
@@ -161,4 +161,153 @@
     </div>
 
 </div>
+
+<!-- View Center Modal -->
+<div id="viewModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 id="viewTitle" style="margin: 0; color: #0B9B7A;">Center Details</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <div id="viewContent" style="display: grid; gap: 15px;">
+            <!-- Content populated by JS -->
+        </div>
+        <button onclick="closeModals()" style="margin-top: 25px; width: 100%; padding: 12px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Close</button>
+    </div>
+</div>
+
+<!-- Edit Center Modal -->
+<div id="editModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: #0B9B7A;">Edit Health Center</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <form id="editForm">
+            <input type="hidden" id="editPhcId">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Center Name</label>
+                <input type="text" id="editName" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;" required>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Location</label>
+                <input type="text" id="editLocation" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;" required>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Contact Phone</label>
+                <input type="text" id="editPhone" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <button type="submit" style="width: 100%; padding: 12px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const centersData = {{ centers|tojson|safe }};
+
+function performSearch() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    const filter = document.getElementById('staffFilter').value;
+    
+    // Filter Cards
+    const cards = document.querySelectorAll('.phc-card');
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const loc = card.dataset.location;
+        const hasDocs = card.dataset.hasDoctors === 'true';
+        const hasNurses = card.dataset.hasNurses === 'true';
+        
+        let matches = (name.includes(query) || loc.includes(query));
+        
+        if (filter === 'has_doctors' && !hasDocs) matches = false;
+        if (filter === 'has_nurses' && !hasNurses) matches = false;
+        
+        card.style.display = matches ? 'block' : 'none';
+    });
+
+    // Filter Table Rows
+    const rows = document.querySelectorAll('.phc-table-row');
+    rows.forEach(row => {
+        const name = row.dataset.name;
+        const loc = row.dataset.location;
+        const hasDocs = row.dataset.hasDoctors === 'true';
+        const hasNurses = row.dataset.hasNurses === 'true';
+        
+        let matches = (name.includes(query) || loc.includes(query));
+        
+        if (filter === 'has_doctors' && !hasDocs) matches = false;
+        if (filter === 'has_nurses' && !hasNurses) matches = false;
+        
+        row.style.display = matches ? '' : 'none';
+    });
+}
+
+// Attach listener to input for live search
+document.getElementById('searchInput').addEventListener('input', performSearch);
+document.getElementById('staffFilter').addEventListener('change', performSearch);
+
+function closeModals() {
+    document.getElementById('viewModal').style.display = 'none';
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function viewCenterById(id) {
+    const center = centersData.find(c => c.id === id);
+    if (!center) return;
+    document.getElementById('viewTitle').textContent = center.name;
+    const content = document.getElementById('viewContent');
+    content.innerHTML = `
+        <div><strong>Location:</strong> ${center.location || 'N/A'}</div>
+        <div><strong>Phone:</strong> ${center.contact_phone || 'N/A'}</div>
+        <hr style="border: 0; border-top: 1px solid #eee;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><strong>Doctors:</strong> ${center.doctor_count}</div>
+            <div><strong>Nurses:</strong> ${center.nurse_count}</div>
+        </div>
+        <div><strong>Total Staff:</strong> ${center.staff_count}</div>
+    `;
+    document.getElementById('viewModal').style.display = 'flex';
+}
+
+function editCenterById(id) {
+    const center = centersData.find(c => c.id === id);
+    if (!center) return;
+    document.getElementById('editPhcId').value = center.id;
+    document.getElementById('editName').value = center.name;
+    document.getElementById('editLocation').value = center.location || '';
+    document.getElementById('editPhone').value = center.contact_phone || '';
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+document.getElementById('editForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editPhcId').value;
+    const payload = {
+        id: id,
+        name: document.getElementById('editName').value,
+        location: document.getElementById('editLocation').value,
+        contact: document.getElementById('editPhone').value
+    };
+
+    try {
+        const res = await fetch('/api/ddhs-admin/update-phc', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Health center updated successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+});
+</script>
 {% endblock %}

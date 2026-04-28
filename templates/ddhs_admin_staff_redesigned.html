@@ -66,7 +66,7 @@
                     {% endfor %}
                 </select>
             </div>
-            <button style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            <button onclick="performSearch()" style="padding: 10px 20px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
                 Search
             </button>
         </div>
@@ -80,7 +80,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; padding: 20px;">
             {% if staff_members %}
                 {% for member in staff_members %}
-                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
+                <div class="staff-card" data-name="{{ member.name|lower }}" data-role="{{ member.role }}" data-center="{{ member.phc_name|lower }}" style="background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 20px; transition: all 0.3s;">
                     <!-- Role Badge -->
                     <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 15px;">
                         <div>
@@ -128,10 +128,10 @@
 
                     <!-- Action Buttons -->
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <button style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
+                        <button onclick="viewStaffById({{ member.id }})" style="padding: 8px 12px; background: #F0FAF7; color: #0B9B7A; border: 1px solid #0B9B7A; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
                             <i class="fas fa-eye"></i> View
                         </button>
-                        <button style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
+                        <button onclick="editStaffById({{ member.id }})" style="padding: 8px 12px; background: #0B9B7A; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: all 0.3s; font-size: 13px;">
                             <i class="fas fa-edit"></i> Edit
                         </button>
                     </div>
@@ -165,7 +165,7 @@
                 </thead>
                 <tbody>
                     {% for member in staff_members %}
-                    <tr style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
+                    <tr class="staff-row" data-name="{{ member.name|lower }}" data-role="{{ member.role }}" data-center="{{ member.phc_name|lower }}" style="border-bottom: 1px solid #e0e0e0; transition: background 0.2s;">
                         <td style="padding: 15px; color: #333; font-weight: 500;">{{ member.name }}</td>
                         <td style="padding: 15px;">
                             <span style="{% if member.role == 'doctor' %}background: #cfe2ff; color: #084298;{% elif member.role == 'phc_nurse' %}background: #d1e7dd; color: #0a3622;{% else %}background: #f8d7da; color: #721c24;{% endif %} padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">
@@ -184,4 +184,148 @@
     </div>
 
 </div>
+</div>
+
+<!-- View Staff Modal -->
+<div id="viewStaffModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 id="viewStaffTitle" style="margin: 0; color: #0B9B7A;">Staff Details</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <div id="viewStaffContent" style="display: grid; gap: 15px;">
+            <!-- Content populated by JS -->
+        </div>
+        <button onclick="closeModals()" style="margin-top: 25px; width: 100%; padding: 12px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Close</button>
+    </div>
+</div>
+
+<!-- Edit Staff Modal -->
+<div id="editStaffModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: white; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: #0B9B7A;">Edit Staff Member</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <form id="editStaffForm">
+            <input type="hidden" id="editStaffId">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Full Name</label>
+                <input type="text" id="editStaffName" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;" required>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Specialization</label>
+                <input type="text" id="editStaffSpec" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Phone</label>
+                <input type="text" id="editStaffPhone" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+            </div>
+            <button type="submit" style="width: 100%; padding: 12px; background: #0B9B7A; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Save Changes</button>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const staffData = {{ staff_members|tojson|safe }};
+
+function performSearch() {
+    const query = document.getElementById('searchInput').value.toLowerCase();
+    const roleFilter = document.getElementById('roleFilter').value;
+    const centerFilter = document.getElementById('centerFilter').value.toLowerCase();
+    
+    // Filter Cards
+    const cards = document.querySelectorAll('.staff-card');
+    cards.forEach(card => {
+        const name = card.dataset.name;
+        const role = card.dataset.role;
+        const center = card.dataset.center;
+        
+        let matches = name.includes(query);
+        if (roleFilter && role !== roleFilter) matches = false;
+        if (centerFilter && !center.includes(centerFilter)) matches = false;
+        
+        card.style.display = matches ? 'block' : 'none';
+    });
+
+    // Filter Table Rows
+    const rows = document.querySelectorAll('.staff-row');
+    rows.forEach(row => {
+        const name = row.dataset.name;
+        const role = row.dataset.role;
+        const center = row.dataset.center;
+        
+        let matches = name.includes(query);
+        if (roleFilter && role !== roleFilter) matches = false;
+        if (centerFilter && !center.includes(centerFilter)) matches = false;
+        
+        row.style.display = matches ? '' : 'none';
+    });
+}
+
+document.getElementById('searchInput').addEventListener('input', performSearch);
+document.getElementById('roleFilter').addEventListener('change', performSearch);
+document.getElementById('centerFilter').addEventListener('change', performSearch);
+
+function closeModals() {
+    document.getElementById('viewStaffModal').style.display = 'none';
+    document.getElementById('editStaffModal').style.display = 'none';
+}
+
+function viewStaffById(id) {
+    const staff = staffData.find(s => s.id === id);
+    if (!staff) return;
+    document.getElementById('viewStaffTitle').textContent = staff.name;
+    const content = document.getElementById('viewStaffContent');
+    content.innerHTML = `
+        <div><strong>Role:</strong> ${staff.role_display}</div>
+        <div><strong>Specialization:</strong> ${staff.specialization || 'General Staff'}</div>
+        <div><strong>Email:</strong> ${staff.email}</div>
+        <div><strong>Phone:</strong> ${staff.contact_phone || 'N/A'}</div>
+        <div><strong>Assigned Center:</strong> ${staff.phc_name || 'Unassigned'}</div>
+    `;
+    document.getElementById('viewStaffModal').style.display = 'flex';
+}
+
+function editStaffById(id) {
+    const staff = staffData.find(s => s.id === id);
+    if (!staff) return;
+    document.getElementById('editStaffId').value = staff.id;
+    document.getElementById('editStaffName').value = staff.name;
+    document.getElementById('editStaffSpec').value = staff.specialization || '';
+    document.getElementById('editStaffPhone').value = staff.contact_phone || '';
+    document.getElementById('editStaffModal').style.display = 'flex';
+}
+
+document.getElementById('editStaffForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('editStaffId').value;
+    const payload = {
+        id: id,
+        fullname: document.getElementById('editStaffName').value,
+        specialization: document.getElementById('editStaffSpec').value,
+        phone: document.getElementById('editStaffPhone').value
+    };
+
+    try {
+        const res = await fetch('/api/ddhs-admin/update-staff', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Staff member updated successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+});
+</script>
 {% endblock %}

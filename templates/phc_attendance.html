@@ -34,32 +34,90 @@
             background: #fff;
             border-right: 1px solid var(--border);
             position: fixed;
-            padding: 20px;
+            padding: 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
+            z-index: 1000;
         }
 
-        .main-content {
-            margin-left: 280px;
-            flex: 1;
-            padding: 40px;
+        .s-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .s-logo-box {
+            width: 38px;
+            height: 38px;
+            background: var(--brand);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-size: 18px;
+        }
+
+        .s-brand-name {
+            font-weight: 800;
+            font-size: 18px;
+            color: var(--t-head);
+            line-height: 1;
+        }
+
+        .s-brand-tag {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--brand);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 2px;
+        }
+
+        .s-nav {
+            padding: 20px 16px;
+        }
+
+        .s-group {
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--t-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin: 20px 0 10px 12px;
         }
 
         .s-link {
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 12px;
+            padding: 12px 16px;
             border-radius: 10px;
             color: var(--t-muted);
             text-decoration: none;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
             font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .s-icon {
+            width: 20px;
+            display: flex;
+            justify-content: center;
         }
 
         .s-link:hover { background: var(--surface); color: var(--brand); }
         .s-link.active { background: var(--brand); color: #fff; }
+        .s-link.active .s-icon { color: #fff; }
+
+        .main-content {
+            margin-left: 280px;
+            flex: 1;
+            padding: 40px;
+        }
 
         .card {
             background: var(--base);
@@ -152,48 +210,66 @@
 </head>
 <body>
 
-<div class="sidebar">
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:40px;">
-        <div style="width:36px; height:36px; background:var(--brand); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff;">
-            <i class="fas fa-heartbeat"></i>
-        </div>
-        <div style="display:flex; flex-direction:column;">
-            <span style="font-weight:800; font-size:18px; color:var(--t-head); line-height:1;">PriorityMed</span>
-            <span style="font-size:10px; font-weight:700; color:var(--brand); text-transform:uppercase; letter-spacing:1px; margin-top:2px;">Doctor Portal</span>
-        </div>
+<aside class="sidebar" id="sidebar">
+  <div class="s-brand">
+    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
+    <div class="s-brand-text">
+      <div class="s-brand-name">PriorityMed</div>
+      <div class="s-brand-tag">Doctor Portal</div>
     </div>
-
+  </div>
+  
+  <nav class="s-nav" style="flex:1; overflow-y:auto;">
+    <div class="s-group">Overview</div>
     <a href="/doctor/dashboard" class="s-link">
-        <i class="fas fa-th-large"></i> Dashboard
+      <div class="s-icon"><i class="fas fa-th-large"></i></div>
+      <span class="s-label">Dashboard</span>
     </a>
     <a href="/patients" class="s-link">
-        <i class="fas fa-user-injured"></i> Patients
+      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
+      <span class="s-label">Patients</span>
     </a>
     <a href="/doctor/reports" class="s-link">
-        <i class="far fa-file-alt"></i> Reports
+      <div class="s-icon"><i class="far fa-file-alt"></i></div>
+      <span class="s-label">Reports</span>
     </a>
     <a href="/phc/doctor/resources" class="s-link">
-        <i class="fas fa-boxes-stacked"></i> Resource Governance
+      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
+      <span class="s-label">Resource Governance</span>
     </a>
     <a href="/phc/attendance" class="s-link active">
-        <i class="fas fa-user-check"></i> Staff Attendance
-    </a>
-    <a href="/appointments" class="s-link">
-        <i class="far fa-calendar-alt"></i> Appointments
-    </a>
-    <a href="/doctors" class="s-link">
-        <i class="fas fa-user-md"></i> Find Doctors
-    </a>
-    <a href="/messages" class="s-link">
-        <i class="fas fa-comments"></i> Messages
+      <div class="s-icon"><i class="fas fa-user-check"></i></div>
+      <span class="s-label">Staff Attendance</span>
     </a>
 
-    <div style="margin-top:auto; padding-top:20px; border-top:1px solid var(--border);">
-        <a href="/logout" class="s-link" style="color:#dc2626;">
-            <i class="fas fa-sign-out-alt"></i> Logout
-        </a>
+    <div class="s-group">My Care</div>
+    <a href="/appointments" class="s-link">
+      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+      <span class="s-label">Appointments</span>
+    </a>
+    <a href="/doctors" class="s-link">
+      <div class="s-icon"><i class="fas fa-user-md"></i></div>
+      <span class="s-label">Find Doctors</span>
+    </a>
+
+    <div class="s-group">Support</div>
+    <a href="/messages" class="s-link">
+      <div class="s-icon"><i class="fas fa-comments"></i></div>
+      <span class="s-label">Messages</span>
+    </a>
+    <a href="/logout" class="s-link">
+      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
+      <span class="s-label">Sign Out</span>
+    </a>
+  </nav>
+  
+  <div class="s-footer" style="padding: 15px; border-top: 1px solid var(--border);">
+    <div class="s-status" style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--t-muted);">
+      <div class="s-dot" style="width:8px; height:8px; background:#10B981; border-radius:50%;"></div>
+      <span>All Systems Operational</span>
     </div>
-</div>
+  </div>
+</aside>
 
 <div class="main-content">
     <div class="header">
@@ -210,6 +286,15 @@
             </button>
         </div>
     </div>
+    
+    <!-- Lead Authority Info -->
+    <div style="background: linear-gradient(135deg, #0B9B7A, #087A60); color: white; padding: 20px; border-radius: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 20px; box-shadow: 0 4px 15px rgba(11, 155, 122, 0.2);">
+        <div style="font-size: 30px;"><i class="fas fa-shield-halved"></i></div>
+        <div>
+            <h4 style="margin: 0; font-weight: 700;">Lead Authority Oversight</h4>
+            <p style="margin: 5px 0 0; font-size: 14px; opacity: 0.9;">As the PHC Lead, you monitor staff presence in real-time. Attendance is automatically marked upon login/logout, while manual adjustments can be made for exceptional cases.</p>
+        </div>
+    </div>
 
     <div class="card">
         <h3>Today's Roster</h3>
@@ -219,6 +304,7 @@
                     <th>Name</th>
                     <th>Role</th>
                     <th>Check-in Time</th>
+                    <th>Check-out Time</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -230,7 +316,8 @@
                         {% if staff.id == user.id %}<span style="color:var(--brand); font-size:10px;">(You)</span>{% endif %}
                     </td>
                     <td>{{ staff.role|replace('phc_', '')|title }}</td>
-                    <td>{{ staff.checkin_time or '--:--' }}</td>
+                    <td>{{ staff.checkin_time|strftime('%I:%M %p') if staff.checkin_time else '--:--' }}</td>
+                    <td>{{ staff.checkout_time|strftime('%I:%M %p') if staff.checkout_time else '--:--' }}</td>
                     <td>
                         <span class="status-badge {{ staff.status.lower()|replace(' ', '-') }}">
                             {{ staff.status }}
