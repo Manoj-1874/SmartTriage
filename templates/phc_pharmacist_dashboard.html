@@ -1,0 +1,120 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}Pharmacist Command Center - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .pharmacy-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 25px;
+        padding: 40px;
+    }
+    .p-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 30px;
+    }
+    .stock-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 0;
+        border-bottom: 1px solid var(--border);
+    }
+    .stock-item { font-weight: 700; font-size: 15px; }
+    .stock-qty { font-family: monospace; font-weight: 800; color: var(--brand); }
+    .waste-badge {
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+</style>
+
+<div class="banner" style="margin: 40px 40px 0;">
+    <div class="banner-left">
+        <div class="banner-eyebrow">PHARMACY OPERATIONS</div>
+        <div class="banner-name">Pharmacist Command Center</div>
+        <p class="banner-sub">Managing drug inventory, inter-PHC stock requests, and 13-Department MPR reports.</p>
+    </div>
+    <div class="banner-actions">
+        <button class="btn btn-primary" onclick="location.href='/phc/pharmacist/mpr-review'"><i class="fas fa-file-signature"></i> Verify Today's MPR</button>
+    </div>
+</div>
+
+<div class="pharmacy-grid">
+    <div class="left-col">
+        <!-- Low Stock Alerts -->
+        <div class="p-card" style="margin-bottom: 25px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h3 style="margin:0;"><i class="fas fa-exclamation-triangle" style="color:var(--clr-amber);"></i> Critical Inventory Gaps</h3>
+                <button class="btn-sync" onclick="location.href='/phc/stock-borrowing'"><i class="fas fa-search-plus"></i> Search District Stock</button>
+            </div>
+            {% for item in low_stock %}
+            <div class="stock-row">
+                <div class="stock-item">{{ item.item_name }}</div>
+                <div style="text-align:right;">
+                    <div class="stock-qty" style="color:var(--clr-red);">{{ item.quantity }} / {{ item.min_threshold }}</div>
+                    <div style="font-size:10px; color:var(--t-muted);">REORDER REQUIRED</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not low_stock %}
+            <div style="padding:40px; text-align:center; color:var(--t-faint);">
+                <i class="fas fa-check-circle fa-2x"></i>
+                <p>All critical drug stocks are healthy.</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Today's Consumption (Real-world: Daily Diary Auto-updates) -->
+        <div class="p-card">
+            <h3 style="margin-bottom:20px;"><i class="fas fa-chart-line"></i> Today's Automated Consumption</h3>
+            <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Every dose logged in the Nurse OP Diary is automatically subtracted here.</p>
+            {% for u in usage %}
+            <div class="stock-row">
+                <div>{{ u.item_name }}</div>
+                <div style="color:var(--clr-red); font-weight:800;">-{{ u.total_used|abs }} units</div>
+            </div>
+            {% endfor %}
+            {% if not usage %}
+            <div style="padding:40px; text-align:center; color:var(--t-faint);">
+                <p>Waiting for today's OP data sync...</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="right-col">
+        <!-- Waste Tracking (Ramky Pickup) -->
+        <div class="p-card" style="margin-bottom: 25px; background: rgba(37,99,235,0.05); border-color:var(--brand);">
+            <h3 style="margin-bottom:20px;"><i class="fas fa-truck-pickup"></i> Waste & Logistics</h3>
+            {% for w in recent_waste %}
+            <div style="padding:15px 0; border-bottom:1px solid var(--border);">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <span class="waste-badge" style="background: {{ w.bag_color }}; color: {% if w.bag_color == 'yellow' or w.bag_color == 'white' %}#000{% else %}#fff{% endif %};">
+                        {{ w.bag_color }} BAG
+                    </span>
+                    <span style="font-weight:800; font-size:12px;">{{ w.weight }} KG</span>
+                </div>
+                <div style="font-size:10px; color:var(--t-muted);">Collected by: {{ w.collected_by }}</div>
+            </div>
+            {% endfor %}
+            {% if not recent_waste %}
+            <div style="padding:20px; text-align:center; font-size:12px; color:var(--t-muted);">No recent Ramky pickups recorded.</div>
+            {% endif %}
+        </div>
+
+        <!-- Quick Links -->
+        <div class="p-card">
+            <h3 style="margin-bottom:20px;">Logistics Shortcuts</h3>
+            <button class="btn btn-outline-white" style="width:100%; margin-bottom:10px;" onclick="location.href='/phc/pharmacist/mpr-review'">13-Dept MPR Review</button>
+            <button class="btn btn-outline-white" style="width:100%; margin-bottom:10px;" onclick="location.href='/phc/pharmacist/bin-card/Paracetamol'">View Paracetamol Bin Card</button>
+            <button class="btn btn-outline-white" style="width:100%;" onclick="alert('Opening Digital Waste Logbook...')">New Waste Receipt</button>
+        </div>
+    </div>
+</div>
+{% endblock %}

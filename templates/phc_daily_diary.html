@@ -1,0 +1,127 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}Digital Daily Diary - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .diary-container {
+        padding: 30px;
+        background: var(--base);
+        min-height: 100vh;
+    }
+    .diary-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        overflow: hidden;
+    }
+    .diary-header {
+        padding: 20px 30px;
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.1), transparent);
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .diary-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .diary-table th {
+        text-align: left;
+        padding: 15px 20px;
+        background: rgba(255,255,255,0.03);
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--t-faint);
+        letter-spacing: 1px;
+    }
+    .diary-table td {
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border);
+        font-size: 13px;
+    }
+    .diary-row:hover {
+        background: rgba(255,255,255,0.02);
+    }
+    .time-badge {
+        font-family: monospace;
+        background: var(--clr-blue-bg);
+        color: var(--clr-blue);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+    .mpr-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 99px;
+        background: rgba(255,255,255,0.05);
+        border: 1px solid var(--border);
+    }
+</style>
+
+<div class="diary-container">
+    <div class="banner" style="margin-bottom: 30px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">DPH TAMIL NADU — OFFICIAL LOG</div>
+            <div class="banner-name">Digital Daily Diary</div>
+            <p class="banner-sub">Real-time log of today's registrations. Data is automatically synced for 13-Department MPR reporting.</p>
+        </div>
+        <div class="banner-vitals">
+            <div class="vital">
+                <div class="vital-ico"><i class="fas fa-calendar-day"></i></div>
+                <div class="vital-val">{{ logs|length }}</div>
+                <div class="vital-lbl">Today's Entries</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="diary-card">
+        <div class="diary-header">
+            <h3><i class="fas fa-list-ul"></i> Today's Patient Flow</h3>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Export for MO</button>
+            </div>
+        </div>
+        <div class="diary-body">
+            <table class="diary-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Patient Name / ID</th>
+                        <th>Department</th>
+                        <th>Symptoms / Diagnosis</th>
+                        <th>AI Risk</th>
+                        <th>Sync Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in logs %}
+                    <tr class="diary-row">
+                        <td><span class="time-badge">{{ log.timestamp.split(' ')[1][:5] if ' ' in log.timestamp else log.timestamp[:5] }}</span></td>
+                        <td><strong>{{ log.patient_name or log.user_id or 'Walk-in Patient' }}</strong></td>
+                        <td><span class="mpr-badge">{{ log.phc_department }}</span></td>
+                        <td style="color: var(--t-muted);">{{ log.symptoms }}</td>
+                        <td>
+                            <span class="status-badge {% if log.dual_brain_risk == 'CRITICAL' %}absent{% elif log.dual_brain_risk == 'HIGH' %}amber{% elif log.dual_brain_risk == 'MEDIUM' %}active{% else %}low{% endif %}">
+                                {{ log.dual_brain_risk }}
+                            </span>
+                        </td>
+                        <td><span style="color: var(--clr-green); font-size: 11px;"><i class="fas fa-check-circle"></i> DDHS Sync</span></td>
+                    </tr>
+                    {% endfor %}
+                    {% if not logs %}
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 50px; color: var(--t-faint);">
+                            No entries in today's diary. Use the Lightning Entry to begin.
+                        </td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

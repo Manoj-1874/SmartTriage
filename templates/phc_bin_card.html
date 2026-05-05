@@ -1,0 +1,94 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}Digital Bin Card - {{ item_name }}{% endblock %}
+
+{% block content %}
+<style>
+    .bin-card-container {
+        padding: 40px;
+        background: var(--base);
+        min-height: 100vh;
+    }
+    .bin-card {
+        background: #fffef0; /* Pale yellow like old paper */
+        color: #000;
+        border: 2px solid #000;
+        padding: 30px;
+        max-width: 800px;
+        margin: 0 auto;
+        font-family: 'Courier New', Courier, monospace;
+    }
+    .bin-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    .bin-table th, .bin-table td {
+        border: 1px solid #000;
+        padding: 8px;
+        text-align: left;
+        font-size: 13px;
+    }
+    .bin-header {
+        display: flex;
+        justify-content: space-between;
+        border-bottom: 2px solid #000;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+</style>
+
+<div class="bin-card-container">
+    <div class="banner" style="margin-bottom: 40px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">PHARMACY AUDIT TRAIL</div>
+            <div class="banner-name">Digital Bin Card</div>
+            <p class="banner-sub">Tracking historical consumption and restock for <strong>{{ item_name }}</strong>.</p>
+        </div>
+    </div>
+
+    <div class="bin-card">
+        <div class="bin-header">
+            <div>
+                <strong>ITEM:</strong> {{ item_name }}<br>
+                <strong>PHC:</strong> VELLODE SECTOR
+            </div>
+            <div style="text-align:right;">
+                <strong>FOLIO NO:</strong> BC-{{ item_name[:3]|upper }}-42<br>
+                <strong>MIN STOCK:</strong> 100
+            </div>
+        </div>
+
+        <table class="bin-table">
+            <thead>
+                <tr>
+                    <th>Date/Time</th>
+                    <th>Action</th>
+                    <th>+/-</th>
+                    <th>Balance</th>
+                    <th>Staff</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in history %}
+                <tr>
+                    <td>{{ row.timestamp }}</td>
+                    <td>{{ row.action }}</td>
+                    <td style="color: {% if row.quantity_changed > 0 %}#16a34a{% else %}#dc2626{% endif %};">
+                        {{ "+" if row.quantity_changed > 0 else "" }}{{ row.quantity_changed }}
+                    </td>
+                    <td><strong>{{ row.balance_after }}</strong></td>
+                    <td>{{ row.staff_name }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="5" style="text-align:center; padding:20px;">No transaction history found.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+        
+        <div style="margin-top:40px; font-size:11px; font-style:italic;">
+            * This digital bin card is an audited record. Every entry corresponds to a Patient OP or a District Supply invoice.
+        </div>
+    </div>
+</div>
+{% endblock %}

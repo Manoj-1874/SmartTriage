@@ -1,825 +1,299 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriorityMed — PHC Nurse Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+{% extends "phc_nurse_base.html" %}
 
-    <style>
-    :root {
-        --brand:        #0B9B7A;
-        --brand-dark:   #087A60;
-        --brand-light:  #34C9A5;
-        --brand-faint:  #E6F7F3;
-        --brand-pale:   #F0FAF7;
-        --sidebar-w:     272px;
-        --sidebar-col:   72px;
-        --radius-sm:     8px;
-        --radius-md:     12px;
-        --radius-lg:     16px;
-        --radius-xl:     22px;
-        --ease:          cubic-bezier(.4,0,.2,1);
-        --t-fast:        .15s;
-        --t-base:        .28s;
-        --clr-green:    #16A34A;
-        --clr-green-bg: #DCFCE7;
-        --clr-amber:    #D97706;
-        --clr-amber-bg: #FEF3C7;
-        --clr-red:      #DC2626;
-        --clr-red-bg:   #FEE2E2;
-        --clr-blue:     #2563EB;
-        --clr-blue-bg:  #DBEAFE;
-        --clr-purple:   #7C3AED;
-        --clr-purple-bg:#EDE9FE;
+{% block title %}Command Center - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .nurse-grid { padding: 40px; display: grid; gap: 40px; }
+    .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+    .stat-box { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 25px; position: relative; overflow: hidden; }
+    .stat-ico { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; }
+    .stat-val { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+    .stat-lbl { font-size: 11px; color: var(--t-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+    
+    .main-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 30px; }
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 30px; }
+    .p-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+    .p-title { font-size: 18px; font-weight: 700; }
+    
+    .lightning-bar {
+        background: var(--brand-pale); border: 1px solid var(--brand); border-radius: 15px; padding: 20px;
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;
     }
-    [data-theme="light"] {
-        --canvas:       #EEF6F2;
-        --base:         #FFFFFF;
-        --surface:      #F5FBF8;
-        --hover:        #EBF7F2;
-        --border:       #D9EDE5;
-        --border-med:   #B8D9CC;
-        --t-head:       #0A2218;
-        --t-body:       #2C4A3C;
-        --t-muted:      #5E8C7A;
-        --t-faint:      #9DC0B2;
-        --sidebar-bg:   #FFFFFF;
-        --sidebar-line: #D9EDE5;
-        --sh-sm: 0 1px 3px rgba(0,0,0,.06);
-        --sh-md: 0 4px 14px rgba(0,0,0,.08);
-        --sh-lg: 0 12px 36px rgba(0,0,0,.1);
-        --sh-card: 0 1px 4px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
-    }
-    [data-theme="dark"] {
-        --canvas:       #0B1812;
-        --base:         #101F18;
-        --surface:      #152A20;
-        --hover:        #1A3328;
-        --border:       #1D3528;
-        --border-med:   #2A4C38;
-        --t-head:       #E4F2EB;
-        --t-body:       #9ABFAE;
-        --t-muted:      #527A65;
-        --t-faint:      #2D4D3C;
-        --sidebar-bg:   #0D1B14;
-        --sidebar-line: #1D3528;
-        --sh-sm: 0 1px 3px rgba(0,0,0,.4);
-        --sh-md: 0 4px 14px rgba(0,0,0,.5);
-        --sh-lg: 0 12px 36px rgba(0,0,0,.6);
-        --sh-card: 0 1px 4px rgba(0,0,0,.4), 0 0 0 1px rgba(0,0,0,.3);
-        --clr-green-bg: rgba(22,163,74,.14);
-        --clr-amber-bg: rgba(217,119,6,.14);
-        --clr-red-bg:   rgba(220,38,38,.14);
-        --clr-blue-bg:  rgba(37,99,235,.14);
-        --clr-purple-bg:rgba(124,58,237,.14);
-        --brand-faint:  rgba(11,155,122,.12);
-        --brand-pale:   rgba(11,155,122,.07);
-    }
+    .btn-lightning { background: var(--brand); color: #fff; border: none; padding: 12px 25px; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 10px; }
 
-    /* ── RESET ── */
-    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-    html,body{overflow-x:hidden;scroll-behavior:smooth}  /* FIX 1: clamp at root */
-    body{
-        font-family:'Outfit',sans-serif;font-size:14.5px;line-height:1.65;
-        background:var(--canvas);color:var(--t-body);-webkit-font-smoothing:antialiased;
-        transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease);
-    }
-    h1,h2,h3,h4{font-family:'Outfit',sans-serif;color:var(--t-head);font-weight:700;line-height:1.2}
-    a{text-decoration:none;color:inherit}
-    button{font-family:'Outfit',sans-serif;cursor:pointer}
-    ::-webkit-scrollbar{width:5px}
-    ::-webkit-scrollbar-track{background:transparent}
-    ::-webkit-scrollbar-thumb{background:var(--border-med);border-radius:99px}
+    .alert-row { padding: 15px; border-bottom: 1px solid var(--border); display: flex; gap: 15px; align-items: center; }
+    .alert-ico { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+</style>
 
-    /* ── LAYOUT ── */
-    .shell{display:flex;min-height:100vh;overflow-x:hidden} /* FIX 2: shell clips */
-
-    /* ── SIDEBAR ── */
-    .sidebar{
-        width:var(--sidebar-w);background:var(--sidebar-bg);
-        border-right:1px solid var(--sidebar-line);
-        position:fixed;top:0;left:0;bottom:0;z-index:300;
-        display:flex;flex-direction:column;overflow:hidden;
-        transition:width var(--t-base) var(--ease),background var(--t-base) var(--ease),border-color var(--t-base) var(--ease);
-    }
-    .sidebar.collapsed{width:var(--sidebar-col)}
-    .s-brand{display:flex;align-items:center;gap:11px;padding:20px 18px 16px;border-bottom:1px solid var(--sidebar-line);flex-shrink:0;transition:border-color var(--t-base);}
-    .s-logo-box{width:36px;height:36px;flex-shrink:0;background:linear-gradient(140deg,var(--brand),var(--brand-light));border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;box-shadow:0 4px 12px rgba(11,155,122,.3);transition:transform var(--t-fast);}
-    .s-logo-box:hover{transform:scale(1.07)}
-    .s-brand-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
-    .sidebar.collapsed .s-brand-text{opacity:0;width:0}
-    .s-brand-name{font-size:16.5px;font-weight:800;color:var(--t-head);letter-spacing:-.3px;white-space:nowrap}
-    .s-brand-tag{font-size:10.5px;color:var(--brand);font-weight:600;white-space:nowrap;margin-top:1px}
-    .s-toggle{position:absolute;top:22px;right:-13px;width:26px;height:26px;background:var(--base);border:1px solid var(--border-med);border-radius:50%;color:var(--t-muted);font-size:10px;display:flex;align-items:center;justify-content:center;z-index:10;box-shadow:var(--sh-sm);transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);}
-    .s-toggle:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
-    .sidebar.collapsed .s-toggle i{transform:rotate(180deg)}
-    .s-user{margin:12px 10px;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);display:flex;align-items:center;gap:10px;overflow:hidden;transition:background var(--t-base),border-color var(--t-base);}
-    .s-ava{width:36px;height:36px;flex-shrink:0;background:linear-gradient(135deg,var(--brand),var(--brand-light));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff;position:relative;}
-    .s-ava-dot{position:absolute;bottom:0;right:0;width:9px;height:9px;background:#22C55E;border-radius:50%;border:2px solid var(--sidebar-bg);}
-    .s-user-text{overflow:hidden;transition:opacity var(--t-base),width var(--t-base)}
-    .sidebar.collapsed .s-user-text{opacity:0;width:0}
-    .s-uname{font-size:13px;font-weight:700;color:var(--t-head);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .s-urole{font-size:11px;color:var(--brand);font-weight:500;margin-top:1px}
-    .s-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:6px 8px}
-    .s-group{font-size:9.5px;font-weight:700;color:var(--t-faint);text-transform:uppercase;letter-spacing:1.2px;padding:10px 10px 4px;white-space:nowrap;transition:opacity var(--t-base),height var(--t-base),padding var(--t-base);}
-    .sidebar.collapsed .s-group{opacity:0;height:0;overflow:hidden;padding:0}
-    .s-link{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:var(--radius-sm);color:var(--t-muted);font-size:13.5px;font-weight:500;margin-bottom:2px;white-space:nowrap;transition:background var(--t-fast),color var(--t-fast),transform var(--t-fast);}
-    .s-link:hover{background:var(--hover);color:var(--t-head);transform:translateX(2px)}
-    .s-link.active{background:var(--brand-faint);color:var(--brand-dark);font-weight:700}
-    [data-theme="dark"] .s-link.active{background:rgba(11,155,122,.15);color:var(--brand-light)}
-    .s-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;transition:background var(--t-fast);}
-    .s-link.active .s-icon{background:rgba(11,155,122,.15);color:var(--brand)}
-    [data-theme="dark"] .s-link.active .s-icon{background:rgba(11,155,122,.2);color:var(--brand-light)}
-    .s-label{transition:opacity var(--t-base),width var(--t-base)}
-    .sidebar.collapsed .s-label{opacity:0;width:0;overflow:hidden}
-    .s-chip{margin-left:auto;background:var(--brand-faint);color:var(--brand);font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:99px;transition:opacity var(--t-base);}
-    [data-theme="dark"] .s-chip{background:rgba(11,155,122,.2);color:var(--brand-light)}
-    .sidebar.collapsed .s-chip{opacity:0;width:0;overflow:hidden}
-    .s-footer{padding:10px 10px 14px;border-top:1px solid var(--sidebar-line);flex-shrink:0;transition:border-color var(--t-base)}
-    .s-status{display:flex;align-items:center;gap:8px;padding:8px 11px;background:var(--clr-green-bg);border-radius:var(--radius-sm);overflow:hidden;transition:background var(--t-base);}
-    .s-dot{width:7px;height:7px;border-radius:50%;background:var(--clr-green);flex-shrink:0;animation:dotPulse 2s ease-in-out infinite;}
-    @keyframes dotPulse{0%,100%{box-shadow:0 0 0 0 rgba(22,163,74,.4)}50%{box-shadow:0 0 0 5px rgba(22,163,74,0)}}
-    .s-status-txt{font-size:11px;font-weight:600;color:var(--clr-green);white-space:nowrap;transition:opacity var(--t-base),width var(--t-base)}
-    [data-theme="dark"] .s-status-txt{color:#4ADE80}
-    .sidebar.collapsed .s-status-txt{opacity:0;width:0;overflow:hidden}
-
-    /* ── MAIN — THE CRITICAL FIX ── */
-    .main{
-        margin-left:var(--sidebar-w);
-        width:calc(100% - var(--sidebar-w)); /* FIX 3: explicit width */
-        min-width:0;                          /* FIX 4: allow shrinking */
-        min-height:100vh;
-        display:flex;flex-direction:column;
-        overflow-x:hidden;                    /* FIX 5: clip child overflow */
-        transition:margin-left var(--t-base) var(--ease),width var(--t-base) var(--ease);
-    }
-    /* FIX 6: recalculate width when sidebar collapses */
-    .sidebar.collapsed~.main{
-        margin-left:var(--sidebar-col);
-        width:calc(100% - var(--sidebar-col));
-    }
-
-    /* ── TOPBAR ── */
-    .topbar{
-        position:sticky;top:0;z-index:200;height:60px;padding:0 28px;
-        width:100%;                           /* FIX 7: never exceed parent */
-        background:var(--base);border-bottom:1px solid var(--border);
-        display:flex;align-items:center;justify-content:space-between;
-        box-shadow:var(--sh-sm);
-        transition:background var(--t-base),border-color var(--t-base);
-    }
-    .t-breadcrumb{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--t-muted);min-width:0;overflow:hidden;}
-    .t-breadcrumb span{white-space:nowrap;}
-    .t-breadcrumb-active{color:var(--t-head);font-weight:600}
-    .t-sep{color:var(--t-faint);font-size:9px;flex-shrink:0;}
-    .t-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
-    .t-clock{font-size:13px;font-weight:600;color:var(--t-muted);padding:5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:99px;font-variant-numeric:tabular-nums;transition:background var(--t-base),border-color var(--t-base);}
-    .theme-pill{display:flex;align-items:center;gap:7px;padding:5px 10px 5px 12px;background:var(--surface);border:1px solid var(--border);border-radius:99px;cursor:pointer;font-size:12px;font-weight:600;color:var(--t-muted);transition:background var(--t-fast),border-color var(--t-fast),color var(--t-fast);user-select:none;}
-    .theme-pill:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
-    .t-track{width:32px;height:17px;background:var(--border-med);border-radius:99px;position:relative;transition:background var(--t-base);}
-    [data-theme="dark"] .t-track{background:var(--brand)}
-    .t-thumb{width:11px;height:11px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:transform var(--t-base) var(--ease);box-shadow:0 1px 3px rgba(0,0,0,.2);}
-    [data-theme="dark"] .t-thumb{transform:translateX(15px)}
-    .t-btn{width:36px;height:36px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--t-muted);font-size:14px;display:flex;align-items:center;justify-content:center;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);position:relative;}
-    .t-btn:hover{background:var(--hover);color:var(--t-head);border-color:var(--border-med)}
-    .t-badge{position:absolute;top:5px;right:5px;width:7px;height:7px;background:var(--clr-red);border-radius:50%;border:1.5px solid var(--base);}
-
-    /* ── PAGE ── */
-    .page{
-        padding:28px 28px 52px;
-        flex:1;
-        min-width:0;          /* FIX 8: flex child must have min-width:0 */
-        overflow-x:hidden;
-        width:100%;
-    }
-    .sec-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-    .sec-label{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--t-faint);display:flex;align-items:center;gap:8px;}
-    .sec-label::after{content:'';display:inline-block;width:20px;height:1px;background:var(--border-med)}
-    .sec-link{font-size:12.5px;font-weight:600;color:var(--brand);display:flex;align-items:center;gap:5px;transition:gap var(--t-fast);}
-    [data-theme="dark"] .sec-link{color:var(--brand-light)}
-    .sec-link:hover{gap:9px}
-
-    /* ── NOTIFICATION ── */
-    .notif{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--brand-pale);border:1px solid rgba(11,155,122,.18);border-radius:var(--radius-md);margin-bottom:18px;animation:fadeUp .4s var(--ease) both;transition:background var(--t-base);}
-    .notif-ico{width:28px;height:28px;border-radius:7px;background:var(--brand-faint);color:var(--brand);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
-    [data-theme="dark"] .notif-ico{background:rgba(11,155,122,.2);color:var(--brand-light)}
-    .notif-txt{flex:1;font-size:12.5px;color:var(--t-body);min-width:0;}
-    .notif-txt strong{color:var(--brand);font-weight:700}
-    [data-theme="dark"] .notif-txt strong{color:var(--brand-light)}
-    .notif-x{background:none;border:none;color:var(--t-faint);font-size:12px;padding:2px 6px;transition:color var(--t-fast);flex-shrink:0;}
-    .notif-x:hover{color:var(--t-head)}
-
-    /* ── BANNER ── */
-    .banner{background:linear-gradient(135deg,var(--brand-dark) 0%,#0B7A62 55%,#0D9478 100%);border-radius:var(--radius-xl);padding:34px 40px;margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;gap:28px;position:relative;overflow:hidden;width:100%;box-shadow:0 8px 28px rgba(11,155,122,.22);animation:fadeUp .5s var(--ease) .05s both;}
-    .banner::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 80% 50%,rgba(255,255,255,.08) 0%,transparent 55%);pointer-events:none;}
-    .banner-ring{position:absolute;right:-50px;top:-50px;width:240px;height:240px;border-radius:50%;border:1px solid rgba(255,255,255,.08);pointer-events:none;}
-    .banner-ring::before{content:'';position:absolute;inset:20px;border-radius:50%;border:1px solid rgba(255,255,255,.06);}
-    .banner-left{position:relative;z-index:1;flex:1;min-width:0;}
-    .banner-eyebrow{font-size:11.5px;color:rgba(255,255,255,.65);font-weight:500;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
-    .banner-name{font-size:28px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-bottom:7px;}
-    .banner-sub{font-size:13.5px;color:rgba(255,255,255,.72);max-width:400px;line-height:1.55;margin-bottom:20px}
-    .banner-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
-    .btn-white{display:inline-flex;align-items:center;gap:7px;padding:9px 18px;background:#fff;color:var(--brand-dark);border-radius:var(--radius-sm);font-size:13px;font-weight:700;border:none;box-shadow:0 2px 8px rgba(0,0,0,.12);transition:transform var(--t-fast),box-shadow var(--t-fast);white-space:nowrap;}
-    .btn-white:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.15);color:var(--brand-dark)}
-    .btn-outline-white{display:inline-flex;align-items:center;gap:7px;padding:9px 16px;background:rgba(255,255,255,.1);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:600;border:1px solid rgba(255,255,255,.22);transition:background var(--t-fast);white-space:nowrap;}
-    .btn-outline-white:hover{background:rgba(255,255,255,.18);color:#fff}
-    .banner-vitals{display:flex;gap:10px;flex-shrink:0;position:relative;z-index:1}
-    .vital{background:rgba(255,255,255,.1);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.18);border-radius:var(--radius-md);padding:13px 16px;text-align:center;min-width:82px;}
-    .vital-ico{font-size:16px;color:rgba(255,255,255,.65);margin-bottom:5px}
-    .vital-val{font-size:19px;font-weight:800;color:#fff;line-height:1;margin-bottom:2px}
-    .vital-lbl{font-size:10px;color:rgba(255,255,255,.55);font-weight:500;white-space:nowrap}
-
-    /* ── STATS — FIX 9: minmax(0,1fr) prevents grid overflow ── */
-    .stats-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .1s both;}
-    .stat-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px 22px;position:relative;overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);box-shadow:var(--sh-card);}
-    .stat-card:hover{transform:translateY(-4px);box-shadow:var(--sh-md);border-color:var(--border-med)}
-    .stat-accent{position:absolute;top:0;left:0;width:3px;height:100%;border-radius:2px 0 0 2px;}
-    .stat-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-    .stat-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;}
-    .stat-trend{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;}
-    .t-up{background:var(--clr-green-bg);color:var(--clr-green)}
-    .t-warn{background:var(--clr-amber-bg);color:var(--clr-amber)}
-    .t-info{background:var(--clr-blue-bg);color:var(--clr-blue)}
-    .stat-val{font-size:34px;font-weight:800;color:var(--t-head);letter-spacing:-1.5px;line-height:1;margin-bottom:3px;font-variant-numeric:tabular-nums;}
-    .stat-lbl{font-size:12px;color:var(--t-muted);font-weight:500}
-    .stat-div{height:1px;background:var(--border);margin:12px 0}
-    .stat-sub{font-size:11.5px;color:var(--t-faint)}
-
-    /* ── QUICK ACTIONS ── */
-    .quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .15s both;}
-    .quick-btn{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-md);padding:15px 12px;display:flex;flex-direction:column;align-items:center;gap:9px;box-shadow:var(--sh-card);transition:transform var(--t-fast),box-shadow var(--t-fast),background var(--t-base),border-color var(--t-base);text-align:center;}
-    .quick-btn:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--brand);background:var(--brand-pale)}
-    [data-theme="dark"] .quick-btn:hover{background:rgba(11,155,122,.07)}
-    .q-ico{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:17px}
-    .q-lbl{font-size:12px;font-weight:600;color:var(--t-muted);line-height:1.3}
-    .quick-btn:hover .q-lbl{color:var(--brand)}
-    [data-theme="dark"] .quick-btn:hover .q-lbl{color:var(--brand-light)}
-
-    /* ── CHARTS ── */
-    .charts-row{display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .2s both;min-width:0;}
-    .card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--sh-card);overflow:hidden;min-width:0;transition:background var(--t-base),border-color var(--t-base);}
-    .card:hover{border-color:var(--border-med)}
-    .card-head{padding:18px 22px 0;display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px}
-    .card-title{font-size:15px;font-weight:700;color:var(--t-head);margin-bottom:2px}
-    .card-sub{font-size:11.5px;color:var(--t-muted)}
-    .card-pill{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--brand);background:var(--brand-faint);padding:4px 9px;border-radius:99px;}
-    [data-theme="dark"] .card-pill{background:rgba(11,155,122,.15);color:var(--brand-light)}
-    .card-body{padding:0 22px 20px}
-    .chart-wrap{height:220px;position:relative}
-    .donut-ctr{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;}
-    .donut-n{font-size:28px;font-weight:800;color:var(--t-head);line-height:1}
-    .donut-l{font-size:10.5px;font-weight:600;color:var(--t-muted);margin-top:2px}
-    .chart-legend{display:flex;flex-wrap:wrap;gap:7px;padding:14px 22px;border-top:1px solid var(--border);transition:border-color var(--t-base);}
-    .leg-item{display:flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;color:var(--t-muted)}
-    .leg-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
-
-    /* ── TIPS ── */
-    .tips-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .25s both;}
-    .tips-head{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;transition:border-color var(--t-base);}
-    .tips-nav-btns{display:flex;gap:5px}
-    .tips-nav-btn{width:28px;height:28px;border-radius:7px;background:var(--surface);border:1px solid var(--border);color:var(--t-muted);font-size:11px;display:flex;align-items:center;justify-content:center;transition:background var(--t-fast),color var(--t-fast),border-color var(--t-fast);}
-    .tips-nav-btn:hover{background:var(--brand);color:#fff;border-color:var(--brand)}
-    .tips-track-outer{overflow:hidden;padding:18px 20px}
-    .tips-track{display:flex;gap:14px;transition:transform .4s var(--ease)}
-    .tip-item{min-width:calc(33.333% - 10px);flex-shrink:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),border-color var(--t-base);}
-    .tip-item:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--brand)}
-    .tip-visual{height:100px;display:flex;align-items:center;justify-content:center;font-size:42px}
-    .tip-body{padding:12px 14px}
-    .tip-cat{font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:var(--brand);margin-bottom:3px}
-    [data-theme="dark"] .tip-cat{color:var(--brand-light)}
-    .tip-ttl{font-size:13px;font-weight:700;color:var(--t-head);margin-bottom:4px}
-    .tip-txt{font-size:11.5px;color:var(--t-muted);line-height:1.55}
-
-    /* ── APPOINTMENTS ── */
-    .appt-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .3s both;}
-    .appt-head{padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;transition:border-color var(--t-base);}
-    .btn-primary{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:var(--brand);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12.5px;font-weight:700;font-family:'Outfit',sans-serif;box-shadow:0 2px 8px rgba(11,155,122,.28);white-space:nowrap;transition:background var(--t-fast),transform var(--t-fast),box-shadow var(--t-fast);}
-    .btn-primary:hover{background:var(--brand-dark);color:#fff;transform:translateY(-1px);box-shadow:0 5px 14px rgba(11,155,122,.35)}
-    .appt-tabs{display:flex;gap:3px;padding:10px 18px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;transition:background var(--t-base),border-color var(--t-base);}
-    .tab{padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;font-family:'Outfit',sans-serif;border:none;background:transparent;color:var(--t-muted);transition:background var(--t-fast),color var(--t-fast);}
-    .tab:hover{background:var(--hover);color:var(--t-head)}
-    .tab.active{background:var(--brand);color:#fff}
-    .appt-list{padding:6px 14px 14px}
-    .appt-row{display:flex;align-items:center;gap:14px;padding:13px 10px;border-radius:var(--radius-md);margin-bottom:3px;border:1px solid transparent;min-width:0;transition:background var(--t-fast),border-color var(--t-fast);}
-    .appt-row:hover{background:var(--surface);border-color:var(--border)}
-    .appt-bar{width:3px;height:42px;border-radius:2px;flex-shrink:0}
-    .appt-ava{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;flex-shrink:0;}
-    .appt-info{flex:1;min-width:0}
-    .appt-doc{font-size:13.5px;font-weight:700;color:var(--t-head);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .appt-meta{display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:11.5px;color:var(--t-muted)}
-    .appt-meta-i{display:flex;align-items:center;gap:3px}
-    .appt-meta-i i{color:var(--brand);font-size:10px}
-    [data-theme="dark"] .appt-meta-i i{color:var(--brand-light)}
-    .appt-reason{font-size:11px;color:var(--t-faint);margin-top:2px;display:flex;align-items:center;gap:3px}
-    .badge{padding:4px 11px;border-radius:99px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
-    .b-completed{background:var(--clr-green-bg);color:var(--clr-green)}
-    .b-approved{background:var(--clr-purple-bg);color:var(--clr-purple)}
-    .b-scheduled{background:var(--clr-blue-bg);color:var(--clr-blue)}
-    .b-pending{background:var(--clr-amber-bg);color:var(--clr-amber)}
-    .b-cancelled,.b-rejected{background:var(--clr-red-bg);color:var(--clr-red)}
-
-    /* ── TOOLS ── */
-    .tools-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .35s both;}
-    .tool-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--sh-card);transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);}
-    .tool-card:hover{transform:translateY(-3px);box-shadow:var(--sh-md);border-color:var(--border-med)}
-    .tool-ico{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:13px}
-    .tool-title{font-size:14px;font-weight:700;color:var(--t-head);margin-bottom:5px}
-    .tool-text{font-size:12.5px;color:var(--t-muted);line-height:1.6}
-    .ecg-line{margin-top:12px;height:34px}
-    .ecg-line svg{width:100%;height:34px;overflow:visible}
-
-    /* ── DOCTORS ── */
-    .doctors-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:24px;animation:fadeUp .5s var(--ease) .4s both;}
-    .doc-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--sh-card);position:relative;overflow:hidden;transition:transform var(--t-base),box-shadow var(--t-base),background var(--t-base),border-color var(--t-base);}
-    .doc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--brand),var(--brand-light));opacity:0;transition:opacity var(--t-base);}
-    .doc-card:hover{transform:translateY(-5px);box-shadow:var(--sh-md);border-color:var(--brand)}
-    .doc-card:hover::before{opacity:1}
-    .doc-top{display:flex;align-items:center;gap:13px;margin-bottom:16px}
-    .doc-ava{width:50px;height:50px;flex-shrink:0;background:linear-gradient(135deg,var(--brand),var(--brand-light));border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:21px;color:#fff;box-shadow:0 4px 12px rgba(11,155,122,.25);}
-    .doc-name{font-size:14.5px;font-weight:700;color:var(--t-head);margin-bottom:2px}
-    .doc-spec{font-size:11.5px;color:var(--brand);font-weight:600}
-    [data-theme="dark"] .doc-spec{color:var(--brand-light)}
-    .doc-stars{display:flex;gap:2px;align-items:center;margin-top:4px;font-size:10.5px;color:#F59E0B}
-    .doc-stars span{color:var(--t-muted);font-size:11px;margin-left:3px}
-    .doc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding-top:14px;border-top:1px solid var(--border);transition:border-color var(--t-base)}
-    .doc-stat{text-align:center}
-    .doc-stat-v{font-size:19px;font-weight:800;color:var(--brand);line-height:1}
-    [data-theme="dark"] .doc-stat-v{color:var(--brand-light)}
-    .doc-stat-l{font-size:10px;color:var(--t-faint);font-weight:500;margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
-
-    /* ── TIMELINE ── */
-    .tl-card{background:var(--base);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px;margin-bottom:24px;box-shadow:var(--sh-card);transition:background var(--t-base),border-color var(--t-base);animation:fadeUp .5s var(--ease) .45s both;}
-    .tl-list{margin-top:18px}
-    .tl-item{display:flex;gap:14px;margin-bottom:16px;position:relative}
-    .tl-item:not(:last-child)::before{content:'';position:absolute;left:16px;top:32px;width:1px;height:calc(100% + 2px);background:var(--border);}
-    .tl-dot{width:32px;height:32px;flex-shrink:0;border-radius:50%;border:2px solid;display:flex;align-items:center;justify-content:center;font-size:12px;position:relative;z-index:1;}
-    .tl-body{flex:1;padding-top:5px;min-width:0;}
-    .tl-ev{font-size:13px;font-weight:600;color:var(--t-head)}
-    .tl-tm{font-size:11px;color:var(--t-faint);margin-top:1px}
-
-    /* ── EMPTY ── */
-    .empty{text-align:center;padding:52px 24px}
-    .empty-ico{width:68px;height:68px;margin:0 auto 16px;background:var(--surface);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;color:var(--t-faint);animation:floatIco 3s ease-in-out infinite;}
-    @keyframes floatIco{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
-    .empty-title{font-size:17px;font-weight:700;color:var(--t-head);margin-bottom:7px}
-    .empty-sub{font-size:13px;color:var(--t-muted);max-width:300px;margin:0 auto 20px}
-
-    /* ── FOOTER ── */
-    .page-footer{text-align:center;padding:18px 0 4px;border-top:1px solid var(--border);font-size:11.5px;color:var(--t-faint);transition:border-color var(--t-base);}
-
-    /* ── ANIMATIONS ── */
-    @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-
-    /* ── RESPONSIVE ── */
-    @media(max-width:1400px){
-        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    }
-    @media(max-width:1200px){
-        .charts-row{grid-template-columns:1fr}
-        .doctors-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .tools-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .banner-vitals{display:none}
-    }
-    @media(max-width:1024px){
-        .page{padding:22px 22px 44px}
-        .topbar{padding:0 20px}
-        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .banner{padding:28px 30px}
-    }
-    @media(max-width:768px){
-        .main{margin-left:0!important;width:100%!important}
-        .sidebar{transform:translateX(-100%)}
-        .sidebar.mobile-open{transform:translateX(0)}
-        .stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .doctors-grid{grid-template-columns:1fr}
-        .tools-grid{grid-template-columns:1fr}
-        .banner{padding:24px 26px}
-        .banner-name{font-size:22px}
-        .charts-row{grid-template-columns:1fr}
-    }
-    </style>
-</head>
-
-<body>
-<div class="shell">
-
-<!-- ══════════ SIDEBAR ══════════ -->
-<aside class="sidebar" id="sidebar">
-    <div class="s-brand">
-        <div class="s-logo-box"><i class="fas fa-hospital"></i></div>
-        <div class="s-brand-text">
-            <div class="s-brand-name">PriorityMed</div>
-            <div class="s-brand-tag">PHC Nurse Center</div>
+<div class="nurse-grid">
+    <div class="banner">
+        <div class="banner-left">
+            <div class="banner-eyebrow">OPERATIONAL OVERVIEW</div>
+            <div class="banner-name">Welcome Back, Nurse</div>
+            <p class="banner-sub">District health systems are optimized. Monitoring 4 active sectors.</p>
         </div>
-    </div>
-    <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
-    <div class="s-user">
-        <div class="s-ava" style="background:linear-gradient(135deg, #DC2626, #F87171);">
-            <i class="fas fa-nurse"></i>
-            <div class="s-ava-dot"></div>
-        </div>
-        <div class="s-user-text">
-            <div class="s-uname">{{ user.fullname }}</div>
-            <div class="s-urole">PHC Nurse</div>
-        </div>
-    </div>
-    <nav class="s-nav">
-        <div class="s-group">Center Management</div>
-        <a href="/phc/nurse/dashboard" class="s-link active">
-            <div class="s-icon"><i class="fas fa-th-large"></i></div>
-            <span class="s-label">Dashboard</span>
-        </a>
-        <a href="/phc/nurse/patients" class="s-link">
-            <div class="s-icon"><i class="fas fa-users"></i></div>
-            <span class="s-label">Patients</span>
-        </a>
-        <a href="/phc/nurse/appointments" class="s-link">
-            <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-            <span class="s-label">Appointments</span>
-            {% if dashboard_data.system_alerts|length > 0 %}<span class="s-chip">{{ dashboard_data.system_alerts|length }}</span>{% endif %}
-        </a>
-        <div class="s-group">Operations</div>
-        <a href="/phc/nurse/intake" class="s-link">
-            <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
-            <span class="s-label">Patient Intake</span>
-        </a>
-        <a href="/phc/nurse/resources" class="s-link">
-            <div class="s-icon"><i class="fas fa-boxes"></i></div>
-            <span class="s-label">Inventory Management</span>
-        </a>
-        <a href="/phc/attendance" class="s-link">
-            <div class="s-icon"><i class="fas fa-user-check"></i></div>
-            <span class="s-label">Staff Attendance</span>
-        </a>
-        <a href="/phc/nurse/reports" class="s-link">
-            <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
-            <span class="s-label">Reports</span>
-        </a>
-        <div class="s-group">Communication</div>
-        <a href="/phc/nurse/messages" class="s-link">
-            <div class="s-icon"><i class="fas fa-comments"></i></div>
-            <span class="s-label">Messages</span>
-        </a>
-        <a href="/logout" class="s-link">
-            <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-            <span class="s-label">Sign Out</span>
-        </a>
-    </nav>
-    <div class="s-footer">
-        <div class="s-status">
-            <div class="s-dot"></div>
-            <span class="s-status-txt">All Systems Operational</span>
-        </div>
-    </div>
-</aside>
-
-<!-- ══════════ MAIN ══════════ -->
-<div class="main" id="mainContent">
-
-    <header class="topbar">
-        <div class="t-breadcrumb">
-            <span>PriorityMed</span>
-            <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
-            <span class="t-breadcrumb-active">PHC Nurse Dashboard</span>
-        </div>
-        <div class="t-right">
-            <div class="t-clock" id="liveClock">--:-- --</div>
-            <div class="theme-pill" id="themeToggle">
-                <i class="fas fa-moon" id="themeIco" style="font-size:11px;"></i>
-                <div class="t-track"><div class="t-thumb"></div></div>
-            </div>
-            <button class="t-btn" title="Notifications">
-                <i class="fas fa-bell"></i>
-                {% if dashboard_data.system_alerts|length > 0 %}<div class="t-badge"></div>{% endif %}
-            </button>
-            <button class="t-btn" title="Settings">
-                <i class="fas fa-cog"></i>
+        <div class="banner-right">
+            <button class="btn-lightning" onclick="openLightningEntry()">
+                <i class="fas fa-bolt"></i> Lightning Diary Entry
             </button>
         </div>
-    </header>
+    </div>
 
-    <div class="page">
-        {% if dashboard_data.system_alerts %}
-        <div class="notif" id="notifStrip">
-            <div class="notif-ico"><i class="fas fa-exclamation-triangle"></i></div>
-            <div class="notif-txt">
-                <strong>Active Alerts:</strong> {{ dashboard_data.system_alerts|length }} critical event{% if dashboard_data.system_alerts|length != 1 %}s{% endif %} requiring attention.
-            </div>
-            <button class="notif-x" onclick="document.getElementById('notifStrip').style.display='none'">
-                <i class="fas fa-times"></i>
-            </button>
+    <div class="stat-row">
+        <div class="stat-box">
+            <div class="stat-ico" style="background:var(--brand-pale); color:var(--brand);"><i class="fas fa-user-plus"></i></div>
+            <div class="stat-val">{{ dashboard_data.patients_registered_today }}</div>
+            <div class="stat-lbl">Today's Registration</div>
         </div>
-        {% endif %}
-
-        <div class="banner">
-            <div class="banner-ring"></div>
-            <div class="banner-left">
-                <div class="banner-eyebrow">
-                    <i class="fas fa-hospital-alt" style="font-size:9px;"></i>
-                    <span id="bannerDate">{{ dashboard_data.center_name }}</span>
-                </div>
-                <div class="banner-name" id="bannerGreet">Welcome back, {{ user.fullname }} 👋</div>
-                <p class="banner-sub">
-                    <strong>{{ dashboard_data.patients_registered_today }}</strong> new patients registered today.
-                    <strong>{{ dashboard_data.total_patients }}</strong> total under your care.
-                </p>
-                <div class="banner-actions">
-                    <a href="/phc/nurse/intake" class="btn-white"><i class="fas fa-plus"></i> New Patient Intake</a>
-                    <a href="/phc/nurse/appointments" class="btn-outline-white"><i class="fas fa-calendar"></i> View Appointments</a>
-                </div>
-            </div>
-            <div class="banner-vitals">
-                <div class="vital">
-                    <div class="vital-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-user-md"></i></div>
-                    <div class="vital-val">{{ dashboard_data.doctors_available }}</div>
-                    <div class="vital-lbl">Doctors Available</div>
-                </div>
-                <div class="vital">
-                    <div class="vital-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-nurse"></i></div>
-                    <div class="vital-val">{{ dashboard_data.nurses_available }}</div>
-                    <div class="vital-lbl">Nurses Available</div>
-                </div>
-                <div class="vital">
-                    <div class="vital-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-bed"></i></div>
-                    <div class="vital-val">{{ dashboard_data.checkins_today }}</div>
-                    <div class="vital-lbl">Check-ins Today</div>
-                </div>
-            </div>
+        <div class="stat-box">
+            <div class="stat-ico" style="background:var(--clr-red-bg); color:var(--clr-red);"><i class="fas fa-ambulance"></i></div>
+            <div class="stat-val">{{ active_referrals|length if active_referrals else 0 }}</div>
+            <div class="stat-lbl">Active Referrals</div>
         </div>
-
-        <div class="sec-head"><div class="sec-label">Key Metrics</div></div>
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-accent" style="background:var(--brand);"></div>
-                <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-users"></i></div>
-                    <span class="stat-trend t-up"><i class="fas fa-arrow-up"></i> Today</span>
-                </div>
-                <div class="stat-val">{{ dashboard_data.patients_registered_today }}</div>
-                <div class="stat-lbl">New Patients Registered</div>
-                <div class="stat-div"></div>
-                <div class="stat-sub">This reporting period</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-accent" style="background:var(--clr-green);"></div>
-                <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-users-alt"></i></div>
-                    <span class="stat-trend t-info">Total</span>
-                </div>
-                <div class="stat-val">{{ dashboard_data.total_patients }}</div>
-                <div class="stat-lbl">Total Patients</div>
-                <div class="stat-div"></div>
-                <div class="stat-sub">Under your PHC center care</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-accent" style="background:var(--clr-blue);"></div>
-                <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-calendar-check"></i></div>
-                    <span class="stat-trend t-info">{{ dashboard_data.center_completion_rate }}%</span>
-                </div>
-                <div class="stat-val">{{ dashboard_data.total_appointments }}</div>
-                <div class="stat-lbl">Total Appointments</div>
-                <div class="stat-div"></div>
-                <div class="stat-sub">Center completion rate</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-accent" style="background:var(--clr-red);"></div>
-                <div class="stat-top">
-                    <div class="stat-ico" style="background:var(--clr-red-bg);color:var(--clr-red);"><i class="fas fa-exclamation-circle"></i></div>
-                    <span class="stat-trend t-warn" id="criticalAlertCount">{{ dashboard_data.system_alerts|length }}</span>
-                </div>
-                <div class="stat-val" id="criticalCasesCount">-</div>
-                <div class="stat-lbl">Critical Cases</div>
-                <div class="stat-div"></div>
-                <div class="stat-sub">Requiring immediate attention</div>
-            </div>
+        <div class="stat-box">
+            <div class="stat-ico" style="background:var(--clr-green-bg); color:var(--clr-green);"><i class="fas fa-box"></i></div>
+            <div class="stat-val">OPTIMAL</div>
+            <div class="stat-lbl">Inventory Status</div>
         </div>
-
-        <div class="sec-head"><div class="sec-label">Quick Actions</div></div>
-        <div class="quick-grid">
-            <a href="/phc/nurse/patients" class="quick-btn" style="border-color: var(--clr-red); background: var(--clr-red-bg);">
-                <div class="q-ico" style="background: var(--clr-red); color: #fff;"><i class="fas fa-ambulance"></i></div>
-                <span class="q-lbl" style="color: var(--clr-red);">Emergency Dispatch</span>
-            </a>
-            <a href="/phc/nurse/appointments" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-calendar-check"></i></div>
-                <span class="q-lbl">View Appointments</span>
-            </a>
-            <a href="/phc/nurse/patients" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-green-bg);color:var(--clr-green);"><i class="fas fa-list"></i></div>
-                <span class="q-lbl">Manage Patients</span>
-            </a>
-            <a href="/phc/nurse/reports" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-amber-bg);color:var(--clr-amber);"><i class="fas fa-chart-bar"></i></div>
-                <span class="q-lbl">Generate Report</span>
-            </a>
-            <a href="/phc/nurse/resources" class="quick-btn">
-                <div class="q-ico" style="background:var(--brand-faint);color:var(--brand);"><i class="fas fa-boxes"></i></div>
-                <span class="q-lbl">Inventory Management</span>
-            </a>
-            <a href="/phc/attendance" class="quick-btn">
-                <div class="q-ico" style="background:var(--clr-purple-bg);color:var(--clr-purple);"><i class="fas fa-user-check"></i></div>
-                <span class="q-lbl">Mark Attendance</span>
-            </a>
+        <div class="stat-box">
+            <div class="stat-ico" style="background:rgba(37,99,235,0.1); color:var(--brand);"><i class="fas fa-clock"></i></div>
+            <div class="stat-val">~4 MIN</div>
+            <div class="stat-lbl">Avg. Wait Time</div>
         </div>
+    </div>
 
-        <div class="sec-head"><div class="sec-label">Analytics & Trends</div></div>
-        <div class="charts-row">
-            <div class="card">
-                <div class="card-head">
+    <div class="main-grid">
+        <div class="panel">
+            <div class="p-head">
+                <div class="p-title"><i class="fas fa-crown" style="color:var(--brand);"></i> Priority Handshake Queue</div>
+                <span class="mpr-badge">HIGH RISK RCH ONLY</span>
+            </div>
+            <div id="priorityQueue">
+                {% for patient in dashboard_data.priority_patients %}
+                <div style="padding:15px; background:{% if patient.risk_level == 'CRITICAL' %}var(--clr-red-bg){% else %}var(--clr-amber-bg){% endif %}; border-radius:12px; display:flex; justify-content:space-between; align-items:center; border:1px solid {% if patient.risk_level == 'CRITICAL' %}var(--clr-red){% else %}var(--clr-amber){% endif %}; margin-bottom: 10px;">
                     <div>
-                        <div class="card-title">7-Day Admission Trend</div>
-                        <div class="card-sub">Patient registration over the week</div>
-                    </div>
-                    <div class="card-pill"><i class="fas fa-chart-line"></i> Live</div>
-                </div>
-                <div class="card-body">
-                    <div class="chart-wrap"><canvas id="admissionChart"></canvas></div>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-head">
-                    <div>
-                        <div class="card-title">Risk Distribution</div>
-                        <div class="card-sub">Disease severity breakdown</div>
-                    </div>
-                </div>
-                <div class="card-body">
-                    <div class="chart-wrap" style="position:relative;">
-                        <canvas id="riskChart"></canvas>
-                        <div class="donut-ctr">
-                            <div class="donut-n" id="riskDonutN">—</div>
-                            <div class="donut-l">Cases</div>
+                        <div style="font-weight:800; font-size:14px; color:{% if patient.risk_level == 'CRITICAL' %}var(--clr-red){% else %}var(--clr-amber){% endif %};">
+                            {{ patient.name }} ({{ patient.source }}: {{ patient.sub_detail }})
                         </div>
+                        <div style="font-size:11px; color:var(--t-muted);">{{ patient.detail }}</div>
                     </div>
+                    <button class="btn-lightning" style="padding:8px 15px; font-size:12px;" onclick="location.href='/phc/nurse/intake?patient_id={{ patient.id }}'">Start Care</button>
                 </div>
-                <div class="chart-legend" id="riskChartLegend"></div>
-            </div>
-        </div>
-
-        <div class="sec-head"><div class="sec-label">System Alerts & Incidents</div></div>
-        <div class="appt-card">
-            <div class="appt-head">
-                <div>
-                    <div class="card-title">{% if dashboard_data.system_alerts|length > 0 %}Active Alerts ({{ dashboard_data.system_alerts|length }}){% else %}No Critical Alerts{% endif %}</div>
-                    <div class="card-sub">Critical cases and pending confirmations</div>
-                </div>
-            </div>
-            <div class="appt-list" id="alertsList">
-                {% if dashboard_data.system_alerts %}
-                    {% for alert in dashboard_data.system_alerts %}
-                    <div class="appt-row">
-                        <div class="appt-bar" style="background:{% if alert.status == 'CRITICAL' %}var(--clr-red){% elif alert.status == 'WARNING' %}var(--clr-amber){% else %}var(--clr-blue){% endif %};"></div>
-                        <div class="appt-ava" style="background:{% if alert.status == 'CRITICAL' %}linear-gradient(135deg,#DC2626,#F87171){% elif alert.status == 'WARNING' %}linear-gradient(135deg,#D97706,#FBBF24){% else %}linear-gradient(135deg,#2563EB,#60A5FA){% endif %};"><i class="{{ alert.icon }}"></i></div>
-                        <div class="appt-info">
-                            <div class="appt-doc">{{ alert.message }}</div>
-                            <div class="appt-meta">
-                                <span class="appt-meta-i"><i class="far fa-clock"></i> {{ alert.timestamp }}</span>
-                                <span class="appt-meta-i"><i class="fas fa-info-circle"></i> {{ alert.type|replace('_', ' ')|title }}</span>
-                            </div>
-                        </div>
-                        <span class="badge" style="background:{% if alert.status == 'CRITICAL' %}var(--clr-red-bg);color:var(--clr-red){% elif alert.status == 'WARNING' %}var(--clr-amber-bg);color:var(--clr-amber){% else %}var(--clr-blue-bg);color:var(--clr-blue){% endif %};">{{ alert.status }}</span>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                <div class="empty">
-                    <div class="empty-ico"><i class="fas fa-check-circle"></i></div>
-                    <div class="empty-title">All Systems Normal</div>
-                    <p class="empty-sub">No critical alerts or pending actions. Your PHC center is operating normally.</p>
+                {% endfor %}
+                {% if not dashboard_data.priority_patients %}
+                <div style="padding:30px; text-align:center; color:var(--t-muted); font-size:12px;">
+                    <i class="fas fa-check-circle" style="color:var(--brand); font-size:24px; display:block; margin-bottom:10px;"></i>
+                    No high-priority patients in the district queue.
                 </div>
                 {% endif %}
             </div>
+            
+            <div style="margin-top:30px;" class="p-head">
+                <div class="p-title">Live Queue Pulse</div>
+                <span class="status-badge amber">High Volume</span>
+            </div>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                <div style="padding:20px; background:var(--glass); border-radius:15px; text-align:center;">
+                    <div style="font-size:32px; font-weight:800;">14</div>
+                    <div style="font-size:11px; color:var(--t-muted); text-transform:uppercase;">In Waiting Area</div>
+                </div>
+                <div style="padding:20px; background:var(--glass); border-radius:15px; text-align:center;">
+                    <div style="font-size:32px; font-weight:800; color:var(--brand);">06m</div>
+                    <div style="font-size:11px; color:var(--t-muted); text-transform:uppercase;">Est. Wait Time</div>
+                </div>
+            </div>
+            <div style="margin-top:20px;">
+                <div style="font-size:12px; color:var(--t-muted); margin-bottom:10px;">Queue Intensity (Morning Rush)</div>
+                <div style="height:30px; display:flex; gap:4px; align-items:flex-end;">
+                    <div style="flex:1; height:40%; background:var(--brand); border-radius:2px;"></div>
+                    <div style="flex:1; height:60%; background:var(--brand); border-radius:2px;"></div>
+                    <div style="flex:1; height:90%; background:var(--clr-red); border-radius:2px;"></div>
+                    <div style="flex:1; height:100%; background:var(--clr-red); border-radius:2px;"></div>
+                    <div style="flex:1; height:80%; background:var(--clr-amber); border-radius:2px;"></div>
+                    <div style="flex:1; height:50%; background:var(--brand); border-radius:2px;"></div>
+                </div>
+            </div>
         </div>
 
-        <div class="page-footer">© 2024 PriorityMed — PHC Nurse Operations Center &nbsp;·&nbsp; Powered by AI &nbsp;·&nbsp; All rights reserved</div>
+        <div class="panel">
+            <div class="p-head">
+                <div class="p-title">Real-time System Alerts</div>
+                <span class="mpr-badge">FILTER: ALL</span>
+            </div>
+            <div id="alertsList">
+                {% for alert in dashboard_data.system_alerts %}
+                <div class="alert-row">
+                    <div class="alert-ico" style="background:{% if alert.status == 'CRITICAL' %}var(--clr-red-bg); color:var(--clr-red){% else %}var(--clr-amber-bg); color:var(--clr-amber){% endif %};">
+                        <i class="{{ alert.icon }}"></i>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-weight:700; font-size:14px;">{{ alert.message }}</div>
+                        <div style="font-size:11px; color:var(--t-muted);">{{ alert.timestamp }} • {{ alert.type }}</div>
+                    </div>
+                    <span class="status-badge {% if alert.status == 'CRITICAL' %}absent{% else %}amber{% endif %}" style="font-size:9px;">{{ alert.status }}</span>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
 
+        <div class="panel">
+            <div class="p-head">
+                <div class="p-title">Field Operations</div>
+            </div>
+            <!-- Field Metrics -->
+            <div style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:12px;">
+                    <span>MTM Outreach Progress</span>
+                    <span style="font-weight:700;">65%</span>
+                </div>
+                <div style="height:6px; background:var(--glass); border-radius:3px;"><div style="width:65%; height:100%; background:var(--brand); border-radius:3px;"></div></div>
+            </div>
+            
+            <a href="/phc/nurse/vhn-outreach" style="text-decoration:none; display:block; padding:15px; background:var(--glass); border-radius:12px; margin-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-weight:700; font-size:13px;">Monitor VHN Tablets</div>
+                    <i class="fas fa-chevron-right" style="color:var(--t-muted);"></i>
+                </div>
+            </a>
+            
+            <div style="padding:15px; background:var(--clr-red-bg); border-radius:12px;">
+                <div style="color:var(--clr-red); font-weight:800; font-size:11px; margin-bottom:5px;">STOCK ALERT</div>
+                <div style="font-size:12px;">ASV (Anti-Snake Venom) at critical level in Block B.</div>
+            </div>
+        </div>
     </div>
 </div>
+
+<!-- Lightning Entry Modal -->
+<div id="lightningModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(10px);">
+    <div style="background:var(--card); width:95%; max-width:600px; border-radius:24px; padding:40px; border:1px solid var(--brand);">
+        <h3 style="margin-bottom:30px;"><i class="fas fa-bolt" style="color:var(--brand);"></i> Lightning OP Entry</h3>
+        <form id="lightningForm">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                <div class="field-wrap">
+                    <label style="font-size:11px; color:var(--t-muted); text-transform:uppercase; font-weight:700;">Type</label>
+                    <select name="op_type" style="width:100%; background:var(--bg); border:1px solid var(--border); color:#fff; padding:12px; border-radius:10px;">
+                        <option value="New OP">New OP</option>
+                        <option value="Old OP">Old OP</option>
+                    </select>
+                </div>
+                <div class="field-wrap">
+                    <label style="font-size:11px; color:var(--t-muted); text-transform:uppercase; font-weight:700;">Patient ID/Name</label>
+                    <input type="text" name="patient_id" placeholder="Name or RCH ID" style="width:100%; background:var(--bg); border:1px solid var(--border); color:#fff; padding:12px; border-radius:10px;">
+                </div>
+            </div>
+            <div class="field-wrap" style="margin-bottom:30px;">
+                <label style="font-size:11px; color:var(--t-muted); text-transform:uppercase; font-weight:700;">Symptoms (Tamil Voice Enabled)</label>
+                <textarea name="symptoms" placeholder="e.g. fever for 2 days..." style="width:100%; background:var(--bg); border:1px solid var(--border); color:#fff; padding:12px; border-radius:10px; min-height:100px;"></textarea>
+            </div>
+            <div style="display:flex; gap:15px;">
+                <button type="submit" class="btn-lightning" style="flex:2;">Confirm & Sync to HMIS</button>
+                <button type="button" onclick="closeLightningEntry()" class="btn-sync" style="background:var(--glass); flex:1;">Cancel</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>
-const dashboardData = {
-    center_name: '{{ dashboard_data.center_name }}',
-    patients_registered_today: {{ dashboard_data.patients_registered_today }},
-    total_patients: {{ dashboard_data.total_patients }},
-    checkins_today: {{ dashboard_data.checkins_today }},
-    center_completion_rate: {{ dashboard_data.center_completion_rate }},
-    total_appointments: {{ dashboard_data.total_appointments }},
-    doctors_available: {{ dashboard_data.doctors_available }},
-    nurses_available: {{ dashboard_data.nurses_available }},
-    admission_dates: {{ dashboard_data.admission_dates | tojson }},
-    admission_counts: {{ dashboard_data.admission_counts | tojson }},
-    disease_labels: {{ dashboard_data.disease_labels | tojson }},
-    disease_counts: {{ dashboard_data.disease_counts | tojson }},
-    system_alerts: {{ dashboard_data.system_alerts | tojson if dashboard_data.system_alerts else '[]' | safe }}
-};
+    function openLightningEntry() { document.getElementById('lightningModal').style.display = 'flex'; }
+    function closeLightningEntry() { document.getElementById('lightningModal').style.display = 'none'; }
+    
+    document.getElementById('lightningForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const symptoms = e.target.symptoms.value;
+        
+        // REAL-WORLD: Check stock before logging
+        const res = await fetch('/api/phc/check-stock-for-symptom', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ symptoms })
+        });
+        const stockData = await res.json();
+        
+        if(stockData.status === 'WARNING') {
+            if(!confirm(stockData.message + "\n\nProceed with registration anyway?")) return;
+        }
 
-/* THEME */
-const html = document.documentElement;
-const themeToggle = document.getElementById('themeToggle');
-const themeIco = document.getElementById('themeIco');
-window._activeCharts = [];
+        const res2 = await fetch('/api/phc/lightning-entry', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                patient_id: e.target.patient_id.value,
+                symptoms: symptoms,
+                phc_department: e.target.op_type.value
+            })
+        });
+        const data = await res2.json();
 
-function setTheme(t) {
-    html.setAttribute('data-theme', t);
-    localStorage.setItem('pmTheme', t);
-    themeIco.className = (t === 'dark' ? 'fas fa-sun' : 'fas fa-moon');
-    themeIco.style.fontSize = '11px';
-    setTimeout(renderCharts, 50);
-}
-(function(){ setTheme(localStorage.getItem('pmTheme') || 'light'); })();
-themeToggle.addEventListener('click', () => { setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); });
-function isDark(){ return html.getAttribute('data-theme') === 'dark'; }
-
-/* SIDEBAR */
-const sidebar = document.getElementById('sidebar');
-document.getElementById('sidebarToggle').addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
-    localStorage.setItem('pmSide', sidebar.classList.contains('collapsed'));
-});
-if(localStorage.getItem('pmSide') === 'true') sidebar.classList.add('collapsed');
-
-/* CLOCK */
-function tick(){ const el=document.getElementById('liveClock'); if(el) el.textContent=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}); }
-setInterval(tick,1000); tick();
-
-/* BANNER */
-(function(){
-    const h=new Date().getHours();
-    const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
-    const el=document.getElementById('bannerGreet');
-    if(el) el.textContent=`${g}, {{ user.fullname }} 👋`;
-    const d=new Date();
-    const de=document.getElementById('bannerDate');
-    if(de) de.textContent=dashboardData.center_name;
-})();
-
-/* CHARTS */
-function renderCharts(){
-    window._activeCharts.forEach(c=>c.destroy());
-    window._activeCharts=[];
-    const dark=isDark();
-    const gridC=dark?'rgba(255,255,255,.05)':'rgba(0,0,0,.05)';
-    const tickC=dark?'#527A65':'#9DC0B2';
-    const tt={backgroundColor:dark?'#152A20':'#fff',borderColor:dark?'rgba(11,155,122,.25)':'rgba(11,155,122,.2)',borderWidth:1,titleColor:dark?'#E4F2EB':'#0A2218',bodyColor:dark?'#9ABFAE':'#4A6B60',padding:12,cornerRadius:8,titleFont:{family:'Outfit',weight:'700',size:13},bodyFont:{family:'Outfit',size:12}};
-
-    // 7-Day Admission Trend
-    const adm=document.getElementById('admissionChart');
-    if(adm && dashboardData.admission_dates.length){
-        const c=new Chart(adm.getContext('2d'),{type:'line',data:{labels:dashboardData.admission_dates,datasets:[{label:'New Admissions',data:dashboardData.admission_counts,borderColor:'#0B9B7A',backgroundColor:(ctx)=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,220);g.addColorStop(0,dark?'rgba(11,155,122,.18)':'rgba(11,155,122,.1)');g.addColorStop(1,'rgba(11,155,122,0)');return g;},borderWidth:2.5,fill:true,tension:.4,pointBackgroundColor:'#0B9B7A',pointBorderColor:dark?'#152A20':'#fff',pointBorderWidth:2.5,pointRadius:4,pointHoverRadius:7}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tt},scales:{y:{beginAtZero:true,ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{color:gridC,drawBorder:false},border:{display:false}},x:{ticks:{color:tickC,font:{size:11,family:'Outfit'}},grid:{display:false},border:{display:false}}}}});
-        window._activeCharts.push(c);
-    }
-
-    // Risk Distribution
-    const riskColors={'CRITICAL':'#DC2626','HIGH':'#D97706','MEDIUM':'#2563EB','LOW':'#16A34A'};
-    const riskLabels=dashboardData.disease_labels.filter((l,i)=>dashboardData.disease_counts[i]>0);
-    const riskVals=dashboardData.disease_counts.filter(v=>v>0);
-    const riskCols=riskLabels.map(l=>riskColors[l]||'#ccc');
-    const riskTot=riskVals.reduce((a,b)=>a+b,0);
-    const riskDonutN=document.getElementById('riskDonutN');
-    if(riskDonutN) riskDonutN.textContent=riskTot||'—';
-    const risk=document.getElementById('riskChart');
-    if(risk && riskLabels.length){
-        const c=new Chart(risk.getContext('2d'),{type:'doughnut',data:{labels:riskLabels,datasets:[{data:riskVals,backgroundColor:riskCols,borderColor:dark?'#152A20':'#fff',borderWidth:3,borderRadius:3,spacing:3}]},options:{responsive:true,maintainAspectRatio:false,cutout:'70%',plugins:{legend:{display:false},tooltip:tt}}});
-        window._activeCharts.push(c);
-    }
-    const riskLeg=document.getElementById('riskChartLegend');
-    if(riskLeg){riskLeg.innerHTML='';riskLabels.forEach((l,i)=>{const el=document.createElement('div');el.className='leg-item';el.innerHTML=`<div class="leg-dot" style="background:${riskCols[i]||'#ccc'}"></div>${l} (${riskVals[i]||0})`;riskLeg.appendChild(el);});}
-}
-renderCharts();
-
-/* COUNTERS */
-function animCount(el,target,dur=800){const start=performance.now();const run=now=>{const p=Math.min((now-start)/dur,1);const ease=1-Math.pow(1-p,3);el.textContent=Math.round(ease*target);if(p<1)requestAnimationFrame(run);else el.textContent=target;};requestAnimationFrame(run);}
-setTimeout(()=>{
-    [['criticalCasesCount', dashboardData.system_alerts.filter(a=>a.status==='CRITICAL').length]].forEach(([id,val])=>{const el=document.getElementById(id);if(el&&!isNaN(val))animCount(el,val);});
-},300);
-
-// Populate alerts list
-(function(){
-    const list = document.getElementById('alertsList');
-    if(!list || !dashboardData.system_alerts.length) return;
-    dashboardData.system_alerts.forEach(alert => {
-        const row = document.createElement('div');
-        row.className = 'appt-row';
-        row.innerHTML = `<div class="appt-bar" style="background:${alert.status === 'CRITICAL' ? 'var(--clr-red)' : 'var(--clr-amber)'}"></div>
-            <div class="appt-ava" style="background:${alert.status === 'CRITICAL' ? 'linear-gradient(135deg,#DC2626,#F87171)' : 'linear-gradient(135deg,#D97706,#FBBF24)'}"><i class="${alert.icon}"></i></div>
-            <div class="appt-info">
-                <div class="appt-doc">${alert.message}</div>
-                <div class="appt-meta">
-                    <span class="appt-meta-i"><i class="far fa-clock"></i> ${alert.timestamp}</span>
-                    <span class="appt-meta-i"><i class="fas fa-tag"></i> ${alert.type.replace(/_/g, ' ')}</span>
+        if(data.success) {
+            // REAL-WORLD: Show Digital OP Ticket for the patient (Printable)
+            const ticket = `
+                <div id="opTicket" style="background:#fff; color:#000; padding:30px; border:4px double #000; font-family:serif; margin-top:20px; border-radius:4px;">
+                    <h2 style="text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:20px;">
+                        VELLODE PRIMARY HEALTH CENTER<br>
+                        <span style="font-size:16px;">OFFICIAL OP SLIP</span>
+                    </h2>
+                    <div style="display:flex; justify-content:space-between; margin:15px 0; font-size:14px;">
+                        <span>PATIENT NAME: <strong>${data.patient_name}</strong></span>
+                        <span>DATE: ${new Date().toLocaleDateString()}</span>
+                    </div>
+                    <div style="padding:15px; background:#f9f9f9; border:1px solid #ccc; margin-bottom:15px;">
+                        <div style="font-size:12px; color:#666;">AI CLINICAL TRIAGE RESULT</div>
+                        <div style="font-size:18px; font-weight:800;">${data.risk} (Score: ${data.score})</div>
+                    </div>
+                    <div style="font-size:24px; text-align:center; padding:20px; border:3px solid #000; background:#f0f0f0;">
+                        <div style="font-size:14px;">DESIGNATED ROUTING:</div>
+                        <strong>${data.routing}</strong>
+                    </div>
+                    <div style="text-align:center; margin-top:20px;">
+                        <!-- REAL-WORLD: QR Handshake for Pharmacist -->
+                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=PATIENT_${data.patient_name}_${data.risk}" alt="QR Handshake">
+                        <div style="font-size:9px; color:#666; margin-top:5px;">PHARMACIST SCAN CODE</div>
+                    </div>
+                    <p style="font-size:11px; margin-top:20px; text-align:center; font-style:italic;">
+                        * Please carry this slip to the next designated room for treatment.<br>
+                        * Generated via SmartTriage District AI.
+                    </p>
+                    <button class="btn btn-primary" style="width:100%; margin-top:20px; background:#000; border:none; padding:15px;" onclick="window.print()">
+                        <i class="fas fa-print"></i> PRINT OP SLIP
+                    </button>
                 </div>
-            </div>
-            <span class="badge" style="background:${alert.status === 'CRITICAL' ? 'var(--clr-red-bg);color:var(--clr-red)' : 'var(--clr-amber-bg);color:var(--clr-amber)'};">${alert.status}</span>`;
-        list.appendChild(row);
+            `;
+            
+            // Inject ticket into modal or show as alert
+            document.getElementById('lightningForm').style.display = 'none';
+            const modalBox = document.querySelector('#lightningModal > div');
+            modalBox.innerHTML = ticket + `<button class="btn btn-sync" style="width:100%; margin-top:10px; background:var(--glass);" onclick="location.reload()">Finish</button>`;
+        }
     });
-})();
 
+    function checkIncomingReferrals() {
+        fetch('/api/phc/incoming-pulse')
+            .then(r => r.json())
+            .then(data => {
+                if(data.alert) {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.play();
+                    
+                    const notify = document.createElement('div');
+                    notify.className = 'status-badge absent';
+                    notify.style.position = 'fixed';
+                    notify.style.top = '100px';
+                    notify.style.right = '40px';
+                    notify.style.zIndex = '9999';
+                    notify.style.background = 'var(--clr-red)';
+                    notify.style.color = '#fff';
+                    notify.innerHTML = `<i class="fas fa-ambulance"></i> EMERGENCY: ${data.active_referrals} Incoming Referral(s)`;
+                    document.body.appendChild(notify);
+                    setTimeout(() => notify.remove(), 5000);
+                }
+            });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        checkIncomingReferrals();
+        setInterval(checkIncomingReferrals, 30000); 
+    });
 </script>
-</body>
-</html>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}MPR Departmental Verification - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .mpr-review-container {
+        padding: 40px;
+        background: var(--base);
+        min-height: 100vh;
+    }
+    .mpr-sheet {
+        background: #fff;
+        color: #000;
+        border-radius: 8px;
+        padding: 50px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        max-width: 900px;
+        margin: 0 auto;
+        font-family: 'Inter', serif;
+    }
+    .mpr-header {
+        text-align: center;
+        border-bottom: 2px solid #000;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+    }
+    .mpr-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 30px;
+    }
+    .mpr-table th, .mpr-table td {
+        border: 1px solid #000;
+        padding: 12px;
+        text-align: left;
+    }
+    .mpr-table th { background: #f0f0f0; font-size: 11px; text-transform: uppercase; }
+    .mpr-footer {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 50px;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .verify-bar {
+        position: fixed;
+        bottom: 0;
+        left: 280px;
+        right: 0;
+        background: var(--card);
+        border-top: 1px solid var(--border);
+        padding: 20px 40px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        z-index: 100;
+    }
+</style>
+
+<div class="mpr-review-container">
+    <div class="banner" style="margin-bottom: 40px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">MONTHLY PROGRESS REPORT (PREVIEW)</div>
+            <div class="banner-name">Departmental Verification</div>
+            <p class="banner-sub">Review today's departmental tally before syncing to the District Health Command Center.</p>
+        </div>
+    </div>
+
+    <div class="mpr-sheet">
+        <div class="mpr-header">
+            <h2 style="margin:0; font-size:18px;">GOVERNMENT OF TAMIL NADU</h2>
+            <h3 style="margin:5px 0; font-size:14px;">DIRECTORATE OF PUBLIC HEALTH AND PREVENTIVE MEDICINE</h3>
+            <p style="font-size:11px; margin-top:10px;">DAILY PROGRESS REPORT - PHC SECTOR: VELLODE DISTRICT</p>
+        </div>
+
+        <table class="mpr-table">
+            <thead>
+                <tr>
+                    <th>Department Code</th>
+                    <th>Official Department Name</th>
+                    <th>Patient Tally (Today)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in stats %}
+                <tr>
+                    <td>DPH-{{ loop.index + 100 }}</td>
+                    <td><strong>{{ s.phc_department }}</strong></td>
+                    <td>{{ s.count }}</td>
+                    <td style="color:#16a34a; font-weight:700;"><i class="fas fa-check"></i> AUTOMATED</td>
+                </tr>
+                {% endfor %}
+                {% if not stats %}
+                <tr><td colspan="4" style="text-align:center; padding:40px; color:#888;">No data logged for today.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        <div class="mpr-footer">
+            <div>PREPARED BY: Digital Assistant (SmartTriage)</div>
+            <div style="border-top: 1px solid #000; width: 200px; text-align:center; padding-top:5px;">PHARMACIST SIGNATURE</div>
+        </div>
+    </div>
+</div>
+
+<div class="verify-bar">
+    <div style="color:var(--t-muted); font-size:14px;">
+        <i class="fas fa-info-circle"></i> Verification ensures accountability for the official DPH audit trail.
+    </div>
+    <div style="display:flex; gap:15px;">
+        <button class="btn btn-outline-white" onclick="window.print()"><i class="fas fa-print"></i> Print for Register</button>
+        <button class="btn btn-primary" onclick="verifyMPR()"><i class="fas fa-file-signature"></i> Verify & Transmit to DDHS</button>
+    </div>
+</div>
+
+<script>
+    async function verifyMPR() {
+        const res = await fetch('/api/phc/verify-mpr', { method: 'POST' });
+        const data = await res.json();
+        if(data.success) {
+            alert("MPR Verified! District Command Center notified.");
+            location.href = "/phc/nurse/dashboard";
+        }
+    }
+</script>
+{% endblock %}

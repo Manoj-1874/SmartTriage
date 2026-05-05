@@ -3,123 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Dashboard - SmartTriage</title>
+    <title>Driver Mission Terminal - PriorityMed</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <style>
         :root {
             --brand: #0B9B7A;
-            --brand-dark: #087A60;
-            --brand-light: #34C9A5;
-            --canvas: #0B1812;
-            --base: #14251D;
-            --surface: #1B3127;
-            --border: #2A4739;
-            --t-head: #FFFFFF;
-            --t-body: #A8C4B8;
-            --t-muted: #6B8E7E;
-            --accent: #FFC107;
-            --emergency: #FF4757;
+            --bg: #F8FAF9;
+            --card: #ffffff;
+            --border: rgba(11, 155, 122, 0.12);
+            --t-main: #1A2E26;
+            --t-muted: #5E7A6F;
+            --emergency: #dc2626;
         }
-
         body {
+            background: var(--bg);
+            color: var(--t-main);
             font-family: 'Outfit', sans-serif;
-            background: var(--canvas);
-            color: var(--t-body);
             margin: 0;
-            padding: 0;
-            overflow: hidden;
-            display: flex;
+            display: grid;
+            grid-template-columns: 360px 1fr;
             height: 100vh;
+            overflow: hidden;
         }
-
-        .sidebar {
+        .driver-sidebar {
             width: 350px;
-            background: var(--base);
+            background: #ffffff;
             border-right: 1px solid var(--border);
+            padding: 30px;
             display: flex;
             flex-direction: column;
-            z-index: 1000;
-            box-shadow: 10px 0 30px rgba(0,0,0,0.5);
-        }
-
-        .header {
-            padding: 30px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .header h2 {
-            margin: 0;
-            color: var(--t-head);
-            font-size: 24px;
-        }
-
-        .task-card {
-            padding: 30px;
-            flex: 1;
+            gap: 20px;
             overflow-y: auto;
+            z-index: 100;
         }
-
-        .card-inner {
-            background: var(--surface);
-            border-radius: 20px;
-            padding: 24px;
+        .mission-status {
+            padding: 10px 15px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(22, 163, 74, 0.1);
+            color: #16a34a;
+            width: fit-content;
+        }
+        .mission-status.active {
+            background: rgba(220, 38, 38, 0.1);
+            color: var(--emergency);
+        }
+        .location-box {
+            background: rgba(255,255,255,0.03);
             border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 20px;
         }
-
-        .status-pill {
-            display: inline-block;
-            padding: 6px 12px;
-            border-radius: 20px;
-            background: rgba(255, 193, 7, 0.1);
-            color: var(--accent);
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 15px;
-        }
-
-        .info-row {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .info-icon {
-            width: 40px;
-            height: 40px;
-            background: var(--base);
+        .loc-label { font-size: 10px; color: var(--t-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
+        .loc-val { font-size: 15px; font-weight: 600; color: #fff; }
+        
+        .sync-banner {
+            background: rgba(37, 99, 235, 0.1);
+            border: 1px solid var(--brand);
+            padding: 15px;
             border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--brand);
-            font-size: 18px;
-        }
-
-        .info-text h4 {
-            margin: 0;
             font-size: 12px;
-            color: var(--t-muted);
-            text-transform: uppercase;
+            display: none; /* Shown when offline */
         }
-
-        .info-text p {
-            margin: 2px 0 0;
-            font-size: 16px;
-            color: var(--t-head);
-            font-weight: 600;
-        }
-
-        .action-area {
-            padding: 20px 30px 40px;
-            border-top: 1px solid var(--border);
-        }
-
-        .btn {
+        
+        #map { flex: 1; background: #111; }
+        
+        .btn-action {
             width: 100%;
             padding: 18px;
             border-radius: 12px;
@@ -127,273 +83,151 @@
             font-size: 16px;
             cursor: pointer;
             border: none;
-            transition: all 0.3s;
+            transition: 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
         }
-
-        .btn-primary {
-            background: var(--brand);
-            color: #fff;
-        }
-
-        .btn-primary:hover {
-            background: var(--brand-dark);
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(11, 155, 122, 0.3);
-        }
-
-        #map {
-            flex: 1;
-            height: 100%;
-        }
-
-        /* Leaflet Overrides for Dark Mode */
-        .leaflet-container {
-            background: #111 !important;
-        }
-        .leaflet-tile {
-            filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
-        }
-
-        .custom-marker {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 40px;
-            height: 40px;
-        }
-
-        .pulse {
-            position: absolute;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(11, 155, 122, 0.4);
-            animation: pulse-animation 2s infinite;
-        }
-
-        @keyframes pulse-animation {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(3); opacity: 0; }
-        }
-
-        .emergency-banner {
+        .btn-finish { background: var(--brand); color: #fff; }
+        
+        .offline-indicator {
             position: fixed;
             top: 20px;
             right: 20px;
-            background: var(--emergency);
-            color: #fff;
-            padding: 15px 25px;
-            border-radius: 12px;
+            background: rgba(217, 119, 6, 0.2);
+            color: #d97706;
+            padding: 8px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            z-index: 1000;
+            border: 1px solid #d97706;
             display: flex;
             align-items: center;
-            gap: 15px;
-            box-shadow: 0 10px 30px rgba(255, 71, 87, 0.4);
-            z-index: 1001;
-            animation: slide-in 0.5s ease-out;
-        }
-
-        @keyframes slide-in {
-            from { transform: translateX(100%); }
-            to { transform: translateX(0); }
-        }
-
-        /* Hide Routing Control Panel */
-        .leaflet-routing-container {
-            display: none !important;
+            gap: 8px;
         }
     </style>
 </head>
 <body>
+    <div class="offline-indicator" id="offlineTag" style="display:none;">
+        <i class="fas fa-wifi-slash"></i> OFFLINE MODE: BREADCRUMBS BUFFERING
+    </div>
 
     <aside class="sidebar">
-        <div class="header">
-            <h2>Ambulance Task</h2>
+        <div style="font-size: 24px; font-weight: 800; color: var(--brand);">PriorityMed</div>
+        
+        {% if task %}
+        <div class="mission-status active">⚡ Emergency In Progress</div>
+        
+        <div class="location-box">
+            <div class="loc-label">Pickup Point (Village)</div>
+            <div class="loc-val">{{ task.source_location }}</div>
+            <div style="margin-top:15px;" class="loc-label">Destination Hospital</div>
+            <div class="loc-val">{{ task.target_phc_name }}</div>
         </div>
 
-        <div class="task-card">
-            {% if task %}
-            <div class="status-pill"><i class="fas fa-circle-notch fa-spin"></i> Task In Progress</div>
-            
-            <div class="card-inner">
-                <div class="info-row">
-                    <div class="info-icon"><i class="fas fa-user"></i></div>
-                    <div class="info-text">
-                        <h4>Patient</h4>
-                        <p>{{ task.patient_name }}</p>
-                    </div>
-                </div>
-                
-                <div class="info-row">
-                    <div class="info-icon"><i class="fas fa-phone"></i></div>
-                    <div class="info-text">
-                        <h4>Contact</h4>
-                        <p>{{ task.patient_phone }}</p>
-                    </div>
-                </div>
-                
-                <div class="info-row">
-                    <div class="info-icon" style="color: var(--emergency);"><i class="fas fa-map-marker-alt"></i></div>
-                    <div class="info-text">
-                        <h4>Pickup</h4>
-                        <p>{{ task.source_location }}</p>
-                    </div>
-                </div>
-                
-                <div class="info-row">
-                    <div class="info-icon" style="color: var(--accent);"><i class="fas fa-hospital"></i></div>
-                    <div class="info-text">
-                        <h4>Destination</h4>
-                        <p>{{ task.target_phc_name }}</p>
-                    </div>
-                </div>
+        <div class="sync-banner" id="syncBanner">
+            <i class="fas fa-database"></i> <strong>Offline Cache Active:</strong> Path is being recorded locally. Will sync to District Command upon 4G restoration.
+            <div class="location-box" style="margin-top:20px; border: 1px dashed var(--emergency); background: rgba(220, 38, 38, 0.05);">
+                <div class="loc-label" style="color:var(--emergency);">DEMO MODE (INDOOR)</div>
+                <button onclick="simulateDrive()" style="width:100%; padding:10px; background:var(--emergency); color:#fff; border:none; border-radius:8px; font-weight:700; cursor:pointer;">
+                    <i class="fas fa-play"></i> Simulate Drive (GPS Mock)
+                </button>
             </div>
 
-            <div style="margin-top: 30px; padding: 20px; background: rgba(255,255,255,0.05); border-radius: 12px;">
-                <p style="font-size: 14px; margin: 0;"><i class="fas fa-info-circle"></i> Destination Hospital has been notified of your incoming arrival.</p>
-            </div>
-            {% else %}
-            <div style="text-align: center; padding: 40px 0;">
-                <i class="fas fa-parking" style="font-size: 48px; color: var(--t-muted); margin-bottom: 20px;"></i>
-                <p>No active tasks. Waiting for allocation...</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <div class="action-area">
-            {% if task %}
-            <button class="btn btn-primary" id="completeBtn" onclick="completeTrip()">
-                <i class="fas fa-check-circle"></i> Complete Trip
+        <div style="margin-top:auto;">
+            <button class="btn-action btn-finish" onclick="completeMission()">
+                <i class="fas fa-hospital-user"></i> Confirm Patient Handover
             </button>
-            {% else %}
-            <button class="btn" style="background: var(--surface); color: var(--t-muted); cursor: not-allowed;">
-                <i class="fas fa-clock"></i> Standby
-            </button>
-            {% endif %}
         </div>
+        {% else %}
+        <div class="mission-status">● Standby Mode</div>
+        <div style="text-align:center; margin-top:50px;">
+            <i class="fas fa-parking fa-3x" style="color:var(--t-muted);"></i>
+            <p style="color:var(--t-muted); margin-top:20px;">No active missions in your sector. Remain at PHC station.</p>
+        </div>
+        {% endif %}
     </aside>
 
     <div id="map"></div>
 
-    {% if task %}
-    <div class="emergency-banner">
-        <i class="fas fa-ambulance fa-beat"></i>
-        <div>
-            <div style="font-weight: 800; font-size: 14px;">ACTIVE EMERGENCY</div>
-            <div style="font-size: 12px; opacity: 0.9;">Heading to {{ task.target_phc_name }}</div>
-        </div>
-    </div>
-    {% endif %}
-
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
     <script>
-        // Map Initialization
-        var map = L.map('map', {
-            zoomControl: false,
-            attributionControl: false
-        }).setView([10.7905, 78.7047], 13); // Default to Trichy
+        const map = L.map('map', { zoomControl: false }).setView([10.79, 78.70], 13);
+        // Light Mode Tiles for better visibility
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        // REAL-WORLD: Interior Village Navigation Logic
+        let breadcrumbs = [];
+        let isOffline = false;
 
-        {% if task %}
-        // Coordinates from backend
-        var patientPos = [{{ task.source_lat or 10.79 }}, {{ task.source_lon or 78.70 }}];
-        var destPos = [{{ task.dest_lat or 10.80 }}, {{ task.dest_lon or 78.72 }}];
-        var ambulancePos = [patientPos[0] + 0.005, patientPos[1] + 0.005]; // Start near patient
+        function updateLocation() {
+            if (!navigator.geolocation) return;
 
-        // Icons
-        var patientIcon = L.divIcon({
-            html: '<div class="custom-marker"><i class="fas fa-user-circle" style="color: #FF4757; font-size: 30px;"></i></div>',
-            className: '', iconSize: [30, 30]
-        });
+            navigator.geolocation.watchPosition((pos) => {
+                const { latitude, longitude } = pos.coords;
+                
+                // Add to breadcrumbs
+                breadcrumbs.push({ lat: latitude, lon: longitude, time: Date.now() });
 
-        var destIcon = L.divIcon({
-            html: '<div class="custom-marker"><i class="fas fa-hospital" style="color: #FFC107; font-size: 30px;"></i></div>',
-            className: '', iconSize: [30, 30]
-        });
-
-        var ambIcon = L.divIcon({
-            html: '<div class="custom-marker"><div class="pulse"></div><i class="fas fa-ambulance" style="color: #0B9B7A; font-size: 24px; position: relative;"></i></div>',
-            className: '', iconSize: [40, 40]
-        });
-
-        // Markers
-        L.marker(patientPos, {icon: patientIcon}).addTo(map).bindPopup("Patient Location");
-        L.marker(destPos, {icon: destIcon}).addTo(map).bindPopup("Destination");
-        var ambMarker = L.marker(ambulancePos, {icon: ambIcon}).addTo(map);
-
-        // Real Road Routing (Google Maps style)
-        var routingControl = L.Routing.control({
-            waypoints: [
-                L.latLng(ambulancePos),
-                L.latLng(patientPos),
-                L.latLng(destPos)
-            ],
-            lineOptions: {
-                styles: [{ color: '#0B9B7A', opacity: 0.8, weight: 6 }]
-            },
-            createMarker: function() { return null; }, // Markers already added manually
-            addWaypoints: false,
-            routeWhileDragging: false,
-            draggableWaypoints: false,
-            fitSelectedRoutes: true,
-            show: false
-        }).addTo(map);
-
-        // Simulated movement
-        let step = 0;
-        const totalSteps = 100;
-        function simulateMovement() {
-            step++;
-            if (step > totalSteps) return;
-            
-            // Just move slightly towards destination for demo
-            let nextLat = ambulancePos[0] + (destPos[0] - ambulancePos[0]) * (step/totalSteps);
-            let nextLon = ambulancePos[1] + (destPos[1] - ambulancePos[1]) * (step/totalSteps);
-            
-            ambMarker.setLatLng([nextLat, nextLon]);
-            
-            // Sync with backend every few steps
-            if (step % 10 === 0) {
-                updateBackendLocation(nextLat, nextLon);
-            }
-            
-            setTimeout(simulateMovement, 1000);
-        }
-
-        function updateBackendLocation(lat, lon) {
-            fetch('/api/driver/update_location', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lat, lon })
-            });
-        }
-
-        simulateMovement();
-        {% endif %}
-
-        function completeTrip() {
-            if (!confirm("Confirm destination reached and patient handed over?")) return;
-            
-            fetch('/api/driver/complete_trip', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ allocation_id: {{ task.id if task else 'null' }} })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    alert("Trip completed! Destination notified.");
-                    location.reload();
+                if (!navigator.onLine) {
+                    isOffline = true;
+                    document.getElementById('offlineTag').style.display = 'flex';
+                    document.getElementById('syncBanner').style.display = 'block';
+                    // Store in LocalStorage for Vellode interior hamlets
+                    localStorage.setItem('offline_breadcrumbs', JSON.stringify(breadcrumbs));
                 } else {
-                    alert("Error: " + data.message);
+                    if (isOffline) {
+                        syncBreadcrumbs();
+                        isOffline = false;
+                        document.getElementById('offlineTag').style.display = 'none';
+                        document.getElementById('syncBanner').style.display = 'none';
+                    }
+                    // Send real-time telemetry
+                    fetch('/api/driver/update_location', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ lat: latitude, lon: longitude })
+                    });
                 }
             });
         }
+
+        async function syncBreadcrumbs() {
+            const data = localStorage.getItem('offline_breadcrumbs');
+            if (!data) return;
+            
+            await fetch('/api/driver/sync_buffer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: JSON.parse(data) })
+            });
+            localStorage.removeItem('offline_breadcrumbs');
+        }
+
+        let demoLat = 10.79;
+        let demoLon = 78.70;
+        function simulateDrive() {
+            setInterval(() => {
+                demoLat += 0.001;
+                demoLon += 0.0005;
+                // Broadcast this "Mock" position to the server
+                fetch('/api/driver/update_location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat: demoLat, lon: demoLon })
+                });
+                // Update local map too
+                if(window.carMarker) {
+                    window.carMarker.setLatLng([demoLat, demoLon]);
+                    map.panTo([demoLat, demoLon]);
+                }
+            }, 3000);
+            alert("SATELLITE SIMULATION ACTIVE: The ambulance is now 'moving' in the District Command Center.");
+        }
+
+        updateLocation();
     </script>
 </body>
 </html>

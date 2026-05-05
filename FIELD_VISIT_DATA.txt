@@ -1,0 +1,65 @@
+# FINAL MASTER DOCUMENTATION: PHC FIELD VISIT DATA
+Source: PHC Nurse Audio (45m), PHC Pharmacist Audio (45m), Handwritten Clinical Diagrams.
+Date of Analysis: 2026-05-02
+
+---
+
+## I. VISUAL DECODING (FROM HANDWRITTEN NOTES)
+
+### A. Administrative & Medical Hierarchy
+*   **DPH - DME Connection:** Integration between Directorate of Public Health (Preventive) and Medical Education (Tertiary).
+*   **Facility Chain:** 
+    *   **DDHS (District level)** oversees the whole HUD.
+    *   **CHC / V.PHC (Chennimalai):** Designated as the "Upgraded" unit with **OT (Operation Theatre)** and **Blood Storage**.
+    *   **PHC (Vellode / P.Kas):** Intermediate units.
+    *   **HSC (Subcentre):** The root node managed by **VHN (Village Health Nurse)**.
+*   **Personnel Path:** Incharge -> **BHC (Block Health Centre)** -> **IMO (Institution Medical Officer)**.
+*   **Maternal Health reporting:** **SHN (Sector Health Nurse)** -> **BMO (Block Medical Officer)**.
+
+### B. Portal & System Mapping
+*   **OP Flow:** Patient -> **HMIS 2.0** (transitioning to **HMIS 3.0**) -> Categorized as Old OP or New OP.
+*   **Maternal Flow:** AN (Antenatal) / PN (Postnatal) / Delivery -> **PICME 2.0** -> Generates **RCH ID**.
+*   **MTM Portal:** (Makkalai Thedi Maruthuvam) - Doorstep care, population target of **6000** per unit.
+*   **FRAS:** Facial Recognition Attendance System - The primary digital attendance tool.
+*   **Kalanjiyam:** The HR/Finance portal for **Salary, PF, and Leave Application**.
+*   **ABHA:** Integration of Ayushman Bharat Health Account IDs.
+*   **Monthly Reporting:** Consolidates **13 Departments** (Surgery, Medicine, OBGYN, etc.).
+
+### C. Clinical Programs & Social Referral
+*   **SN (Staff Nurse) Portfolio:** RCH, WCD, RBSK, HWC, PN, MTM School.
+*   **Target Clinics:** TB Screening, Leprosy, Eye.
+*   **Social Registry:** Tracking of **School Dropouts -> Teenage Pregnancy -> Unmarried Pregnancy -> Safe Abortion**.
+*   **Target Demographic:** 18-49 years (Reproductive age group focus).
+
+---
+
+## II. AUDIO CONTENT EXTRACTION (NURSE & PHARMACIST)
+
+### A. The Nurse's Testimony (Key Takeaways)
+1.  **Question vs. Reality (Attendance):** 
+    *   *Question:* "How is your attendance verified by DDHS?"
+    *   *Answer:* Primarily via **FRAS**, but they keep a **Manual Log Book** because the face scanner often fails to sync in real-time, especially in the early morning shifts.
+2.  **The "Paperwork" Bottleneck:**
+    *   *Insight:* Even though **PICME 2.0** is used, the DDHS requires a physical "Maternal Health Register" for audit. This creates **100% duplicate work**.
+3.  **Field Connectivity (MTM):**
+    *   *Insight:* VHNs visit houses with tablets, but in "Internet Dead Zones," they can't save data. They record in a **Field Diary** and then spend their nights re-entering it at the PHC.
+4.  **Social Referral:**
+    *   *Insight:* Tracking teenage pregnancies and dropouts is highly sensitive. It is currently managed in a **Separate Secret Diary** to maintain privacy, making it invisible to district-level analytics.
+
+### B. The Pharmacist's Testimony (Key Takeaways)
+1.  **Inventory Lag:**
+    *   *Question:* "Can the DDHS see your stock levels?"
+    *   *Answer:* Only once a month when the **HMIS report** is uploaded. The daily stock is tracked on **Paper Bin Cards**.
+2.  **Biomedical Waste (Ramky):**
+    *   *Insight:* **Ramky Agency** collects waste. The record-keeping is entirely paper-based (Receipts). There is no "Alert" if a pickup is missed.
+3.  **ABHA Challenges:**
+    *   *Insight:* Rural elderly patients do not have mobile numbers linked to Aadhar, making it nearly impossible to generate the digital health IDs required for current government metrics.
+
+---
+
+## III. PROBLEM STATEMENT FOR UPGRADED SOLUTION
+Based on the field visit, the "Upgrade" needed is a **Centralized Command Center** for the DDHS that:
+1.  **Auto-Populates Portals:** Enters data into PICME/HMIS/MTM from a single source to end duplicate entry.
+2.  **Live Referral Tracking:** Digital "Handshake" between PHC and Upgraded PHC (Chennimalai) for high-risk ANC.
+3.  **Inventory Alerts:** Real-time visibility of Bin Cards to the DDHS to prevent "Sudden Stock-outs."
+4.  **Instant Personnel Dashboard:** Combining FRAS attendance with GPS data to give the DDHS a "Live Staff Map."

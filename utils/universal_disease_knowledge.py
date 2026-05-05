@@ -33,7 +33,15 @@ class EmergencyManifest:
         'acute aortic dissection': ('Acute Aortic Dissection', 0.99, 'CRITICAL'),
         'myocardial rupture': ('Myocardial Rupture', 0.99, 'CRITICAL'),
         'cholangiocarcinoma': ('Bile Duct Cancer', 0.88, 'CRITICAL'),
-        'bile duct cancer': ('Bile Duct Cancer', 0.88, 'CRITICAL')
+        'bile duct cancer': ('Bile Duct Cancer', 0.88, 'CRITICAL'),
+        'ecclampsia': ('Pre-eclampsia / Eclampsia', 0.95, 'CRITICAL'), # Maternal Emergency
+        'post-partum hemorrhage': ('PPH', 0.96, 'CRITICAL'), # Maternal Emergency
+        'pph': ('PPH', 0.96, 'CRITICAL'),
+        'active labour': ('Active Labour', 0.75, 'HIGH'),
+        'obstructed labour': ('Obstructed Labour', 0.94, 'CRITICAL'),
+        'snake bite': ('Snake Venom Poisoning', 0.95, 'CRITICAL'),
+        'rabies': ('Rabies Infection', 0.98, 'CRITICAL'),
+        'dengue hemorrhagic fever': ('DHF', 0.92, 'CRITICAL')
     }
 
     @staticmethod
@@ -142,8 +150,8 @@ class UniversalDiseaseRiskAssessment:
                     score, cat = 0.65, 'MEDIUM'
                     
                     # CRITICAL KEYWORDS BOOSTER
-                    critical_keywords = ['failure', 'infarction', 'stroke', 'hemorrhage', 'rupture', 'sepsis', 'shock', 'arrest', 'acute', 'ischemia', 'embolism', 'aneurysm']
-                    high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'syndrome', 'disease', 'disorder', 'toxicity', 'poisoning', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+                    critical_keywords = ['failure', 'infarction', 'stroke', 'hemorrhage', 'rupture', 'sepsis', 'shock', 'arrest', 'acute', 'ischemia', 'embolism', 'aneurysm', 'ecclampsia', 'poisoning', 'snake']
+                    high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'syndrome', 'disease', 'disorder', 'toxicity', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'anc', 'pnc', 'maternal', 'pregnancy']
                     
                     if any(w in snomed_term for w in critical_keywords):
                         score, cat = 0.90, 'CRITICAL'
@@ -164,8 +172,8 @@ class UniversalDiseaseRiskAssessment:
                 score, cat = 0.60, 'MEDIUM'
                 
                 # CRITICAL DESCRIPTOR BOOSTER
-                critical_desc = ['fatal', 'emergency', 'life-threatening', 'sudden death', 'critical', 'organ failure', 'severe hemorrhage', 'respiratory failure', 'aortic dissection']
-                high_desc = ['cancer', 'carcinoma', 'malignant', 'progressive', 'severe', 'chronic', 'serious', 'tumor', 'metabolic', 'genetic', 'disorder', 'syndrome', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+                critical_desc = ['fatal', 'emergency', 'life-threatening', 'sudden death', 'critical', 'organ failure', 'severe hemorrhage', 'respiratory failure', 'aortic dissection', 'snake bite', 'poisoning']
+                high_desc = ['cancer', 'carcinoma', 'malignant', 'progressive', 'severe', 'chronic', 'serious', 'tumor', 'metabolic', 'genetic', 'disorder', 'syndrome', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'pregnancy risk', 'high risk anc']
                 
                 if any(w in desc for w in critical_desc):
                     score, cat = 0.92, 'CRITICAL'

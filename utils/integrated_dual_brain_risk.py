@@ -18,6 +18,23 @@ from utils.universal_disease_knowledge import UniversalDiseaseRiskAssessment
 
 logger = logging.getLogger(__name__)
 
+# Real-world PHC Departments for DDHS Reporting (13 Departments)
+PHC_DEPARTMENTS = {
+    'Medicine': ['fever', 'cough', 'headache', 'body ache', 'vomiting', 'diarrhea', 'infection', 'diabetes', 'hypertension'],
+    'Surgery': ['wound', 'fracture', 'injury', 'accident', 'abscess', 'burn', 'swelling', 'appendicitis'],
+    'OBGYN': ['pregnancy', 'anc', 'pnc', 'delivery', 'labour', 'menstrual', 'maternal', 'abortion', 'fetal'],
+    'Paediatrics': ['child', 'infant', 'baby', 'newborn', 'rbsk', 'immunization', 'growth'],
+    'Dental': ['tooth', 'gum', 'mouth', 'dental', 'cavity'],
+    'ENT': ['ear', 'nose', 'throat', 'sinus', 'tonsil'],
+    'Eye': ['vision', 'eye', 'blindness', 'cataract', 'redness'],
+    'TB': ['tuberculosis', 'chronic cough', 'weight loss', 'sputum', 'dots'],
+    'Leprosy': ['skin patch', 'numbness', 'leprosy'],
+    'Family Planning': ['contraception', 'sterilization', 'copper-t', 'birth control'],
+    'Immunization': ['vaccine', 'polio', 'bcg', 'measles', 'dpt'],
+    'Lab': ['blood test', 'urine test', 'screening', 'biopsy'],
+    'Pharmacy': ['refill', 'medication', 'dispensing']
+}
+
 
 class IntegratedDualBrainRisk:
     """
@@ -132,12 +149,16 @@ class IntegratedDualBrainRisk:
         result['xgboost_analysis'] = xgb_risk
         logger.info(f"[XGB-RESULT] Score: {xgb_risk.get('risk_score', 0):.2%} | Label: {xgb_risk.get('risk_label')}")
 
-        # ===== STEP 5: DUAL-BRAIN FUSION =====
-        logger.info(f"[DUAL-BRAIN-v3.1-PRODUCTION] Step 3: Fusing semantic + numerical insights...")
+        # ===== STEP 5: PHC-SPECIFIC CLASSIFICATION (FOR DDHS REPORTING) =====
+        dept = self._classify_phc_department(disease_input, combined_symptoms)
+        result['phc_department'] = dept
+
+        # ===== STEP 6: DUAL-BRAIN FUSION & REFERRAL LOGIC =====
+        logger.info(f"[DUAL-BRAIN-v3.2-REAL-WORLD] Fusing insights for {dept} department...")
         final_assessment = self._fuse_dual_brain_results(
             bert_result=bert_risk,
             xgb_result=xgb_risk,
-            disease_context=primary_disease, # Pass the full best hit
+            disease_context=primary_disease,
             age=age,
             sys_bp=sys_bp,
             dia_bp=dia_bp,
@@ -146,6 +167,10 @@ class IntegratedDualBrainRisk:
             spo2=spo2,
             respiration_rate=respiration_rate
         )
+
+        # Add Referral Logic based on PHC tiers (Vellode vs Chennimalai)
+        referral = self._generate_phc_referral(final_assessment, dept, combined_symptoms)
+        final_assessment.update(referral)
 
         # Add NEWS2 score
         news2_val = calculate_news2_score(
@@ -158,9 +183,76 @@ class IntegratedDualBrainRisk:
         result['news2_score'] = news2_val
         result['final_risk'] = final_assessment
         
-        logger.info(f"[FUSION-COMPLETE] Final Risk: {final_assessment.get('risk_category')} ({final_assessment.get('final_risk_score', 0):.2%}) | NEWS2: {news2_val}")
+        logger.info(f"[FUSION-COMPLETE] Final Risk: {final_assessment.get('risk_category')} | Dept: {dept} | Referral: {final_assessment.get('referral_target')}")
 
         return result
+
+    def _classify_phc_department(self, disease_name: str, symptoms: str) -> str:
+        """Map the case to one of the 13 official PHC departments for DDHS reporting"""
+        text = f"{disease_name} {symptoms}".lower()
+        
+        # High-priority detection for OBGYN (ANC/PNC)
+        if any(k in text for k in ['pregnancy', 'anc', 'pnc', 'delivery', 'maternal', 'abortion']):
+            return 'OBGYN'
+        
+        for dept, keywords in PHC_DEPARTMENTS.items():
+            if any(k in text for k in keywords):
+                return dept
+        
+        return 'Medicine' # Default
+
+    def _generate_phc_referral(self, assessment: Dict, dept: str, symptoms: str, available_inventory: Optional[List[str]] = None) -> Dict:
+        """
+        Generate referral targets based on the 3-tier system from field visit.
+        REAL-WORLD LOGIC:
+        - Vellode/P.Kas PHC -> mid-level nodes
+        - CHC Chennimalai -> Upgraded center
+        - GH Erode -> Tertiary
+        """
+        risk_cat = assessment.get('risk_category')
+        text = symptoms.lower()
+        
+        # 1. Detection of "Social Risk" (Secret Diary cases)
+        social_risk = any(k in text for k in ['dropout', 'teenage', 'unmarried', 'safe abortion', 'social stigma'])
+        
+        # 2. Maternal Health Context (PICME 2.0 / RCH)
+        is_maternal = dept == 'OBGYN' or any(k in text for k in ['pregnancy', 'anc', 'pnc', 'rch', 'picme'])
+        is_high_risk_mother = is_maternal and (risk_cat in ['HIGH', 'CRITICAL'] or 'eclampsia' in text or 'pph' in text)
+        
+        target = "Primary Health Centre" # Default
+        instruction = "Routine follow-up."
+
+        # 3. Inventory-Aware Override (e.g., if ASV is needed but missing)
+        inventory_missing = False
+        if 'snake' in text or 'venom' in text:
+            if available_inventory and 'ASV' not in available_inventory:
+                inventory_missing = True
+                logger.warning("[INVENTORY-ALERT] Critical Item ASV missing! Redirecting to CHC/GH.")
+
+        # 4. Triage Logic
+        if risk_cat == 'CRITICAL' or is_high_risk_mother or inventory_missing:
+            target = "District General Hospital / Medical College"
+            instruction = "IMMEDIATE AMBULANCE TRANSFER (108). Notify DDHS instantly."
+            if is_high_risk_mother:
+                instruction += " [Maternal Emergency: PICME Protocol Triggered]"
+            if inventory_missing:
+                instruction += " [INVENTORY DEFICIT: PHC lacks critical emergency drugs]"
+        elif risk_cat == 'HIGH' or social_risk:
+            target = "Upgraded PHC (CHC Chennimalai)"
+            instruction = "Refer to Specialist / OT facilities. Track via Referral Handshake."
+            if social_risk:
+                instruction += " [SOCIAL REFERRAL: Handle with Privacy / Secret Diary Protocol]"
+        elif risk_cat == 'LOW' and dept in ['Immunization', 'Family Planning', 'Paediatrics']:
+            target = "Sub-Centre (HSC / VHN)"
+            instruction = "Refer to Village Health Nurse for community follow-up and field screening."
+
+        return {
+            'referral_target': target,
+            'referral_instruction': instruction,
+            'maternal_risk': is_maternal,
+            'is_field_case': 'field' in text or 'vhn' in text,
+            'ncd_screening': any(k in text for k in ['sugar', 'bp', 'urination', 'thirst', 'vision'])
+        }
 
     def _extract_symptoms_from_disease(self, disease_info: Dict) -> List[str]:
         """Extract symptoms from disease profile"""
@@ -202,12 +294,20 @@ class IntegratedDualBrainRisk:
             result.update({'risk_label': 'LOW', 'risk_score': 0.2})
             return result
         try:
-            # 1. KEYWORD-BASED SEMANTIC OVERRIDE (Ensures resilience if AI model is off)
+            # 1. KEYWORD-BASED SEMANTIC OVERRIDE (Real-world PHC keywords)
             text_lower = symptoms_text.lower()
-            critical_keywords = ['emergency', 'critical', 'unbearable', 'severe bleeding', 'crushing chest pain', 'stroke', 'cardiac arrest', 'failure', 'aortic dissection']
-            high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'progressive', 'severe', 'chronic', 'serious', 'metabolic', 'genetic', 'deficiency', 'disorder', 'xanthomatosis', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic']
+            critical_keywords = [
+                'emergency', 'critical', 'unbearable', 'severe bleeding', 'crushing chest pain', 
+                'stroke', 'cardiac arrest', 'failure', 'aortic dissection',
+                'active labour', 'ecclampsia', 'post-partum hemorrhage', 'pph' # Added Maternal Emergencies
+            ]
+            high_keywords = [
+                'cancer', 'carcinoma', 'malignant', 'tumor', 'progressive', 'severe', 'chronic', 
+                'high risk pregnancy', 'anc complication', 'dropout', 'teenage pregnancy', # Added Rural/Social risks
+                'tb', 'leprosy', 'xanthomatosis', 'fibrosis', 'sclerosis', 'cystic'
+            ]
             
-            # 2. AI MODEL PREDICTION (if available)
+            # 2. AI MODEL PREDICTION (if available - check for latency)
             if self.bert_model:
                 try:
                     prediction = self.bert_model(symptoms_text, top_k=3)

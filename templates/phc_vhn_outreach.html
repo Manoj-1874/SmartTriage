@@ -1,0 +1,76 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}VHN Outreach Monitoring - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .outreach-container {
+        padding: 40px;
+        background: var(--base);
+        min-height: 100vh;
+    }
+    .vhn-card {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .status-badge {
+        padding: 5px 12px;
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+    }
+    .status-synced { background: rgba(22, 163, 74, 0.1); color: #16a34a; }
+    .status-offline { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+</style>
+
+<div class="outreach-container">
+    <div class="banner" style="margin-bottom: 40px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">FIELD MONITORING (MTM)</div>
+            <div class="banner-name">VHN Outreach Activity</div>
+            <p class="banner-sub">Real-time visibility into doorstep screening by Village Health Nurses in your sector.</p>
+        </div>
+    </div>
+
+    <div class="vhn-list">
+        {% for vhn in field_data %}
+        <div class="vhn-card">
+            <div style="display:flex; gap:20px; align-items:center;">
+                <div style="width:48px; height:48px; border-radius:12px; background:var(--brand-pale); color:var(--brand); display:flex; align-items:center; justify-content:center; font-weight:700;">
+                    {{ vhn.vhn_name[0] }}
+                </div>
+                <div>
+                    <div style="font-weight:700; font-size:16px;">{{ vhn.vhn_name }}</div>
+                    <div style="font-size:12px; color:var(--t-muted);"><i class="fas fa-location-dot"></i> {{ vhn.village }}</div>
+                </div>
+            </div>
+
+            <div style="display:flex; gap:40px; text-align:center;">
+                <div>
+                    <div style="font-size:10px; color:var(--t-muted); font-weight:700;">SCREENED</div>
+                    <div style="font-size:18px; font-weight:800;">{{ vhn.screened }}</div>
+                </div>
+                <div>
+                    <div style="font-size:10px; color:var(--t-muted); font-weight:700;">HIGH BP</div>
+                    <div style="font-size:18px; font-weight:800; color:var(--clr-red);">{{ vhn.high_bp }}</div>
+                </div>
+            </div>
+
+            <div>
+                <span class="status-badge status-{{ vhn.status|lower }}">{{ vhn.status }}</span>
+                {% if vhn.status == 'OFFLINE' %}
+                <div style="font-size:10px; color:var(--t-muted); margin-top:5px;">Interior Hamlet (No 4G)</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

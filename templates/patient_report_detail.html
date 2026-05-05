@@ -1,511 +1,217 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assessment Report — PriorityMed</title>
+    <title>Clinical Assessment - PriorityMed</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/enhanced_dashboard.css') }}">
     <style>
         :root {
-            --brand:        #0B9B7A;
-            --brand-dark:   #087A60;
-            --brand-light:  #34C9A5;
-            --brand-faint:  #E6F7F3;
-            --brand-pale:   #F0FAF7;
-        }
-        [data-theme="light"] {
-            --canvas:       #EEF6F2;
-            --base:         #FFFFFF;
-            --surface:      #F5FBF8;
-            --hover:        #EBF7F2;
-            --border:       #D9EDE5;
-            --t-head:       #0A2218;
-            --t-body:       #2C4A3C;
-            --t-muted:      #5E8C7A;
+            --brand: #2563eb;
+            --bg: #0a0a0b;
+            --card: #141417;
+            --border: rgba(255,255,255,0.08);
+            --t-main: #ffffff;
+            --t-muted: #88888b;
+            --critical: #dc2626;
+            --high: #d97706;
+            --medium: #2563eb;
+            --low: #16a34a;
         }
         body {
-            background: var(--canvas);
-            color: var(--t-body);
+            background: var(--bg);
+            color: var(--t-main);
             font-family: 'Outfit', sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 40px;
+            line-height: 1.5;
         }
-
-        .container {
-            max-width: 900px;
+        .report-wrap {
+            max-width: 1000px;
             margin: 0 auto;
         }
-
+        .glass-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+        }
         .header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 24px;
+            align-items: flex-start;
+            margin-bottom: 40px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 30px;
         }
-
-        .back-link {
-            color: var(--brand);
-            text-decoration: none;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .back-link:hover {
-            gap: 12px;
-            color: var(--brand-dark);
-        }
-
-        .section {
-            background: var(--base);
-            padding: 28px;
+        .risk-banner {
+            padding: 15px 30px;
             border-radius: 12px;
-            box-shadow: 0 4px 14px rgba(0,0,0,.08);
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--brand);
-            margin-bottom: 20px;
-            display: flex;
+            font-weight: 800;
+            font-size: 20px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
+            margin-bottom: 30px;
         }
+        .risk-CRITICAL { background: rgba(220, 38, 38, 0.1); color: var(--critical); border: 1px solid var(--critical); }
+        .risk-HIGH { background: rgba(217, 119, 6, 0.1); color: var(--high); border: 1px solid var(--high); }
+        .risk-MEDIUM { background: rgba(37, 99, 235, 0.1); color: var(--medium); border: 1px solid var(--medium); }
+        .risk-LOW { background: rgba(22, 163, 74, 0.1); color: var(--low); border: 1px solid var(--low); }
 
-        .section-title i {
-            font-size: 22px;
+        .vitals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
         }
+        .vital-box {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border);
+            padding: 20px;
+            border-radius: 16px;
+            text-align: center;
+        }
+        .vital-label { font-size: 11px; color: var(--t-muted); text-transform: uppercase; margin-bottom: 8px; font-weight: 700; }
+        .vital-value { font-size: 22px; font-weight: 700; color: var(--brand); }
 
-        .risk-badge {
-            display: inline-block;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 16px;
-        }
-
-        .risk-critical {
-            background: #fecaca;
-            color: #7f1d1d;
-        }
-
-        .risk-high {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        .risk-medium {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .risk-low {
-            background: #dcfce7;
-            color: #166534;
-        }
+        .clinical-section { margin-bottom: 40px; }
+        .section-label { font-size: 13px; font-weight: 700; color: var(--brand); text-transform: uppercase; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; }
         
-        .history-card {
-            border-left: 4px solid var(--brand);
-            background: var(--surface);
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-        }
-
-        .history-date {
-            font-size: 12px;
-            color: var(--t-muted);
-            margin-bottom: 5px;
-        }
-
-        .history-doctor {
-            font-weight: 700;
-            color: var(--brand-dark);
-            margin-bottom: 8px;
-        }
+        .symptoms-chip-container { display: flex; flex-wrap: wrap; gap: 10px; }
+        .chip { background: var(--glass-border); padding: 6px 15px; border-radius: 99px; font-size: 13px; border: 1px solid var(--border); }
 
         .notes-area {
-            width: 100%;
-            padding: 15px;
+            background: rgba(0,0,0,0.2);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            color: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            width: 100%;
+            min-height: 150px;
             font-family: inherit;
-            resize: vertical;
-            min-height: 120px;
-            margin-bottom: 15px;
+            margin-top: 10px;
         }
-
-        .outcome-select {
-            padding: 10px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            margin-bottom: 15px;
-            width: 100%;
-        }
-
-        .detail-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 24px;
-        }
-
-        .detail-item {
-            background: var(--surface);
-            padding: 16px;
-            border-radius: 8px;
-            border: 1px solid var(--border);
-        }
-
-        .detail-label {
-            font-size: 12px;
-            color: var(--t-muted);
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 8px;
-            letter-spacing: 0.5px;
-        }
-
-        .detail-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--t-head);
-        }
-
-        .symptoms-box {
-            background: var(--brand-pale);
-            padding: 16px;
-            border-radius: 8px;
-            border-left: 4px solid var(--brand);
-            margin-bottom: 16px;
-        }
-
-        .symptoms-box .detail-label {
-            color: var(--brand-dark);
-        }
-
-        .symptoms-box .detail-value {
-            color: var(--brand-dark);
-            font-size: 15px;
-            font-weight: 500;
-            line-height: 1.6;
-        }
-
-        .routing-box {
-            background: #f0fdf4;
-            padding: 16px;
-            border-radius: 8px;
-            border-left: 4px solid #16a34a;
-            margin-top: 16px;
-        }
-
-        .routing-box .detail-label {
-            color: #166534;
-        }
-
-        .routing-box .detail-value {
-            color: #166534;
-            font-size: 15px;
-            font-weight: 600;
-        }
-
-        .specialist-box {
-            background: #fef3c7;
-            padding: 16px;
-            border-radius: 8px;
-            border-left: 4px solid #eab308;
-            margin-top: 16px;
-        }
-
-        .specialist-box .detail-label {
-            color: #92400e;
-        }
-
-        .specialist-box .detail-value {
-            color: #92400e;
-            font-size: 15px;
-            font-weight: 600;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .btn-primary {
-            padding: 12px 24px;
+        .btn-save {
             background: var(--brand);
-            color: white;
+            color: #fff;
             border: none;
-            border-radius: 6px;
+            padding: 15px 30px;
+            border-radius: 12px;
+            font-weight: 700;
             cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            flex: 1;
+            margin-top: 20px;
+            transition: all 0.2s;
         }
-
-        .btn-primary:hover {
-            background: var(--brand-dark);
-        }
-
-        .btn-secondary {
-            padding: 12px 24px;
-            background: var(--surface);
-            color: var(--t-body);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: 500;
-            transition: all 0.2s ease;
-        }
-
-        .btn-secondary:hover {
-            background: var(--hover);
-        }
-
-        .timestamp {
-            font-size: 13px;
-            color: var(--t-muted);
-            margin-top: 12px;
-        }
+        .btn-save:hover { filter: brightness(1.2); }
 
         @media print {
-            body { background: white; }
-            .header { display: none; }
-            .btn-group { display: none; }
-        }
-
-        @media (max-width: 768px) {
-            .detail-grid { grid-template-columns: 1fr; }
-            .btn-group { flex-direction: column; }
+            body { padding: 0; background: #fff; color: #000; }
+            .glass-card { box-shadow: none; border: 1px solid #eee; }
+            .no-print { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- HEADER -->
-        <div class="header">
-            <a href="javascript:history.back()" class="back-link">
-                <i class="fas fa-arrow-left"></i>
-                Back
-            </a>
-            <div style="text-align: center;">
-                <h1 style="margin: 0; font-size: 24px; color: var(--brand);">Assessment Report</h1>
-                <p style="margin: 5px 0 0 0; color: var(--t-muted); font-weight: 500;">Patient: {{ report.patient_name }}</p>
-            </div>
-            <button onclick="window.print()" style="background: var(--surface); border: 1px solid var(--border); padding: 8px 16px; border-radius: 6px; cursor: pointer; color: var(--t-body); font-weight: 500;">
-                <i class="fas fa-print"></i> Print
-            </button>
+    <div class="report-wrap">
+        <div class="no-print" style="margin-bottom: 20px;">
+            <a href="javascript:history.back()" style="color:var(--t-muted); text-decoration:none; font-size:14px;"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
         </div>
 
-        <!-- RISK LEVEL -->
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-heartbeat"></i> Risk Assessment
-            </div>
-            <div class="risk-badge risk-{{ report.risk_class }}">
-                {{ report.dual_brain_risk }} RISK
-            </div>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <div class="detail-label">Assessment Date</div>
-                    <div class="detail-value">{{ report.formatted_date }}</div>
+        <div class="glass-card">
+            <div class="header">
+                <div>
+                    <h1 style="margin:0; font-size:32px;">Clinical Assessment</h1>
+                    <p style="color:var(--t-muted); margin-top:5px;">Patient: <strong>{{ report.patient_name }}</strong> • Case ID: #{{ report.id }}</p>
                 </div>
-                <div class="detail-item">
-                    <div class="detail-label">Assessment Time</div>
-                    <div class="detail-value">{{ report.formatted_time }}</div>
+                <div style="text-align:right;">
+                    <div style="font-size:12px; color:var(--t-muted);">GENERATE DATE</div>
+                    <div style="font-weight:700;">{{ report.formatted_date }}</div>
+                    <button class="no-print" onclick="window.print()" style="margin-top:10px; background:none; border:1px solid var(--border); color:#fff; padding:5px 15px; border-radius:8px; cursor:pointer;">Print PDF</button>
                 </div>
-                <div class="detail-item">
-                    <div class="detail-label">Age</div>
-                    <div class="detail-value">{{ report.age }} years</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Gender</div>
-                    <div class="detail-value">{{ report.gender }}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- VITALS -->
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-chart-line"></i> Vital Signs
-            </div>
-            <div class="detail-grid">
-                <div class="detail-item">
-                    <div class="detail-label">Blood Pressure</div>
-                    <div class="detail-value">{{ report.bp_formatted }}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Heart Rate</div>
-                    <div class="detail-value">{{ report.hr_formatted }}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Temperature</div>
-                    <div class="detail-value">{{ report.temp_formatted }}</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">SPO₂ (Oxygen)</div>
-                    <div class="detail-value">{{ report.spo2 }}%</div>
-                </div>
-                <div class="detail-item">
-                    <div class="detail-label">Respiration Rate</div>
-                    <div class="detail-value">{{ report.respiration_rate }} /min</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- SYMPTOMS & CLINICAL FINDINGS -->
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-stethoscope"></i> Reported Symptoms
-            </div>
-            <div class="symptoms-box">
-                <div class="detail-label">Patient Symptoms</div>
-                <div class="detail-value">{{ report.symptoms }}</div>
-            </div>
-        </div>
-
-        <!-- ROUTING & RECOMMENDATIONS -->
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-directions"></i> Clinical Recommendation
             </div>
 
-            {% if report.routing %}
-            <div class="routing-box">
-                <div class="detail-label">Recommended Routing</div>
-                <div class="detail-value">
-                    {% if report.routing == 'AMBULANCE' %}
-                        <i class="fas fa-ambulance"></i> Emergency Ambulance
-                    {% elif report.routing == 'SPECIALIST' %}
-                        <i class="fas fa-hospital-user"></i> Specialist Referral
-                    {% elif report.routing == 'HOME_CARE' %}
-                        <i class="fas fa-home"></i> Home Care
-                    {% else %}
-                        {{ report.routing }}
-                    {% endif %}
+            <div class="risk-banner risk-{{ report.dual_brain_risk }}">
+                <i class="fas fa-shield-virus"></i>
+                {{ report.dual_brain_risk }} RISK LEVEL
+            </div>
+
+            <div class="clinical-section">
+                <div class="section-label">Real-time Vitals Pulse</div>
+                <div class="vitals-grid">
+                    <div class="vital-box">
+                        <div class="vital-label">Blood Pressure</div>
+                        <div class="vital-value">{{ report.bp_formatted }}</div>
+                    </div>
+                    <div class="vital-box">
+                        <div class="vital-label">Heart Rate</div>
+                        <div class="vital-value">{{ report.hr_formatted }}</div>
+                    </div>
+                    <div class="vital-box">
+                        <div class="vital-label">SPO₂</div>
+                        <div class="vital-value">{{ report.spo2 }}%</div>
+                    </div>
+                    <div class="vital-box">
+                        <div class="vital-label">Temperature</div>
+                        <div class="vital-value">{{ report.temp_formatted }}</div>
+                    </div>
                 </div>
+            </div>
+
+            <div class="clinical-section">
+                <div class="section-label">Reported Symptoms</div>
+                <div class="symptoms-chip-container">
+                    {% for s in report.symptoms.split(',') %}
+                    <span class="chip">{{ s.strip() }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="clinical-section">
+                <div class="section-label">AI Diagnostic Reasoning</div>
+                <div style="background:rgba(37,99,235,0.05); padding:20px; border-radius:12px; border:1px solid rgba(37,99,235,0.2); font-size:14px; line-height:1.6;">
+                    The Dual-Brain engine has categorized this case as <strong>{{ report.dual_brain_risk }}</strong> based on the physiological synergy between Vitals and Symptoms. 
+                    Recommended routing: <span style="color:var(--brand); font-weight:700;">{{ report.routing }}</span>.
+                </div>
+            </div>
+
+            {% if user.role in ['doctor', 'phc_nurse'] %}
+            <div class="clinical-section no-print">
+                <div class="section-label">Final Clinical Outcome & Notes</div>
+                <form id="outcomeForm">
+                    <select id="actualOutcome" style="width:100%; padding:15px; background:var(--card); border:1px solid var(--border); color:#fff; border-radius:12px; margin-bottom:15px;">
+                        <option value="LOW">Confirmed LOW Risk</option>
+                        <option value="MEDIUM">Confirmed MEDIUM Risk</option>
+                        <option value="HIGH">Confirmed HIGH Risk</option>
+                        <option value="CRITICAL">Confirmed CRITICAL Risk</option>
+                    </select>
+                    <textarea id="outcomeNotes" class="notes-area" placeholder="Enter post-consultation findings, medication, or referral details...">{{ report.outcome_notes or '' }}</textarea>
+                    <button type="submit" class="btn-save"><i class="fas fa-save"></i> Save Assessment Summary</button>
+                </form>
             </div>
             {% endif %}
-
-            {% if report.recommended_specialist %}
-            <div class="specialist-box">
-                <div class="detail-label">Specialist Department</div>
-                <div class="detail-value">{{ report.recommended_specialist }}</div>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- DOCTOR'S CLINICAL NOTES (Visible/Editable for Staff) -->
-        {% if user.role in ['doctor', 'phc_nurse', 'ddhs_admin'] %}
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-user-md"></i> Post-Checkup Clinical Notes
-            </div>
-            <form id="outcomeForm">
-                <label class="detail-label">Confirmed Clinical Outcome</label>
-                <select id="actualOutcome" class="outcome-select" required>
-                    <option value="">Select Confirmed Triage Level...</option>
-                    <option value="LOW" {% if report.actual_outcome == 'LOW' %}selected{% endif %}>LOW RISK - Routine Care</option>
-                    <option value="MEDIUM" {% if report.actual_outcome == 'MEDIUM' %}selected{% endif %}>MEDIUM RISK - Observation</option>
-                    <option value="HIGH" {% if report.actual_outcome == 'HIGH' %}selected{% endif %}>HIGH RISK - Urgent Intervention</option>
-                </select>
-
-                <label class="detail-label">Detailed Clinical Notes & Findings</label>
-                <textarea id="outcomeNotes" class="notes-area" placeholder="Write detailed clinical notes, pre-conditions, and follow-up advice here...">{{ report.outcome_notes or '' }}</textarea>
-                
-                <button type="submit" class="btn-primary">
-                    <i class="fas fa-save"></i> Save Clinical Summary
-                </button>
-            </form>
-        </div>
-        {% elif report.outcome_notes %}
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-clipboard-check"></i> Doctor's Clinical Summary
-            </div>
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px;">
-                <div style="font-weight: 700; color: var(--brand-dark); margin-bottom: 10px;">
-                    Confirmed Outcome: <span class="risk-{{ report.actual_outcome|lower }}">{{ report.actual_outcome }}</span>
-                </div>
-                <div style="line-height: 1.6; color: #334155;">
-                    {{ report.outcome_notes }}
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- PREVIOUS CLINICAL HISTORY -->
-        {% if history %}
-        <div class="section">
-            <div class="section-title">
-                <i class="fas fa-history"></i> Previous Clinical History
-            </div>
-            {% for entry in history %}
-            <div class="history-card">
-                <div class="history-date">
-                    <i class="far fa-calendar-alt"></i> {{ entry.timestamp }}
-                </div>
-                <div class="history-doctor">
-                    <i class="fas fa-user-md"></i> Dr. {{ entry.doctor_name or 'Unknown' }}
-                </div>
-                <div style="font-weight: 600; font-size: 13px; margin-bottom: 5px;">
-                    Outcome: <span style="text-transform: uppercase;">{{ entry.actual_outcome }}</span>
-                </div>
-                <div style="font-size: 14px; color: var(--t-body);">
-                    {{ entry.outcome_notes }}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        <!-- ACTIONS -->
-        <div class="section no-print">
-            <div class="btn-group">
-                <button class="btn-secondary" onclick="window.history.back()">Close</button>
-                <button class="btn-primary" onclick="window.print()">
-                    <i class="fas fa-print"></i> Print Report
-                </button>
-            </div>
-            <div class="timestamp">
-                <i class="fas fa-info-circle"></i> Report ID: {{ report.id }} • Generated on {{ report.formatted_date }} at {{ report.formatted_time }}
-            </div>
         </div>
     </div>
 
     <script>
         document.getElementById('outcomeForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const payload = {
-                actual_outcome: document.getElementById('actualOutcome').value,
-                notes: document.getElementById('outcomeNotes').value
-            };
-
-            try {
-                const response = await fetch('/triage/outcome/{{ report.id }}', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                const result = await response.json();
-                if (result.success) {
-                    alert('Clinical notes saved successfully!');
-                    location.reload();
-                } else {
-                    alert('Error: ' + result.error);
-                }
-            } catch (err) {
-                alert('Connection error. Please try again.');
+            const res = await fetch('/triage/outcome/{{ report.id }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    actual_outcome: document.getElementById('actualOutcome').value,
+                    notes: document.getElementById('outcomeNotes').value
+                })
+            });
+            const data = await res.json();
+            if(data.success) {
+                alert('Assessment Updated Successfully');
+                location.reload();
             }
         });
     </script>

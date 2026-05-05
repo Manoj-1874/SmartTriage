@@ -1,0 +1,140 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}Stock Discovery - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .discovery-grid {
+        display: grid;
+        grid-template-columns: 1fr 2fr;
+        gap: 30px;
+        padding: 40px;
+    }
+    .search-panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 30px;
+        position: sticky;
+        top: 120px;
+    }
+    .results-panel {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 30px;
+    }
+    .phc-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        margin-bottom: 15px;
+        transition: all 0.2s;
+    }
+    .phc-card:hover {
+        border-color: var(--brand);
+        background: var(--brand-pale);
+    }
+    .phc-info h4 { margin: 0; font-size: 18px; }
+    .phc-info p { margin: 5px 0 0; font-size: 12px; color: var(--t-muted); }
+    .stock-pill {
+        background: var(--clr-green-bg);
+        color: var(--clr-green);
+        padding: 6px 12px;
+        border-radius: 99px;
+        font-weight: 800;
+        font-size: 14px;
+    }
+</style>
+
+<div class="banner" style="margin: 40px 40px 0;">
+    <div class="banner-left">
+        <div class="banner-eyebrow">LOGISTICS & STOCK</div>
+        <div class="banner-name">Inter-PHC Stock Discovery</div>
+        <p class="banner-sub">Find and borrow life-saving drugs from neighboring facilities in real-time.</p>
+    </div>
+</div>
+
+<div class="discovery-grid">
+    <div class="search-panel">
+        <h3 style="margin-bottom:20px;"><i class="fas fa-search"></i> Find Resources</h3>
+        <div style="margin-bottom:20px;">
+            <label style="display:block; font-size:12px; font-weight:700; margin-bottom:8px;">ITEM NAME</label>
+            <input type="text" id="itemName" class="btn-sync" style="background:#fff; color:#000; width:100%; border:1px solid var(--border);" placeholder="e.g., Anti-Snake Venom">
+        </div>
+        <button class="btn-sync" style="width:100%; padding:15px;" onclick="searchStock()">
+            <i class="fas fa-satellite-dish"></i> Broadcast Search
+        </button>
+        
+        <div style="margin-top:30px; padding:20px; background:var(--brand-pale); border-radius:12px;">
+            <p style="font-size:11px; line-height:1.6; margin:0;">
+                <i class="fas fa-info-circle"></i> This tool searches the <strong>Digital Bin Cards</strong> of all PHCs in the {{ user.district }} district.
+            </p>
+        </div>
+    </div>
+
+    <div class="results-panel">
+        <div id="loading" style="display:none; text-align:center; padding:60px;">
+            <i class="fas fa-spinner fa-spin fa-2x" style="color:var(--brand);"></i>
+            <p style="margin-top:15px; color:var(--t-muted);">Scanning District Inventory...</p>
+        </div>
+
+        <div id="noResults" style="text-align:center; padding:60px; color:var(--t-faint);">
+            <i class="fas fa-box-open fa-3x"></i>
+            <p style="margin-top:15px;">Search for an item to see availability across the district.</p>
+        </div>
+
+        <div id="resultsList"></div>
+    </div>
+</div>
+
+<script>
+    function searchStock() {
+        const item = document.getElementById('itemName').value;
+        if(!item) return alert("Please enter an item name.");
+
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('noResults').style.display = 'none';
+        document.getElementById('resultsList').innerHTML = '';
+
+        fetch('/api/phc/stock-borrow-request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ item_name: item })
+        })
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
+            
+            if(data.nearby_availability && data.nearby_availability.length > 0) {
+                let html = `<h3>Found in ${data.nearby_availability.length} Nearby Centers</h3><br>`;
+                data.nearby_availability.forEach(res => {
+                    html += `
+                        <div class="phc-card">
+                            <div class="phc-info">
+                                <h4>${res.name}</h4>
+                                <p><i class="fas fa-phone"></i> ${res.contact} | <i class="fas fa-map-marker-alt"></i> ${res.distance || 'Nearby'}</p>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="stock-pill">${res.quantity} In Stock</div>
+                                <button class="btn-sync" style="margin-top:10px; font-size:11px;" onclick="requestTransfer('${res.name}')">Request Transfer</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                document.getElementById('resultsList').innerHTML = html;
+            } else {
+                document.getElementById('noResults').style.display = 'block';
+                document.getElementById('noResults').innerHTML = `<i class="fas fa-times-circle fa-2x"></i><p>No neighboring centers have surplus stock of "${item}" at this time.</p>`;
+            }
+        });
+    }
+
+    function requestTransfer(phcName) {
+        alert("TRANSFER REQUEST SENT: A digital requisition has been sent to " + phcName + ". Please coordinate with 108 for transport if urgent.");
+    }
+</script>
+{% endblock %}

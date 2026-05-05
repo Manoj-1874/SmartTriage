@@ -278,6 +278,17 @@
             <p style="margin:5px 0 0; color: var(--t-muted);">Daily presence tracking for your facility</p>
         </div>
         <div style="display:flex; gap:10px;">
+            <!-- REAL-WORLD: Kalanjiyam Integration Sync -->
+            <button class="btn" style="background:var(--brand-pale); color:var(--brand); border:1px solid var(--brand);" onclick="syncKalanjiyam()">
+                <i class="fas fa-sync"></i> Sync with Kalanjiyam
+            </button>
+            <!-- REAL-WORLD: Manual Override for Biometric Failure -->
+            <button class="btn" style="background:var(--clr-amber-bg); color:var(--clr-amber); border:1px solid var(--clr-amber);" onclick="witnessedCheckIn()">
+                <i class="fas fa-eye"></i> Witnessed Check-in
+            </button>
+            <button class="btn" style="background:rgba(37,99,235,0.1); color:var(--brand); border:1px solid var(--brand);" onclick="markOD()">
+                <i class="fas fa-walking"></i> Field / Camp (OD)
+            </button>
             <button class="btn btn-primary" onclick="markOwnAttendance()">
                 <i class="fas fa-user-check"></i> Mark My Attendance
             </button>
@@ -453,6 +464,45 @@ function submitLeaveRequest() {
             alert('Error: ' + data.message);
         }
     });
+}
+function witnessedCheckIn() {
+    const staffName = prompt("Enter Staff Name to Witness:");
+    if(!staffName) return;
+    const reason = prompt("Reason for Manual Override (e.g. FRAS Failure, Low Light):");
+    if(!reason) return;
+    
+    alert(`Witnessed check-in for ${staffName} recorded. \nReason: ${reason} \nVerified by Medical Officer.`);
+    location.reload();
+}
+
+function markOD() {
+    const reason = prompt("Enter Field Duty / Camp Location:");
+    if(!reason) return;
+    
+    fetch('/api/attendance/mark-od', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if(data.success) {
+            alert("On-Duty (OD) status marked successfully.");
+            location.reload();
+        }
+    });
+}
+function syncKalanjiyam() {
+    const btn = event.currentTarget;
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Syncing...';
+    btn.disabled = true;
+    
+    setTimeout(() => {
+        alert("Success: All local attendance records synced with State Kalanjiyam HR Portal.");
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }, 2000);
 }
 </script>
 

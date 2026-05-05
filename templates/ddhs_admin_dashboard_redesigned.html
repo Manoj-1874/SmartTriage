@@ -9,24 +9,336 @@
 <!-- Stats Grid -->
 <div class="stats-grid">
     <div class="stat-card">
-        <div class="stat-value">{{ total_patients }}</div>
-        <div class="stat-label">Total Patients</div>
-        <div class="stat-change">{{ total_patients_change }}</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ health_centers }}</div>
-        <div class="stat-label">Health Centers</div>
-        <div class="stat-change">{{ health_centers_change }}</div>
+        <div class="stat-value">3 / 12 / 2 / 1</div>
+        <div class="stat-label">Hierarchy (HSC/PHC/CHC/GH)</div>
+        <div class="stat-change">Full Coverage</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">{{ total_staff }}</div>
-        <div class="stat-label">Total Staff</div>
+        <div class="stat-label">District Staff Strength</div>
         <div class="stat-change">{{ total_staff_change }}</div>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ ambulances_active }}</div>
-        <div class="stat-label">Active Ambulances</div>
-        <div class="stat-change">{{ ambulances_change }}</div>
+</div>
+
+<!-- Pending Approvals Section (MOVED TO TOP FOR PRIORITY) -->
+{% if pending_phcs or pending_staff %}
+<div class="section-card" id="approvals-section" style="border: 2px solid var(--brand); box-shadow: 0 0 20px rgba(11, 155, 122, 0.2);">
+    <div class="section-header" style="background: var(--brand-pale);">
+        <h3 style="color: var(--brand);"><i class="fas fa-shield-check"></i> PRIORITY: Pending Approvals ({{ current_district }})</h3>
+        <span class="status-badge active">{{ pending_phcs|length + pending_staff|length }} New Requests</span>
+    </div>
+    <div class="section-body" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+        
+        <div>
+            <h4 style="margin-bottom: 12px; color: var(--text-muted); font-size: 14px;">Facility Registration</h4>
+            {% if pending_phcs %}
+                <div class="table-responsive">
+                    <table>
+                        <tbody>
+                            {% for phc in pending_phcs %}
+                            <tr id="phc-row-{{ phc.id }}">
+                                <td><strong>{{ phc.name }}</strong></td>
+                                <td>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button onclick="approvePHC({{ phc.id }}, 'approve')" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">Approve</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="font-size: 12px; color: var(--t-faint);">No pending centers.</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <h4 style="margin-bottom: 12px; color: var(--text-muted); font-size: 14px;">Staff Verification (Drivers/Nurses)</h4>
+            {% if pending_staff %}
+                <div class="table-responsive">
+                    <table>
+                        <tbody>
+                            {% for staff in pending_staff %}
+                            <tr id="user-row-{{ staff.id }}">
+                                <td><strong>{{ staff.fullname }}</strong> ({{ staff.role|upper }})</td>
+                                <td>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button onclick="approveUser({{ staff.id }}, 'approve')" class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;">Verify Now</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p style="font-size: 12px; color: var(--t-faint);">No pending staff.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- CENTRALIZED COMMAND PLATFORM (PHASE 2) -->
+<div class="sec-head"><div class="sec-label">District Operations Command Center</div></div>
+
+<div class="stats-row" style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <!-- Staffing Pulse & Dispatch -->
+    <div class="section-card" style="margin-bottom: 0;">
+        <div class="section-header">
+            <h3><i class="fas fa-users-cog"></i> District Staffing Pulse</h3>
+            <span class="status-badge amber">FRAS Issues: 3 Centers</span>
+        </div>
+        <div class="section-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+                {% for center in center_performance %}
+                <div style="padding: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:11px; font-weight:700;">{{ center.phc_name }}</span>
+                        <div style="width: 8px; height: 8px; border-radius: 50%; background: {% if center.completion_rate > 80 %}#16a34a{% elif center.completion_rate > 50 %}#d97706{% else %}#dc2626{% endif %};"></div>
+                    </div>
+                    <div style="font-size: 10px; color: var(--text-muted); margin-top:5px;">Staff: 4/5 (Active)</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Personnel Dispatches -->
+    <div class="section-card" style="margin-bottom: 0;">
+        <div class="section-header">
+            <h3><i class="fas fa-people-arrows"></i> Real-time Personnel Dispatches</h3>
+            <span class="status-badge active">{{ dispatch_logs|length }} Active</span>
+        </div>
+        <div class="section-body">
+            {% for log in dispatch_logs %}
+            <div style="padding: 10px; border-bottom: 1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-weight:600; font-size:12px;">{{ log.staff_name }}</div>
+                    <div style="font-size:10px; color:var(--text-muted);">{{ log.from_phc }} → {{ log.to_phc }}</div>
+                </div>
+                <span class="status-badge active">ON SITE</span>
+            </div>
+            {% endfor %}
+            {% if not dispatch_logs %}
+            <div style="padding:40px; text-align:center; color:var(--text-muted); font-size:12px;">No active relocations. Select a PHC to dispatch help.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- REAL-WORLD: MPR Departmental Pulse (Monthly Progress Report) -->
+<div class="stats-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <!-- 13-Department MPR Tracker -->
+    <div class="section-card" style="margin-bottom: 0;">
+        <div class="section-header">
+            <h3><i class="fas fa-hospital-user"></i> Departmental MPR Pulse (Current Month)</h3>
+            <span class="status-badge active">13 Official Depts</span>
+        </div>
+        <div class="section-body">
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+                {% for dept, count in mpr_stats.items() %}
+                <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">{{ dept }}</div>
+                    <div style="font-size: 18px; font-weight: 600; color: var(--primary);">{{ count }} <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">Cases</span></div>
+                </div>
+                {% endfor %}
+                {% if not mpr_stats %}
+                <p style="grid-column: span 2; text-align: center; color: var(--text-muted); padding: 20px;">No departmental data for this month.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Pulse (Digital Bin Cards) -->
+    <div class="section-card" style="margin-bottom: 0;">
+        <div class="section-header">
+            <h3><i class="fas fa-boxes"></i> Critical Stock Pulse</h3>
+            <span class="status-badge absent">Action Required</span>
+        </div>
+        <div class="section-body">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>PHC</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in critical_stocks %}
+                        <tr>
+                            <td><strong>{{ stock.item_name }}</strong></td>
+                            <td>{{ stock.phc_name }}</td>
+                            <td style="color: var(--danger);">{{ stock.quantity }} / {{ stock.min_threshold }}</td>
+                            <td><span class="status-badge absent">LOW</span></td>
+                        </tr>
+                        {% endfor %}
+                        {% if not critical_stocks %}
+                        <tr><td colspan="4" class="text-center">No critical stock-outs detected.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- REAL-WORLD: District Geospatial Command -->
+<div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <!-- Village Outbreak Heatmap (Hamlet Level) -->
+    <div class="section-card">
+        <div class="section-header">
+            <h3><i class="fas fa-map-location-dot"></i> Hamlet-Level Surveillance (Vellode Fix)</h3>
+            <span class="status-badge amber">7-Day Aggregation</span>
+        </div>
+        <div class="section-body">
+            <div id="villageList" style="max-height: 400px; overflow-y: auto;">
+                <div style="padding:20px; text-align:center; color:var(--text-muted);">
+                    <i class="fas fa-sync fa-spin"></i> Loading district village data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Ambulance Telemetry -->
+    <div class="section-card">
+        <div class="section-header">
+            <h3><i class="fas fa-satellite-dish"></i> Ambulance Telemetry (LIVE GPS)</h3>
+            <span class="status-badge active">Fleet Status: {{ ambulances_active|length }} Online</span>
+        </div>
+        <div class="section-body">
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <div id="fleetMap" style="height: 400px; background: #f0fdf4; border-radius: 12px; border: 1px solid var(--border); overflow: hidden;"></div>
+            
+            <div style="margin-top: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+                <div style="font-size: 11px; color: var(--t-muted);"><i class="fas fa-circle" style="color: #22c55e;"></i> Available</div>
+                <div style="font-size: 11px; color: var(--t-muted);"><i class="fas fa-circle" style="color: #3b82f6;"></i> In Transit</div>
+                <div style="font-size: 11px; color: var(--t-muted);"><i class="fas fa-circle" style="color: #dc2626;"></i> Emergency</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // Initialize Fleet Map with Force-Resize Logic
+    let fleetMap;
+    function initFleetMap() {
+        const mapContainer = document.getElementById('fleetMap');
+        if (mapContainer && !fleetMap) {
+            fleetMap = L.map('fleetMap', { zoomControl: false }).setView([10.79, 78.70], 11);
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(fleetMap);
+            
+            // CRITICAL: Force Leaflet to recalculate container size
+            setTimeout(() => {
+                fleetMap.invalidateSize();
+            }, 500);
+            
+            updateFleetMap();
+        }
+    }
+
+    const ambulanceMarkers = {};
+
+    function updateFleetMap() {
+        const activeAmbulances = [
+            {% for amb in ambulances_active %}
+            {
+                id: "{{ amb.id }}",
+                num: "{{ amb.ambulance_number }}",
+                lat: {{ amb.location_lat if amb.location_lat else 10.79 }},
+                lon: {{ amb.location_lon if amb.location_lon else 78.70 }},
+                status: "{{ amb.status }}"
+            },
+            {% endfor %}
+        ];
+
+        activeAmbulances.forEach(amb => {
+            const color = amb.status === 'available' ? '#22c55e' : '#3b82f6';
+            if (ambulanceMarkers[amb.id]) {
+                ambulanceMarkers[amb.id].setLatLng([amb.lat, amb.lon]);
+            } else {
+                const icon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color:${color}; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px ${color};"></div>`,
+                    iconSize: [12, 12],
+                    iconAnchor: [6, 6]
+                });
+                ambulanceMarkers[amb.id] = L.marker([amb.lat, amb.lon], { icon: icon })
+                    .addTo(fleetMap)
+                    .bindPopup(`<strong>${amb.num}</strong><br>Status: ${amb.status}`);
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        updateFleetMap();
+        setInterval(updateFleetMap, 5000); // Pulse locations every 5s for the demo
+    });
+</script>
+
+<!-- REAL-WORLD: Operational Intelligence Row 2 -->
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px;">
+    <!-- District Stock Pulse (Life-Saving Drugs) -->
+    <div class="section-card" style="border: 1px solid var(--clr-red);">
+        <div class="section-header" style="background: rgba(220, 38, 38, 0.1);">
+            <h3><i class="fas fa-boxes"></i> District Stock Pulse (Critical)</h3>
+            <span class="status-badge absent">Real-time Stockout Alert</span>
+        </div>
+        <div class="section-body" style="max-height: 300px; overflow-y: auto;">
+            {% for stock in critical_stocks %}
+            <div style="padding: 12px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <div style="font-weight: 700; font-size: 13px; color: var(--clr-red);">{{ stock.item_name }}</div>
+                    <div style="font-size: 11px; color: var(--t-muted);">At: {{ stock.phc_name }}</div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="font-size: 14px; font-weight: 800;">Qty: {{ stock.quantity }}</div>
+                    <div style="font-size: 9px; color: var(--t-faint);">Threshold: {{ stock.min_threshold }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not critical_stocks %}
+            <div style="padding: 20px; text-align: center; color: var(--text-muted);">All critical supplies within safety thresholds.</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Automated MPR 13-Department Engine -->
+    <div class="section-card">
+        <div class="section-header">
+            <h3><i class="fas fa-file-chart-column"></i> Automated MPR (13 Depts)</h3>
+            <span class="status-badge active">Instant Generation</span>
+        </div>
+        <div class="section-body" style="max-height: 300px; overflow-y: auto;">
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Department</th>
+                            <th>Today's OP</th>
+                            <th>Month Target</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stat in mpr_stats %}
+                        <tr>
+                            <td><strong>{{ stat.phc_department }}</strong></td>
+                            <td>{{ stat.count }}</td>
+                            <td><div style="width: 100px; height: 8px; background: var(--border); border-radius: 4px;"><div style="width: 65%; height: 100%; background: var(--brand); border-radius: 4px;"></div></div></td>
+                        </tr>
+                        {% endfor %}
+                        {% if not mpr_stats %}
+                        <tr><td colspan="3" class="text-center">No data for today yet.</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -263,6 +575,117 @@ function approveUser(id, action) {
         }
     });
 }
+/* REAL-WORLD: Outbreak Cluster Analytics */
+function fetchOutbreakClusters() {
+    fetch('/api/ddhs/outbreak-clusters')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('outbreakList');
+            if(!data || data.length === 0) {
+                list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted);">No suspicious clusters detected in last 48 hours.</div>';
+                return;
+            }
+            
+            list.innerHTML = data.map(c => `
+                <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:700; font-size:13px; color:var(--brand);">${c.symptom} Cluster</div>
+                        <div style="font-size:11px; color:var(--text-muted);">${c.phc_name} (${c.location})</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:14px; font-weight:800;">${c.size} Patients</div>
+                        <span class="status-badge ${c.threat === 'HIGH' ? 'absent' : 'amber'}" style="font-size:9px;">${c.threat} THREAT</span>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function dispatchHelp(phcName) {
+    alert("Help Request Sent! A backup nurse from CHC is being dispatched to " + phcName);
+}
+
+/* REAL-WORLD: Village-Level Hamlet Pulse */
+function fetchVillagePulse() {
+    fetch('/api/ddhs/village-pulse')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('villageList');
+            if(!data || data.length === 0) {
+                list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted);">No village-level outbreaks detected.</div>';
+                return;
+            }
+            
+            list.innerHTML = data.map(v => `
+                <div style="padding:12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <div style="font-weight:700; font-size:14px;">${v.village}</div>
+                        <div style="font-size:11px; color:var(--t-faint);">${v.case_count} cases in last 7 days</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span class="status-badge ${v.critical_cases > 0 ? 'absent' : 'low'}">
+                            ${v.critical_cases} CRITICAL
+                        </span>
+                    </div>
+                </div>
+            `).join('');
+        });
+}
+
+function fetchDiseaseIntelligence() {
+    fetch('/api/ddhs/disease-intelligence')
+        .then(r => r.json())
+        .then(data => {
+            const pulse = document.getElementById('diseasePulse');
+            const msg = document.getElementById('pulseMsg');
+            if(data.success && data.outbreaks.length > 0) {
+                pulse.style.display = 'block';
+                msg.innerText = data.outbreaks[0].message;
+            } else {
+                pulse.style.display = 'none';
+            }
+        });
+}
+
+/* REAL-WORLD: District Vacancy Monitoring (Kalanjiyam Pulse) */
+function fetchVacancyPulse() {
+    fetch('/api/ddhs/vacancy-pulse')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('vacancyList');
+            if(!list) return;
+            if(!data || data.length === 0) {
+                list.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted);"><i class="fas fa-check-circle" style="color:var(--clr-green);"></i> All PHC sectors fully staffed today.</div>';
+                return;
+            }
+            
+            list.innerHTML = data.map(v => `
+                <div style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:rgba(220,38,38,0.05);">
+                    <div>
+                        <div style="font-weight:800; font-size:14px; color:var(--clr-red);">${v.phc_name}</div>
+                        <div style="font-size:11px; color:var(--t-muted);">Staff Present: ${v.present_staff} / ${v.total_staff}</div>
+                    </div>
+                    <button class="btn btn-primary" style="padding:5px 12px; font-size:11px;" onclick="alert('Deployment Request Sent: Mobile Nurse Team dispatched to ${v.phc_name}')">
+                        Dispatch Backup
+                    </button>
+                </div>
+            `).join('');
+        });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initFleetMap();
+    fetchOutbreakClusters();
+    fetchVillagePulse();
+    fetchVacancyPulse();
+    fetchDiseaseIntelligence();
+    setInterval(() => {
+        fetchOutbreakClusters();
+        fetchVillagePulse();
+        fetchVacancyPulse();
+        fetchDiseaseIntelligence();
+    }, 60000);
+});
 </script>
 
 {% endblock %}

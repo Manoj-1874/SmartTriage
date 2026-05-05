@@ -769,6 +769,13 @@
                                 <span>Driver</span>
                             </label>
                         </div>
+                        <div class="role-opt">
+                            <input type="radio" name="role" id="rolePharmacist" value="pharmacist" onchange="handleRoleChange()">
+                            <label for="rolePharmacist">
+                                <i class="fas fa-pills"></i>
+                                <span>Pharmacist</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
 
@@ -1032,6 +1039,10 @@ function handleRoleChange() {
         ico.className   = 'fas fa-ambulance';
         title.textContent = 'Ambulance Driver';
         sub.textContent   = 'Register as an emergency response driver';
+    } else if(selected === 'pharmacist') {
+        ico.className   = 'fas fa-pills';
+        title.textContent = 'Pharmacist Registration';
+        sub.textContent   = 'Access the PHC Stock & MPR Command Center';
     } else {
         ico.className   = 'fas fa-user-plus';
         title.textContent = 'Create Account';

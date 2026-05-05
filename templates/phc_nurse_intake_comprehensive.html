@@ -1879,11 +1879,30 @@
 
       /* PATIENT SELECTOR */
       const patientSelect = document.getElementById('patientSelect');
+      const patientIdInput = document.getElementById('patientIdInput');
+      const fullnameInput = document.querySelector('[name="fullname"]');
+
       if (patientSelect) {
         patientSelect.addEventListener('change', function(e) {
-          document.getElementById('patientIdInput').value = this.value;
+          patientIdInput.value = this.value;
+          
+          // Auto-fill name if selecting from dropdown
+          const selectedText = this.options[this.selectedIndex].text;
+          const nameOnly = selectedText.split(' (ID:')[0];
+          if(this.value) fullnameInput.value = nameOnly;
+          updateSteps();
         });
       }
+
+      // Handle pre-selected patient from URL
+      {% if selected_patient %}
+      if(patientSelect) {
+          patientSelect.value = "{{ selected_patient.id }}";
+          patientIdInput.value = "{{ selected_patient.id }}";
+          fullnameInput.value = "{{ selected_patient.fullname }}";
+          updateSteps();
+      }
+      {% endif %}
 
       /* FORM SUBMISSION */
       document.getElementById('triageForm').addEventListener('submit', async (e) => {

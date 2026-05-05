@@ -1,0 +1,111 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}Maternal Health (PICME Automation) - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .maternal-container {
+        padding: 40px;
+        background: var(--base);
+        min-height: 100vh;
+    }
+    .mother-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        transition: all 0.3s;
+    }
+    .mother-card:hover {
+        border-color: var(--brand);
+        background: rgba(11, 155, 122, 0.03);
+    }
+    .rch-id {
+        font-family: monospace;
+        background: var(--brand-pale);
+        color: var(--brand);
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 700;
+    }
+    .status-active { color: var(--clr-green); font-weight: 700; font-size: 11px; text-transform: uppercase; }
+    .print-btn {
+        background: none;
+        border: 1px solid var(--border);
+        color: var(--t-muted);
+        padding: 8px 15px;
+        border-radius: 10px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    .print-btn:hover { background: #fff; color: #000; }
+</style>
+
+<div class="maternal-container">
+    <div class="banner" style="margin-bottom: 40px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">PICME 2.0 SYNC / RCH AUTOMATION</div>
+            <div class="banner-name">Maternal Health (ANC/PNC)</div>
+            <p class="banner-sub">Automated reporting for pregnant mothers. This system generates official DPH registers to eliminate double manual entry.</p>
+        </div>
+        <div class="banner-actions">
+            <button class="btn btn-primary" onclick="alert('Syncing with PICME 2.0 Database...')"><i class="fas fa-sync"></i> Refresh RCH Data</button>
+        </div>
+    </div>
+
+    <div class="notif" style="background: rgba(37, 99, 235, 0.1); border-color: var(--brand); margin-bottom: 30px;">
+        <div class="notif-ico"><i class="fas fa-print"></i></div>
+        <div class="notif-txt">
+            <strong>Register Automation:</strong> You no longer need to write in physical books. Use the "Print Register" button to generate the official DPH handwritten-format document.
+        </div>
+    </div>
+
+    <div class="mother-grid">
+        {% for mother in mothers %}
+        <div class="mother-card">
+            <div style="display: flex; gap: 20px; align-items: center;">
+                <div style="width: 50px; height: 50px; border-radius: 50%; background: #ff7675; display: flex; align-items: center; justify-content: center; color: #fff;">
+                    <i class="fas fa-person-pregnant fa-lg"></i>
+                </div>
+                <div>
+                    <div style="font-weight: 700; font-size: 18px;">{{ mother.fullname }}</div>
+                    <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+                        <span class="rch-id">RCH-ID: 10928374{{ mother.patient_id }}</span>
+                        <!-- REAL-WORLD: High Risk Flagging -->
+                        {% if 'Fever' in mother.last_checkup or 'Pain' in mother.last_checkup %}
+                        <span class="status-badge absent" style="font-size:9px;">HIGH RISK (CLINICAL)</span>
+                        {% else %}
+                        <span class="status-active">● Active ANC</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: right;">
+                <div style="font-size: 11px; color: var(--t-muted); margin-bottom: 10px;">LAST VISIT: {{ mother.last_visit.split(' ')[0] if mother.last_visit else 'N/A' }}</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="print-btn" onclick="alert('Generating official ANC Register Page for {{ mother.fullname }}...')">
+                        <i class="fas fa-file-pdf"></i> Print Register Page
+                    </button>
+                    <button class="btn btn-primary" style="padding: 8px 15px; font-size: 12px;">
+                        Record Checkup
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not mothers %}
+        <div style="text-align: center; padding: 100px; color: var(--t-faint);">
+            <i class="fas fa-users-slash fa-3x"></i>
+            <p style="margin-top: 20px;">No maternal cases registered in your sector.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

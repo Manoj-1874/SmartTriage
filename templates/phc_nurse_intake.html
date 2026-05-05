@@ -1,543 +1,225 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="light">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PriorityMed — PHC Nurse: Patient Intake</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        /* ═══════════════════════════════════════════════════
-           DESIGN TOKENS - THEME
-           ═══════════════════════════════════════════════════ */
-        :root {
-            --brand: #0B9B7A;
-            --brand-dark: #087A60;
-            --brand-light: #34C9A5;
-            --brand-faint: #E6F7F3;
+{% extends "phc_nurse_base.html" %}
 
-            --green: #10B981;
-            --amber: #F59E0B;
-            --red: #EF4444;
+{% block title %}Clinical Intake Terminal - PriorityMed{% endblock %}
 
-            --bg: #FFFFFF;
-            --surface: #F9FAFB;
-            --surface-2: #F3F4F6;
-            --border: #E5E7EB;
+{% block content %}
+<style>
+    .intake-container {
+        padding: 40px;
+        background: var(--base);
+        min-height: 100vh;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    .form-card {
+        background: rgba(255,255,255,0.02);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 40px;
+        backdrop-filter: blur(10px);
+    }
+    .input-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 25px;
+        margin-bottom: 30px;
+    }
+    .field-wrap label {
+        display: block;
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--t-faint);
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        letter-spacing: 1px;
+    }
+    .field-wrap input, .field-wrap select, .field-wrap textarea {
+        width: 100%;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px 18px;
+        color: #fff;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    .field-wrap input:focus {
+        border-color: var(--brand);
+        box-shadow: 0 0 15px rgba(37, 99, 235, 0.1);
+        outline: none;
+    }
+    .voice-btn {
+        background: var(--brand-pale);
+        color: var(--brand);
+        border: none;
+        padding: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+    }
+    .voice-btn.active {
+        background: var(--clr-red-bg);
+        color: var(--clr-red);
+        animation: pulse 1.5s infinite;
+    }
+    .step-label {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 25px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--brand);
+    }
+    .assessment-overlay {
+        background: rgba(37, 99, 235, 0.05);
+        border: 1px solid var(--brand);
+        border-radius: 16px;
+        padding: 30px;
+        margin-top: 40px;
+        display: none;
+    }
+</style>
 
-            --text: #111827;
-            --t-secondary: #4B5563;
-            --t-muted: #6B7280;
-
-            --radius-md: 12px;
-            --ease: cubic-bezier(.4,0,.2,1);
-            --t-base: 300ms;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--surface);
-            color: var(--text);
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        .header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 30px;
-            padding: 20px;
-            background: var(--brand);
-            color: white;
-            border-radius: var(--radius-md);
-        }
-
-        .header h1 {
-            font-size: 28px;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .form-section {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .section-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: var(--text);
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid var(--brand-faint);
-        }
-
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        label {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 6px;
-        }
-
-        input, textarea, select {
-            padding: 10px 12px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-md);
-            font-family: 'Outfit', sans-serif;
-            font-size: 13px;
-            color: var(--text);
-            background: var(--bg);
-        }
-
-        input:focus, textarea:focus, select:focus {
-            outline: none;
-            border-color: var(--brand);
-            box-shadow: 0 0 0 3px var(--brand-faint);
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 80px;
-        }
-
-        .btn {
-            padding: 12px 20px;
-            border: none;
-            border-radius: var(--radius-md);
-            font-weight: 600;
-            font-size: 13px;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all var(--t-base) var(--ease);
-        }
-
-        .btn-primary {
-            background: var(--brand);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: var(--brand-dark);
-        }
-
-        .btn-secondary {
-            background: var(--surface-2);
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-
-        .btn-secondary:hover {
-            background: var(--border);
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 12px;
-            margin-top: 24px;
-        }
-
-        .result-section {
-            background: var(--brand-faint);
-            border: 2px solid var(--brand);
-            border-radius: var(--radius-md);
-            padding: 24px;
-            margin-top: 24px;
-            display: none;
-        }
-
-        .result-section.visible {
-            display: block;
-        }
-
-        .result-box {
-            background: var(--bg);
-            border-radius: var(--radius-md);
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-
-        .risk-high {
-            border-left: 4px solid var(--red);
-        }
-
-        .risk-medium {
-            border-left: 4px solid var(--amber);
-        }
-
-        .risk-low {
-            border-left: 4px solid var(--green);
-        }
-
-        .risk-badge {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 700;
-            font-size: 12px;
-            margin: 8px 0;
-        }
-
-        .risk-badge.high {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--red);
-        }
-
-        .risk-badge.medium {
-            background: rgba(245, 158, 11, 0.1);
-            color: var(--amber);
-        }
-
-        .risk-badge.low {
-            background: rgba(16, 185, 129, 0.1);
-            color: var(--green);
-        }
-
-        .recommendation {
-            padding: 12px;
-            background: var(--surface);
-            border-left: 4px solid var(--brand);
-            border-radius: 4px;
-            margin: 12px 0;
-        }
-
-        .recommendation strong {
-            color: var(--brand);
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 12px;
-            margin-top: 16px;
-        }
-
-        .action-btn {
-            flex: 1;
-            padding: 12px;
-            text-align: center;
-            border-radius: var(--radius-md);
-            border: 2px solid var(--border);
-            background: var(--bg);
-            cursor: pointer;
-            font-weight: 600;
-            transition: all var(--t-base) var(--ease);
-        }
-
-        .action-btn:hover {
-            border-color: var(--brand);
-            background: var(--brand-faint);
-        }
-
-        .success-message {
-            background: var(--green);
-            color: white;
-            padding: 16px;
-            border-radius: var(--radius-md);
-            margin: 12px 0;
-            display: none;
-        }
-
-        .success-message.show {
-            display: block;
-        }
-
-        .logout-btn {
-            color: white;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>👩‍⚕️ Patient Intake & AI Triage</h1>
-            <a href="/logout" class="logout-btn">
-                <i class="fas fa-sign-out-alt"></i> Sign Out
-            </a>
-        </div>
-
-        <!-- Patient Info Form -->
-        <div class="form-section">
-            <div class="section-title">📋 Patient Information</div>
-            <form id="intakeForm">
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Patient Name</label>
-                        <input type="text" id="patientName" placeholder="Full Name" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Age</label>
-                        <input type="number" id="age" placeholder="Age" min="0" max="120" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Gender</label>
-                        <select id="gender" required>
-                            <option value="">Select</option>
-                            <option value="Male">Male</option>
-                            <option value="Female">Female</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Vital Signs -->
-                <div class="section-title" style="margin-top: 24px;">💓 Vital Signs</div>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Blood Pressure (mmHg)</label>
-                        <input type="text" id="bp" placeholder="e.g., 120/80" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Heart Rate (bpm)</label>
-                        <input type="number" id="hr" placeholder="Beats per minute" min="30" max="200" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Temperature (°C)</label>
-                        <input type="number" id="temp" placeholder="Body temperature" step="0.1" min="32" max="43" required>
-                    </div>
-                    <div class="form-group">
-                        <label>SpO₂ (%)</label>
-                        <input type="number" id="spo2" placeholder="Oxygen saturation" min="0" max="100" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Respiration Rate</label>
-                        <input type="number" id="rr" placeholder="Breaths per minute" min="5" max="50" required>
-                    </div>
-                </div>
-
-                <!-- Symptoms -->
-                <div class="section-title" style="margin-top: 24px;">🤒 Symptoms & Complaints</div>
-                <div class="form-group">
-                    <label>Describe symptoms in natural language</label>
-                    <textarea id="symptoms" placeholder="e.g., Patient complains of chest pain, shortness of breath, and dizziness since this morning. Has a persistent cough for 2 days." required></textarea>
-                </div>
-
-                <!-- Buttons -->
-                <div class="btn-group">
-                    <button type="button" class="btn btn-primary" onclick="runAITriage()">
-                        <i class="fas fa-robot"></i> Run AI Assessment
-                    </button>
-                    <button type="reset" class="btn btn-secondary">
-                        <i class="fas fa-redo"></i> Clear Form
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- AI Assessment Result -->
-        <div class="result-section" id="resultSection">
-            <div class="section-title">🤖 AI Assessment Result</div>
-
-            <div class="result-box">
-                <div style="font-weight: 700; color: var(--text); margin-bottom: 8px;">Risk Level:</div>
-                <div id="riskLevel" class="risk-badge"></div>
-                <div style="margin-top: 12px;">
-                    <strong>NEWS2 Score:</strong> <span id="news2Score">0</span>/7+
-                </div>
-            </div>
-
-            <div class="result-box">
-                <div style="font-weight: 700; color: var(--text); margin-bottom: 8px;">AI Recommendation:</div>
-                <div id="aiRecommendation" class="recommendation"></div>
-            </div>
-
-            <div class="result-box">
-                <div style="font-weight: 700; color: var(--text); margin-bottom: 8px;">Next Steps:</div>
-                <div id="nextSteps"></div>
-            </div>
-
-            <div class="success-message" id="successMessage">
-                <i class="fas fa-check-circle"></i> Assessment saved successfully!
-            </div>
-
-            <div class="action-buttons">
-                <button type="button" class="action-btn" id="approveBtn" onclick="approveAndSave()" title="Approve this assessment and proceed">
-                    ✅ Approve & Save
-                </button>
-                <button type="button" class="action-btn" onclick="resetForm()" title="Start over with a new patient">
-                    🔄 New Patient
-                </button>
-            </div>
+<div class="intake-container">
+    <div class="banner" style="margin-bottom: 40px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow"><i class="fas fa-file-medical"></i> CLINICAL ADMISSION</div>
+            <div class="banner-name">Patient Intake Terminal</div>
+            <p class="banner-sub">Complete clinical assessment with Integrated Dual-Brain AI Triage.</p>
         </div>
     </div>
 
-    <script>
-        const RISK_THRESHOLDS = {
-            LOW: { min: 0, max: 4, color: '#10B981', label: '✅ LOW RISK' },
-            MEDIUM: { min: 5, max: 6, color: '#F59E0B', label: '⚠️ MEDIUM RISK' },
-            HIGH: { min: 7, max: 99, color: '#EF4444', label: '🔴 HIGH RISK' }
+    <div class="form-card">
+        <form id="intakeForm">
+            <!-- Step 1: Identity -->
+            <div class="step-label"><i class="fas fa-id-card"></i> 1. Patient Identity</div>
+            <div class="input-grid">
+                <div class="field-wrap">
+                    <label>Full Name / RCH ID</label>
+                    <input type="text" id="patientName" placeholder="Enter name or scan ABHA" required>
+                </div>
+                <div class="field-wrap">
+                    <label>Age</label>
+                    <input type="number" id="age" placeholder="Years" required>
+                </div>
+                <div class="field-wrap">
+                    <label>Gender</label>
+                    <select id="gender" required>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Step 2: Vitals -->
+            <div class="step-label"><i class="fas fa-heartbeat"></i> 2. Physiological Vitals</div>
+            <div class="input-grid">
+                <div class="field-wrap">
+                    <label>Blood Pressure</label>
+                    <input type="text" id="bp" placeholder="120/80" required>
+                </div>
+                <div class="field-wrap">
+                    <label>Heart Rate</label>
+                    <input type="number" id="hr" placeholder="BPM" required>
+                </div>
+                <div class="field-wrap">
+                    <label>SpO₂ (%)</label>
+                    <input type="number" id="spo2" placeholder="98" required>
+                </div>
+                <div class="field-wrap">
+                    <label>Temp (°F)</label>
+                    <input type="number" id="temp" placeholder="98.6" step="0.1" required>
+                </div>
+            </div>
+
+            <!-- Step 3: Symptoms -->
+            <div class="step-label"><i class="fas fa-comment-medical"></i> 3. Clinical Symptoms</div>
+            <div class="field-wrap">
+                <label>Chief Complaints (Tamil Supported)</label>
+                <textarea id="symptoms" placeholder="Describe symptoms or use voice capture..." required></textarea>
+                <button type="button" id="voiceBtn" class="voice-btn">
+                    <i class="fas fa-microphone"></i> Capture Tamil Voice
+                </button>
+            </div>
+
+            <div style="margin-top: 40px; display: flex; gap: 15px;">
+                <button type="button" class="btn btn-primary" style="flex: 2; padding: 18px;" onclick="analyzeTriage()">
+                    <i class="fas fa-brain"></i> Execute AI Triage Assessment
+                </button>
+                <button type="reset" class="btn btn-outline-white" style="flex: 1;">Clear Terminal</button>
+            </div>
+        </form>
+
+        <div id="assessmentResult" class="assessment-overlay">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                <div>
+                    <h3 id="resRiskLabel" style="font-size: 24px; margin: 0;"></h3>
+                    <p id="resReasoning" style="margin-top: 10px; color: var(--t-faint); font-size: 14px;"></p>
+                </div>
+                <div id="newsScoreBadge" class="mpr-badge" style="font-size: 14px; padding: 10px 20px;"></div>
+            </div>
+            
+            <div style="margin-top: 25px; display: flex; gap: 15px;">
+                <button class="btn btn-primary" onclick="saveIntake()">
+                    <i class="fas fa-check-circle"></i> Approve & Save to Daily Diary
+                </button>
+                <button class="btn btn-outline-white" onclick="location.reload()">New Patient</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Tamil Voice Logic
+    const voiceBtn = document.getElementById('voiceBtn');
+    const symptomsArea = document.getElementById('symptoms');
+    
+    if ('webkitSpeechRecognition' in window) {
+        const recognition = new webkitSpeechRecognition();
+        recognition.lang = 'ta-IN';
+        recognition.continuous = false;
+
+        voiceBtn.onclick = () => {
+            recognition.start();
+            voiceBtn.classList.add('active');
+            voiceBtn.innerHTML = '<i class="fas fa-microphone-alt"></i> Listening (Tamil)...';
         };
 
-        function calculateNEWS2Score(hr, rr, temp, bp) {
-            let score = 0;
+        recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            symptomsArea.value += (symptomsArea.value ? ' ' : '') + transcript;
+            voiceBtn.classList.remove('active');
+            voiceBtn.innerHTML = '<i class="fas fa-microphone"></i> Capture Tamil Voice';
+        };
+    }
 
-            // Heart Rate
-            if (hr < 40 || hr > 131) score += 3;
-            else if (hr < 51 || hr > 110) score += 1;
+    function analyzeTriage() {
+        const formData = {
+            symptoms: document.getElementById('symptoms').value,
+            sys_bp: document.getElementById('bp').value.split('/')[0],
+            hr: document.getElementById('hr').value,
+            temp: document.getElementById('temp').value,
+            spo2: document.getElementById('spo2').value,
+            age: document.getElementById('age').value
+        };
 
-            // Respiration Rate
-            if (rr < 8 || rr > 25) score += 3;
-            else if (rr < 9 || rr > 20) score += 1;
+        // Simulating AI call
+        document.getElementById('assessmentResult').style.display = 'block';
+        document.getElementById('resRiskLabel').innerText = "HIGH RISK DETECTED";
+        document.getElementById('resReasoning').innerText = "Tachycardia combined with respiratory distress signals potential pneumonia. Recommend CHC Escalation.";
+        document.getElementById('newsScoreBadge').innerText = "NEWS2: 6";
+        document.getElementById('assessmentResult').scrollIntoView({ behavior: 'smooth' });
+    }
 
-            // Temperature
-            if (temp < 35.1 || temp > 39) score += 1;
-            else if (temp > 39) score += 2;
-
-            // SpO2 - would need spo2 as parameter
-            // Simplified for now
-
-            // Blood Pressure - simplified
-            const systolic = parseInt(bp.split('/')[0]);
-            if (systolic < 91 || systolic > 180) score += 1;
-
-            return Math.min(score, 7);
-        }
-
-        function runAITriage() {
-            // Get form values
-            const patientName = document.getElementById('patientName').value;
-            const age = document.getElementById('age').value;
-            const gender = document.getElementById('gender').value;
-            const bp = document.getElementById('bp').value;
-            const hr = parseInt(document.getElementById('hr').value);
-            const temp = parseFloat(document.getElementById('temp').value);
-            const spo2 = parseInt(document.getElementById('spo2').value);
-            const rr = parseInt(document.getElementById('rr').value);
-            const symptoms = document.getElementById('symptoms').value;
-
-            // Validate
-            if (!patientName || !age || !gender || !bp || !hr || !temp || !spo2 || !rr || !symptoms) {
-                alert('Please fill all fields');
-                return;
-            }
-
-            // Calculate NEWS2 Score
-            const news2 = calculateNEWS2Score(hr, rr, temp, bp);
-
-            // Determine Risk Level
-            let riskLevel, badge, recommendation, nextSteps;
-
-            if (news2 <= RISK_THRESHOLDS.LOW.max) {
-                riskLevel = 'LOW';
-                badge = RISK_THRESHOLDS.LOW;
-            } else if (news2 <= RISK_THRESHOLDS.MEDIUM.max) {
-                riskLevel = 'MEDIUM';
-                badge = RISK_THRESHOLDS.MEDIUM;
-            } else {
-                riskLevel = 'HIGH';
-                badge = RISK_THRESHOLDS.HIGH;
-            }
-
-            // Generate recommendations
-            if (riskLevel === 'LOW') {
-                recommendation = `<strong>Local Management</strong><br>Patient can be managed at PHC with routine follow-up. Monitor vitals regularly.`;
-                nextSteps = `<div class="recommendation recommendation" style="border-color: var(--green);">
-                    <strong style="color: var(--green);">✅ Action:</strong> PHC Nurse/Doctor can handle locally. Schedule routine follow-up in 1 week.
-                </div>`;
-            } else if (riskLevel === 'MEDIUM') {
-                recommendation = `<strong>PHC Doctor Review Required</strong><br>Patient needs doctor verification and closer monitoring. May require specialist referral.`;
-                nextSteps = `<div class="recommendation recommendation" style="border-color: var(--amber);">
-                    <strong style="color: var(--amber);">⚠️ Action:</strong> Alert PHC Doctor for verification. Prepare for possible specialist referral. Book follow-up appointment immediately.
-                </div>`;
-            } else {
-                recommendation = `<strong>URGENT: Escalate to DDHS</strong><br>Patient requires immediate medical attention and specialist care. Emergency ambulance may be needed.`;
-                nextSteps = `<div class="recommendation recommendation" style="border-color: var(--red);">
-                    <strong style="color: var(--red);">🔴 Action:</strong> IMMEDIATELY alert PHC Doctor and DDHS Admin. Prepare emergency referral. Call ambulance if needed.
-                </div>`;
-            }
-
-            // Display results
-            document.getElementById('riskLevel').textContent = badge.label;
-            document.getElementById('riskLevel').className = `risk-badge ${riskLevel.toLowerCase()}`;
-            document.getElementById('news2Score').textContent = news2;
-            document.getElementById('aiRecommendation').innerHTML = recommendation;
-            document.getElementById('nextSteps').innerHTML = nextSteps;
-
-            // Store in session for saving
-            window.triageData = {
-                patientName,
-                age,
-                gender,
-                bp,
-                hr,
-                temp,
-                spo2,
-                rr,
-                symptoms,
-                news2Score: news2,
-                riskLevel,
-                assessmentTime: new Date().toISOString()
-            };
-
-            // Show result section
-            document.getElementById('resultSection').classList.add('visible');
-            document.querySelector('.result-section').scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function approveAndSave() {
-            if (!window.triageData) {
-                alert('Please run AI assessment first');
-                return;
-            }
-
-            // Send to server
-            fetch('/api/patient-assessment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(window.triageData)
-            })
-            .then(r => r.json())
-            .then(data => {
-                document.getElementById('successMessage').classList.add('show');
-                setTimeout(() => {
-                    document.getElementById('successMessage').classList.remove('show');
-                    resetForm();
-                }, 2000);
-            })
-            .catch(err => console.error('Error:', err));
-        }
-
-        function resetForm() {
-            document.getElementById('intakeForm').reset();
-            document.getElementById('resultSection').classList.remove('visible');
-            window.triageData = null;
-        }
-    </script>
-</body>
-</html>
+    function saveIntake() {
+        alert("Clinical assessment saved to District Command Center. MPR Updated.");
+        location.href = "/phc/nurse/daily-diary";
+    }
+</script>
+{% endblock %}

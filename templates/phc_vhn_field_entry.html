@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VHN Field Entry — PriorityMed</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --bg: #F8FAF9;
+            --card: #ffffff;
+            --border: rgba(11, 155, 122, 0.12);
+            --t-main: #1A2E26;
+            --t-muted: #5E7A6F;
+        }
+        body {
+            background: var(--bg);
+            color: var(--t-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .offline-badge {
+            background: rgba(217, 119, 6, 0.1);
+            color: #d97706;
+            padding: 5px 12px;
+            border-radius: 99px;
+            font-size: 11px;
+            font-weight: 800;
+        }
+        .form-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 25px;
+        }
+        .input-group {
+            margin-bottom: 20px;
+        }
+        .input-group label {
+            display: block;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--t-muted);
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            background: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 15px;
+            color: var(--t-main);
+            font-family: 'Outfit';
+        }
+        .btn-save {
+            width: 100%;
+            background: var(--brand);
+            color: #fff;
+            border: none;
+            padding: 18px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .buffer-status {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--t-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <div style="font-size:12px; color:var(--brand); font-weight:800;">VELLODE SECTOR</div>
+            <h2 style="margin:0;">VHN Field Entry</h2>
+        </div>
+        <div class="offline-badge" id="netStatus"><i class="fas fa-signal"></i> Online</div>
+    </div>
+
+    <div class="form-card">
+        <form id="vhnForm">
+            <div class="input-group">
+                <label>Village / Street</label>
+                <input type="text" id="village" placeholder="e.g. South Colony" required>
+            </div>
+            <div class="input-group">
+                <label>Screening Type</label>
+                <select id="type">
+                    <option>ANC Visit (Maternal)</option>
+                    <option>MTM (NCD Screening)</option>
+                    <option>Post-Natal Care</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label>Patient Details (Aadhar or Name)</label>
+                <input type="text" id="patient" required>
+            </div>
+            <div class="input-group">
+                <label>Clinical Findings (BP/Vitals)</label>
+                <input type="text" id="findings" placeholder="e.g. 140/90 BP, Fever">
+            </div>
+            <button type="submit" class="btn-save">Save to Local Buffer</button>
+        </form>
+    </div>
+
+    <div class="buffer-status">
+        <i class="fas fa-database"></i> <span id="bufferCount">0</span> records waiting for signal sync.
+    </div>
+
+    <script>
+        let buffer = JSON.parse(localStorage.getItem('vhn_buffer') || '[]');
+        document.getElementById('bufferCount').innerText = buffer.length;
+
+        document.getElementById('vhnForm').onsubmit = (e) => {
+            e.preventDefault();
+            const record = {
+                village: document.getElementById('village').value,
+                type: document.getElementById('type').value,
+                patient: document.getElementById('patient').value,
+                findings: document.getElementById('findings').value,
+                time: new Date().toISOString()
+            };
+            
+            buffer.push(record);
+            localStorage.setItem('vhn_buffer', JSON.stringify(buffer));
+            document.getElementById('bufferCount').innerText = buffer.length;
+            alert("SUCCESS: Saved locally. Data will sync automatically when you reach the main road.");
+            e.target.reset();
+        };
+
+        // Network Monitor
+        window.addEventListener('offline', () => {
+            document.getElementById('netStatus').innerHTML = '<i class="fas fa-plane"></i> Offline Mode';
+            document.getElementById('netStatus').style.background = 'rgba(217, 119, 6, 0.1)';
+        });
+        window.addEventListener('online', () => {
+            document.getElementById('netStatus').innerHTML = '<i class="fas fa-signal"></i> Online';
+            document.getElementById('netStatus').style.background = 'rgba(16, 185, 129, 0.1)';
+            syncData();
+        });
+
+        function syncData() {
+            if(buffer.length === 0) return;
+            console.log("Syncing field data...");
+            // Simulate API call
+            setTimeout(() => {
+                buffer = [];
+                localStorage.setItem('vhn_buffer', '[]');
+                document.getElementById('bufferCount').innerText = '0';
+                alert("Data synced with District Server!");
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

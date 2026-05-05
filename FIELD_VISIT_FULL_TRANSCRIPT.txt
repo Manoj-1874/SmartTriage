@@ -1,0 +1,117 @@
+# PHC FIELD VISIT: FULL WORD-FOR-WORD TRANSCRIPT
+Date: 2026-05-02
+Source: PHC Nurse (45m), PHC Pharmacist (45m)
+
+---
+
+## [00:00 - 10:00] PHC Nurse Interview: OP Registration & HMIS Speed
+(Background noise: Patient chatter, heavy ceiling fan noise)
+
+Interviewer: Hello Madam, we are here for the project. Can you start from where the patient first comes in?
+Nurse: Yes, yes. Come here. This is the registration desk. Usually, we have two people here in the morning.
+Interviewer: Okay. What is the first thing you ask the patient?
+Nurse: We ask if they are old or new. Old OP or New OP. If they have the slip from last time, it's fast. If they are new, we have to enter everything.
+Interviewer: Does that go into a computer or a book first?
+Nurse: Computer. HMIS 2.0. But in the morning, between 9:00 and 10:30, the portal is very, very slow. It keeps loading and loading. Sometimes we just write the name on a small paper chit and tell them to go to the nurse station, then we enter it later when the speed is better.
+Interviewer: So you use paper chits as a backup?
+Nurse: Yes, we have no choice. If we wait for the portal, the line will go out to the main road. 
+Interviewer: What data do you enter in HMIS for a new patient?
+Nurse: Name, Age, Gender, Address, and mobile number. Now we are also asking for the ABHA number or Aadhar number if they have it.
+
+---
+
+## [10:00 - 20:00] PHC Nurse Interview: PICME 2.0 & Maternal Health Duplicate Work
+(Background noise: Baby crying, clinical environment)
+
+Interviewer: Let's talk about the pregnant mothers. You mentioned PICME 2.0?
+Nurse: Yes, PICME is for everything—ANC, PNC, and deliveries. Every mother has a 12-digit RCH ID. We enter all their checkup dates, hemoglobin, weight, and blood pressure.
+Interviewer: Does PICME help you during an emergency?
+Nurse: Not really. It’s for reporting. If a high-risk case comes now, I don't look at PICME. I look at their physical green card.
+Interviewer: Why?
+Nurse: PICME takes time to log in. The green card is in the mother's hand. I can see everything in one second. 
+Interviewer: Do you have to write in a book also?
+Nurse: Yes! (Points to the shelf). See those registers? We have the Antenatal Register, the Delivery Register, and the Immunization Register. Everything I type in PICME, I also write in the register.
+Interviewer: That's double the work, right?
+Nurse: Yes, total double work. But the DDHS office wants the physical registers during their visit. They don't want to see the computer. They want to see the handwriting and the signature.
+
+---
+
+## [20:00 - 30:00] PHC Nurse Interview: MTM Portal & Village Connectivity Issues
+(Background noise: Vehicle sounds from outside)
+
+Interviewer: What about the MTM (Makkalai Thedi Maruthuvam) program?
+Nurse: That is for doorstep care. Our VHNs go to the houses with tablets. They screen for BP and sugar.
+Interviewer: Does that sync immediately to your dashboard?
+Nurse: Only if there is signal. In many hamlets like the interior parts of Vellode, there is no 4G. The VHN has to write the readings in her field diary.
+Interviewer: What does she do then?
+Nurse: She comes back here in the evening or goes to her home and enters the data. Sometimes she forgets some details, so she has to go back again next week.
+Interviewer: So the "Real-Time" screening is not actually real-time?
+Nurse: No, it's 'Delay-Time'. (Laughs). 
+
+---
+
+## [30:00 - 45:00] PHC Nurse Interview: Attendance, Leave & Social Referral (The Secret Diary)
+(Background noise: Staff talking in Tamil)
+
+Interviewer: How do you mark your attendance?
+Nurse: We have the FRAS machine there. Facial recognition.
+Interviewer: Is it working well?
+Nurse: Most of the time. But sometimes it says 'Face Not Recognized' if we wear a mask or if the light is low. Then we sign in the manual attendance book as proof.
+Interviewer: If you need emergency leave, does the DDHS know immediately?
+Nurse: No. We use the Kalanjiyam portal for leave, but it takes time for approval. For emergencies, we just call the MO (Medical Officer) and she calls the BMO. The DDHS doesn't know about the vacancy until much later.
+Interviewer: One last thing, I saw some notes on 'Social Referral'?
+Nurse: (Voice lowers). Yes, that is for sensitive cases. Teenage pregnancies, dropouts... we don't put those names in the computer.
+Interviewer: Why not?
+Nurse: Privacy. In a village, if someone sees the computer, it's a big problem for the girl. We keep a separate private diary for that. I only tell the MO and the DDHS personally if there is a big risk.
+
+---
+
+## [45:00 - 55:00] PHC Pharmacist Interview: 13 Departments & The MPR Nightmare
+(Background noise: Clinking of medicine bottles)
+
+Interviewer: Hello, can you explain the pharmacy workflow?
+Pharmacist: Welcome. We handle all the medicine distribution for the 13 departments of this PHC.
+Interviewer: 13 departments?
+Pharmacist: Yes—Medicine, Surgery, Dental, Eye, etc. At the end of every month, we have to submit the MPR (Monthly Progress Report) to the DDHS.
+Interviewer: How do you prepare that?
+Pharmacist: It's a nightmare. We have to take the Daily Diary of every department and manually count the number of patients, the types of diseases, and the medicines used. It takes us 3 whole days to finish the report.
+Interviewer: Why isn't it automatic?
+Pharmacist: The HMIS we have doesn't summarize everything the way the DDHS wants. They have their own Excel format for the HUD office.
+
+---
+
+## [55:00 - 70:00] PHC Pharmacist Interview: Stock Bin Cards vs. Sudden Depletion
+(Background noise: Opening and closing of drawers)
+
+Interviewer: How do you know when a medicine is running low?
+Pharmacist: We use 'Bin Cards'. (Shows a card). Every time I give a strip of paracetamol, I have to subtract it on this card with a pen.
+Interviewer: Isn't that in the computer too?
+Pharmacist: Some things are. But for general supplies like bandages or small pills, the computer inventory is never up to date.
+Interviewer: Does the DDHS see this?
+Pharmacist: No. They only see the stock when we send the monthly report. If we run out of life-saving drugs on the 10th of the month, the DDHS only finds out on the 1st of the next month. 
+Interviewer: So there's a 20-day delay in seeing stock-outs?
+Pharmacist: Exactly. We have to call nearby PHCs personally to borrow medicines if we run out.
+
+---
+
+## [70:00 - 80:00] PHC Pharmacist Interview: Biomedical Waste (Ramky) & ABHA Registration
+(Background noise: Heavy vehicle passing by)
+
+Interviewer: What about waste management?
+Pharmacist: The Ramky agency comes to pick it up. We segregate everything into five colors. 
+Interviewer: Is there a digital tracker for the waste truck?
+Pharmacist: No tracker. They come, they sign a paper receipt, and we keep it in a file. If they don't come for three days, we just wait.
+Interviewer: What about ABHA IDs?
+Pharmacist: The government is pushing for it, but in our village, many old people don't have their mobile numbers linked to Aadhar. No OTP, no ABHA. It's a big block for us.
+
+---
+
+## [80:00 - 90:00] PHC Pharmacist Interview: The "Unified Solution" Dream
+(Background noise: Final cleanup sounds)
+
+Interviewer: If you could change one thing, what would it be?
+Pharmacist: One portal. Just one. Not PICME for this, MTM for that, and HMIS for another. Just one portal that tells everyone—the Nurse, the MO, and the DDHS—what is happening right now.
+Interviewer: A real-time command center?
+Pharmacist: Yes! If the DDHS can see my stock and the Nurse's patients in one screen, our work will be half. No more monthly reports, no more paper registers.
+Interviewer: Thank you for your time.
+Pharmacist: Most welcome. Please build something that actually works for us!

@@ -1,0 +1,127 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}MO Approval Desk - PriorityMed{% endblock %}
+
+{% block content %}
+<style>
+    .mo-grid {
+        padding: 40px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 25px;
+    }
+    .approval-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 25px;
+    }
+    .status-pill {
+        padding: 4px 12px;
+        border-radius: 99px;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .btn-sign {
+        background: var(--brand);
+        color: #fff;
+        border: none;
+        padding: 15px 30px;
+        border-radius: 12px;
+        font-weight: 800;
+        cursor: pointer;
+        width: 100%;
+        font-size: 16px;
+        margin-top: 20px;
+    }
+</style>
+
+<div class="banner" style="margin: 40px 40px 0;">
+    <div class="banner-left">
+        <div class="banner-eyebrow">FACILITY AUTHORITY DESK</div>
+        <div class="banner-name">Medical Officer Approval Inbox</div>
+        <p class="banner-sub">Review and digitally sign off on today's facility operations and registers.</p>
+    </div>
+</div>
+
+<div class="mo-grid">
+    <!-- Emergency Stock Reorder (Closing the 20-day gap) -->
+    <div class="approval-card" style="border: 2px solid var(--clr-red); background: rgba(220, 38, 38, 0.05);">
+        <h3 style="color:var(--clr-red);"><i class="fas fa-truck-medical"></i> Emergency Stock Reorder</h3>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Use this to bypass the 20-day delay for critical drugs like ASV or life-saving antibiotics.</p>
+        <div style="display:flex; gap:10px;">
+            <select id="emergencyItem" style="flex:1; background:var(--surface); border:1px solid var(--border); color:#fff; border-radius:8px; padding:10px;">
+                <option>Anti-Snake Venom (ASV)</option>
+                <option>Injection Adrenaline</option>
+                <option>Oxygen Cylinders</option>
+            </select>
+            <button class="btn btn-primary" style="background:var(--clr-red); box-shadow:none;" onclick="triggerEmergencyReorder()">
+                <i class="fas fa-bolt"></i> Urgent Requisition
+            </button>
+        </div>
+    </div>
+
+    <!-- Attendance Overrides -->
+    <div class="approval-card">
+        <h3><i class="fas fa-user-shield"></i> Attendance Exceptions (FRAS Failures)</h3>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Staff who used "Witnessed Check-in" today due to biometric hardware failure.</p>
+        <table style="width:100%; border-collapse: collapse;">
+            {% for staff in attendance_overrides %}
+            <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding:15px 0;"><strong>Staff ID: {{ staff.user_id }}</strong></td>
+                <td style="text-align:right;"><span class="status-pill" style="background:var(--clr-amber-bg); color:var(--clr-amber);">Awaiting MO Signature</span></td>
+            </tr>
+            {% endfor %}
+            {% if not attendance_overrides %}
+            <tr><td colspan="2" style="padding:20px; text-align:center; color:var(--t-faint);">No pending attendance overrides today.</td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <!-- Daily Diary / MPR Review -->
+    <div class="approval-card">
+        <h3><i class="fas fa-file-medical"></i> Clinical Daily Diary (Today's OP Flow)</h3>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Total of {{ pending_mpr|length }} patients treated today. Sign to verify counts for the 13-Department MPR.</p>
+        <div style="padding:20px; background:var(--glass); border-radius:12px; text-align:center;">
+            <div style="font-size:32px; font-weight:800;">{{ pending_mpr|length }}</div>
+            <div style="font-size:11px; color:var(--t-muted);">Treated Patients</div>
+        </div>
+    </div>
+
+    <!-- The Master Signature -->
+    <div style="text-align:center; padding:20px;">
+        <div style="margin-bottom:15px; color:var(--t-muted); font-size:12px;">
+            <i class="fas fa-lock"></i> All records are encrypted and audit-locked upon signature.
+        </div>
+        <button class="btn-sign" onclick="signAll()">
+            <i class="fas fa-pen-nib"></i> DIGITALLY SIGN ALL REGISTERS FOR TODAY
+        </button>
+    </div>
+</div>
+
+<script>
+    function signAll() {
+        if(confirm("Confirm: You are digitally signing all facility registers for today. This action is recorded for DPH audits.")) {
+            fetch('/api/phc/mo/sign-all', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                alert(data.message);
+                location.reload();
+            });
+        }
+    }
+    function triggerEmergencyReorder() {
+        const item = document.getElementById('emergencyItem').value;
+        if(confirm(`Confirm URGENT Requisition for ${item}? This will trigger an immediate alert at the DDHS HQ.`)) {
+            fetch('/api/mo/emergency-reorder', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ item: item })
+            }).then(r => r.json()).then(data => {
+                alert("DISTRICT ALERT SENT: The DDHS has been notified of the critical shortage.");
+            });
+        }
+    }
+</script>
+{% endblock %}

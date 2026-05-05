@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Nurse Portal - PriorityMed{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --brand: #0B9B7A;
+            --brand-pale: rgba(11, 155, 122, 0.08);
+            --bg: #F8FAF9;
+            --card: #ffffff;
+            --border: rgba(11, 155, 122, 0.12);
+            --t-main: #1A2E26;
+            --t-muted: #5E7A6F;
+            --t-faint: #9DB0A8;
+            --glass: rgba(11, 155, 122, 0.03);
+            --clr-red: #dc2626;
+            --clr-red-bg: rgba(220, 38, 38, 0.08);
+            --clr-green: #059669;
+            --clr-green-bg: rgba(5, 150, 105, 0.08);
+            --sh-card: 0 4px 20px rgba(11, 155, 122, 0.06);
+        }
+        body {
+            background: var(--bg);
+            color: var(--t-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            min-height: 100vh;
+        }
+        .sidebar {
+            width: 280px;
+            background: #ffffff;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+        }
+        .main-content { flex: 1; min-width: 0; }
+        .sidebar-brand { padding: 40px 30px; font-size: 22px; font-weight: 900; color: var(--brand); letter-spacing: -1px; }
+        .nav-list { list-style: none; padding: 0 15px; margin: 0; }
+        .nav-item a {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 14px 20px;
+            color: var(--t-muted);
+            text-decoration: none;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .nav-item a:hover { background: var(--brand-pale); color: var(--brand); }
+        .nav-item.active a { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(11, 155, 122, 0.25); }
+        
+        .top-bar {
+            height: 80px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 40px;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .btn-sync {
+            background: var(--brand);
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        
+        /* Shared Components */
+        .banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-bottom: 40px;
+        }
+        .banner-eyebrow { color: var(--brand); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 8px; }
+        .banner-name { font-size: 32px; font-weight: 800; letter-spacing: -1px; }
+        .banner-sub { color: var(--t-muted); margin-top: 5px; font-size: 14px; }
+        
+        .mpr-badge { background: var(--glass); border: 1px solid var(--border); color: var(--t-muted); padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-brand">PriorityMed</div>
+        <ul class="nav-list">
+            {% if user.role == 'phc_nurse' or user.role == 'doctor' %}
+            <li class="nav-item"><a href="/phc/nurse/dashboard"><i class="fas fa-grid-2"></i> Command Center</a></li>
+            <li class="nav-item"><a href="/phc/nurse/patients"><i class="fas fa-users"></i> Patient Monitor</a></li>
+            <li class="nav-item"><a href="/phc/nurse/daily-diary"><i class="fas fa-book-medical"></i> Daily Diary</a></li>
+            <li class="nav-item"><a href="/phc/nurse/maternal-tracking"><i class="fas fa-person-pregnant"></i> Maternal (PICME)</a></li>
+            <li class="nav-item"><a href="/phc/nurse/vhn-outreach"><i class="fas fa-walking"></i> VHN Outreach</a></li>
+            {% endif %}
+
+            {% if user.role == 'pharmacist' or user.role == 'doctor' or user.role == 'phc_nurse' %}
+            <li class="nav-item"><a href="/phc/pharmacist/dashboard"><i class="fas fa-pills"></i> Pharmacy Command</a></li>
+            <li class="nav-item"><a href="/phc/stock-borrowing"><i class="fas fa-exchange-alt"></i> Stock Discovery</a></li>
+            {% endif %}
+
+            <li class="nav-item"><a href="/phc/attendance"><i class="fas fa-user-check"></i> Attendance (OD)</a></li>
+            
+            {% if user.role == 'doctor' %}
+            <li class="nav-item"><a href="/phc/mo/approval-inbox" style="background:rgba(11,155,122,0.1);"><i class="fas fa-file-signature"></i> MO Approval Desk</a></li>
+            {% endif %}
+            <li class="nav-item" style="margin-top: 40px;"><a href="/logout" style="color: var(--clr-red);"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
+        </ul>
+    </aside>
+
+    <main class="main-content">
+        <header class="top-bar">
+            <div style="font-size: 14px; font-weight: 600; color: var(--t-muted);">PHC SECTOR: <span style="color:#fff;">Vellode District</span></div>
+            <div style="display:flex; gap:15px; align-items:center;">
+                <div id="hmisStatus" style="font-size:11px; color:var(--clr-green);"><i class="fas fa-check-circle"></i> HMIS 2.0 Connected</div>
+                <button class="btn-sync" onclick="batchSyncHMIS()"><i class="fas fa-cloud-upload"></i> Batch HMIS Sync</button>
+            </div>
+        </header>
+
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        function batchSyncHMIS() {
+            const btn = document.querySelector('.btn-sync');
+            const status = document.getElementById('hmisStatus');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing Batch...';
+            
+            fetch('/api/phc/hmis-batch-sync', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                alert("SUCCESS: " + data.synced_count + " entries pushed to state portal.");
+                btn.innerHTML = '<i class="fas fa-cloud-upload"></i> Batch HMIS Sync';
+            });
+        }
+    </script>
+</body>
+</html>
