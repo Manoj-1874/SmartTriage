@@ -2461,6 +2461,7 @@ def phc_nurse_reports():
 
             # Latest vitals and symptoms
             latest = records_list[0]
+            patient_dict['latest_report_id'] = latest.get('id')
             patient_dict['last_checkup'] = latest.get('timestamp', '')
             patient_dict['symptoms'] = latest.get('symptoms', 'N/A')
             patient_dict['risk_level'] = latest.get('dual_brain_risk', 'UNKNOWN')
@@ -2488,7 +2489,53 @@ def phc_nurse_reports():
                          dashboard_data=dashboard_data,
                          user=current_user)
 
-@app.route('/phc/nurse/messages')
+@app.route('/phc/nurse/patient-report/<int:patient_id>')
+@login_required
+def phc_nurse_patient_report(patient_id):
+    """View ALL reports/history for a specific patient (NURSE VIEW)"""
+    if current_user.role != 'phc_nurse':
+        flash('Access denied')
+        return redirect(url_for('index'))
+
+    conn = get_db_connection()
+    patient = conn.execute('SELECT * FROM users WHERE id = ?', (patient_id,)).fetchone()
+    
+    if not patient:
+        conn.close()
+        flash('Patient not found')
+        return redirect(url_for('phc_nurse_patients'))
+
+    # Fetch all logs for this patient
+    history_rows = conn.execute('''
+        SELECT * FROM patient_logs 
+        WHERE user_id = ? 
+        ORDER BY timestamp DESC
+    ''', (patient_id,)).fetchall()
+    
+    history = []
+    from datetime import datetime
+    for row in history_rows:
+        r = dict(row)
+        try:
+            dt = datetime.fromisoformat(r['timestamp'])
+            r['formatted_date'] = dt.strftime('%B %d, %Y')
+            r['formatted_time'] = dt.strftime('%I:%M %p')
+        except:
+            r['formatted_date'] = r['timestamp']
+            r['formatted_time'] = ''
+        
+        r['bp_formatted'] = f"{r.get('sys_bp', '--')}/{r.get('dia_bp', '--')} mmHg"
+        r['hr_formatted'] = f"{r.get('hr', '--')} bpm"
+        r['temp_formatted'] = f"{r.get('temp', '--')}°F"
+        r['patient_name'] = patient['fullname']
+        history.append(r)
+
+    conn.close()
+    return render_template('patient_report_detail.html', 
+                         report=history[0] if history else None, 
+                         history=history, 
+                         patient=patient,
+                         user=current_user)
 @login_required
 def phc_nurse_messages():
     """PHC Nurse - Messaging with facility patients"""
@@ -3064,25 +3111,50 @@ def api_verify_mpr():
 # DIGITAL BIN CARD (Stock Audit History)
 # ═══════════════════════════════════════════════════
 
+@app.route('/api/phc/log-waste', methods=['POST'])
+@login_required
+def api_phc_log_waste():
+    """REAL-WORLD: Pharmacist logs biomedical waste for Ramky pickup"""
+    if current_user.role not in ['pharmacist', 'phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+    data = request.json
+    bag_color = data.get('bag_color')
+    weight = data.get('weight')
+    collected_by = data.get('collected_by', 'Ramky Driver')
+    
+    if not bag_color or not weight:
+        return jsonify({'success': False, 'message': 'Missing data'}), 400
+        
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT INTO waste_logs (phc_id, bag_color, weight, collected_by)
+        VALUES (?, ?, ?, ?)
+    ''', (current_user.phc_id, bag_color, weight, collected_by))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': 'Waste log saved successfully.'})
+
 @app.route('/phc/pharmacist/bin-card/<item_name>')
 @login_required
 def phc_pharmacist_bin_card(item_name):
-    """REAL-WORLD: Digitizes the physical 'Bin Card' where staff subtract stock with a pen"""
+    """REAL-WORLD: Digitizes the physical 'Bin Card' with flexible naming"""
     if current_user.role not in ['pharmacist', 'phc_nurse', 'doctor']:
         return redirect(url_for('login'))
         
     conn = get_db_connection()
-    # Fetch consumption history for this item
+    # Fetch consumption history with LIKE for flexibility
     history = conn.execute('''
         SELECT timestamp, action, quantity_changed, balance_after, staff_name
         FROM stock_logs
-        WHERE item_name = ? AND phc_id = ?
+        WHERE (item_name LIKE ?) AND phc_id = ?
         ORDER BY timestamp DESC
         LIMIT 50
-    ''', (item_name, current_user.phc_id)).fetchall()
+    ''', (f"%{item_name}%", current_user.phc_id)).fetchall()
     conn.close()
     
-    return render_template('phc_bin_card.html', item_name=item_name, history=history)
+    return render_template('phc_bin_card.html', item_name=item_name, history=history, user=current_user)
 
 # ═══════════════════════════════════════════════════
 # INCOMING REFERRAL PULSE (Emergency Handshake)
@@ -3992,10 +4064,11 @@ def ddhs_admin_attendance():
         
         query = '''
             SELECT u.id, u.fullname, u.role, u.phone, u.specialization, u.phc_id,
-                   pf.name as center_name,
+                   pf.name as center_name, pf.lat as phc_lat, pf.lon as phc_lon,
                    sa.check_in_time as checkin_time,
                    sa.check_out_time as checkout_time,
                    sa.status as attendance_status,
+                   sa.lat as staff_lat, sa.lon as staff_lon, sa.ai_confidence,
                    (SELECT status FROM staff_leaves 
                     WHERE user_id = u.id AND status = 'APPROVED' 
                     AND ? BETWEEN start_date AND end_date LIMIT 1) as current_leave
@@ -4003,7 +4076,7 @@ def ddhs_admin_attendance():
             LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
             LEFT JOIN staff_attendance sa ON u.id = sa.user_id
                 AND date(sa.check_in_time) = ?
-            WHERE u.role IN ('doctor', 'phc_nurse') AND u.district = ?
+            WHERE u.role IN ('doctor', 'phc_nurse', 'pharmacist', 'vhn', 'ambulance_driver') AND u.district = ?
         '''
         
         params = [today, today, current_user.district]
@@ -4084,24 +4157,25 @@ def ddhs_admin_attendance():
 @app.route('/phc/attendance')
 @login_required
 def phc_staff_attendance():
-    """PHC Nurse/Doctor - View attendance for THEIR center"""
-    if current_user.role not in ['phc_nurse', 'doctor']:
+    """PHC Staff - View attendance for THEIR center"""
+    if current_user.role not in ['phc_nurse', 'doctor', 'pharmacist', 'vhn', 'ambulance_driver']:
         flash('Access denied')
         return redirect(url_for('index'))
 
     conn = get_db_connection()
     c = conn.cursor()
     
-    # Get staff in THIS PHC
+    # Get staff in THIS PHC (Deduplicated latest attendance only)
     staff_list = c.execute('''
         SELECT u.id, u.fullname, u.role, u.phone, u.specialization,
-               sa.check_in_time as checkin_time,
-               sa.check_out_time as checkout_time,
+               MAX(sa.check_in_time) as checkin_time,
+               MAX(sa.check_out_time) as checkout_time,
                COALESCE(sa.status, 'Absent') as status
         FROM users u
         LEFT JOIN staff_attendance sa ON u.id = sa.user_id 
-             AND date(sa.check_in_time) = date('now')
-        WHERE u.phc_id = ? AND u.role IN ('doctor', 'phc_nurse')
+             AND date(sa.check_in_time) = date('now', 'localtime')
+        WHERE u.phc_id = ? AND u.role IN ('doctor', 'phc_nurse', 'pharmacist', 'vhn', 'ambulance_driver')
+        GROUP BY u.id
         ORDER BY u.fullname
     ''', (current_user.phc_id,)).fetchall()
     
@@ -4112,11 +4186,23 @@ def phc_staff_attendance():
         ORDER BY requested_at DESC
     ''', (current_user.id,)).fetchall()
     
+    # Get attendance stats for visuals (7 days, 30 days, year)
+    stats = {}
+    periods = [('7d', 7), ('30d', 30), ('1y', 365)]
+    for key, days in periods:
+        count = c.execute('''
+            SELECT COUNT(DISTINCT date(check_in_time)) as count
+            FROM staff_attendance
+            WHERE user_id = ? AND date(check_in_time) >= date('now', 'localtime', ?)
+        ''', (current_user.id, f'-{days} days')).fetchone()
+        stats[key] = count['count'] if count else 0
+
     conn.close()
     
     return render_template('phc_attendance.html',
                          staff_list=staff_list,
                          my_leaves=my_leaves,
+                         attendance_stats=stats,
                          user=current_user)
 
 @app.route('/api/staff/leave/request', methods=['POST'])
@@ -4654,20 +4740,23 @@ def phc_nurse_dashboard():
         """, (phc_id,)).fetchall()
         mpr_stats = {row['phc_department']: row['count'] for row in mpr_rows}
 
-        # REAL-WORLD: Fetch real priority queue patients (VHN referrals + High Risk Clinical logs)
+        # REAL-WORLD: Fetch real priority queue patients (Deduplicated latest entry only)
         priority_queue_rows = conn.execute("""
-            SELECT 'VHN' as source, id, patient_name as name, vitals_summary as detail, 
-                   CASE WHEN risk_score >= 8 THEN 'CRITICAL' ELSE 'HIGH' END as risk_level, 
-                   village as sub_detail, timestamp
-            FROM vhn_field_entries 
-            WHERE risk_score >= 7
-            UNION ALL
-            SELECT 'CLINIC' as source, u.id, u.fullname as name, pl.dual_brain_risk as detail, 
-                   pl.dual_brain_risk as risk_level, pl.phc_department as sub_detail, pl.timestamp
-            FROM patient_logs pl
-            JOIN users u ON pl.user_id = u.id
-            WHERE pl.phc_id = ? AND pl.dual_brain_risk IN ('CRITICAL', 'HIGH')
-            ORDER BY timestamp DESC LIMIT 5
+            SELECT source, id, name, detail, risk_level, sub_detail, timestamp FROM (
+                SELECT 'VHN' as source, id, patient_name as name, vitals_summary as detail, 
+                       CASE WHEN risk_score >= 8 THEN 'CRITICAL' ELSE 'HIGH' END as risk_level, 
+                       village as sub_detail, timestamp
+                FROM vhn_field_entries 
+                WHERE risk_score >= 7
+                UNION ALL
+                SELECT 'CLINIC' as source, u.id, u.fullname as name, pl.dual_brain_risk as detail, 
+                       pl.dual_brain_risk as risk_level, pl.phc_department as sub_detail, pl.timestamp
+                FROM patient_logs pl
+                JOIN users u ON pl.user_id = u.id
+                WHERE pl.phc_id = ? AND pl.dual_brain_risk IN ('CRITICAL', 'HIGH')
+            ) t
+            GROUP BY id, source
+            ORDER BY timestamp DESC LIMIT 10
         """, (phc_id,)).fetchall()
         
         priority_patients = []
@@ -4887,21 +4976,12 @@ def phc_nurse_intake():
         return redirect(url_for('index'))
 
     conn = get_db_connection()
-    # Get ONLY patients assigned to this nurse
+    # Get ALL patients at this PHC center
     patients = conn.execute('''
-        SELECT DISTINCT u.id, u.fullname FROM users u
-        WHERE u.role = 'patient' AND u.assigned_nurse_id = ?
-        ORDER BY u.fullname
-    ''', (current_user.id,)).fetchall()
-
-    # If no patients found via direct assignment, check logs (fallback)
-    if not patients:
-        patients = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname FROM users u
-            INNER JOIN patient_logs pl ON u.id = pl.user_id
-            WHERE u.role = 'patient' AND u.assigned_nurse_id = ?
-            ORDER BY u.fullname
-        ''', (current_user.id,)).fetchall()
+        SELECT id, fullname FROM users 
+        WHERE role = 'patient' AND phc_id = ?
+        ORDER BY fullname
+    ''', (current_user.phc_id,)).fetchall()
 
     patient_id = request.args.get('patient_id')
     selected_patient = None
@@ -8335,7 +8415,27 @@ def api_mark_attendance():
         if not staff:
             return jsonify({'success': False, 'message': 'Staff not found'}), 404
 
-        # Insert or update attendance record for today
+        # 1. Capture Audit Metrics
+        lat = data.get('lat')
+        lon = data.get('lon')
+        ai_conf = data.get('ai_confidence', 0)
+        
+        # Get PHC coordinates
+        phc = c.execute('SELECT name, lat, lon FROM phc_facilities WHERE id = ?', (staff['phc_id'],)).fetchone()
+        distance = 0
+        if lat and lon and phc['lat'] and phc['lon']:
+            from math import radians, cos, sin, asin, sqrt
+            def haversine(lon1, lat1, lon2, lat2):
+                lon1, lat1, lon2, lat2 = map(radians, [float(lon1), float(lat1), float(lon2), float(lat2)])
+                dlon = lon2 - lon1 
+                dlat = lat2 - lat1 
+                a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+                c = 2 * asin(sqrt(a)) 
+                r = 6371 # Radius of earth in km
+                return c * r
+            distance = haversine(lon, lat, phc['lon'], phc['lat'])
+
+        # 2. Insert or update attendance record for today
         status_val = status.title() if status in ['present', 'absent', 'late'] else 'Present'
         
         # Check if record for today exists
@@ -8347,14 +8447,15 @@ def api_mark_attendance():
         if existing:
             c.execute('''
                 UPDATE staff_attendance 
-                SET status = ? 
+                SET status = ?, check_in_time = datetime('now', 'localtime'), check_out_time = NULL,
+                    lat = ?, lon = ?, ai_confidence = ?
                 WHERE id = ?
-            ''', (status_val, existing['id']))
+            ''', (status_val, lat, lon, ai_conf, existing['id']))
         else:
             c.execute('''
-                INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time)
-                VALUES (?, ?, ?, datetime('now', 'localtime'))
-            ''', (staff_id, staff['phc_id'], status_val))
+                INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time, lat, lon, ai_confidence)
+                VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?, ?)
+            ''', (staff_id, staff['phc_id'], status_val, lat, lon, ai_conf))
 
         conn.commit()
         conn.close()
@@ -8362,6 +8463,25 @@ def api_mark_attendance():
         return jsonify({'success': True, 'message': f'Attendance marked as {status_val}'})
     except Exception as e:
         app.logger.error(f"Error marking attendance: {e}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+@app.route('/api/attendance/checkout', methods=['POST'])
+@login_required
+def api_attendance_checkout():
+    """Mark staff check-out for today"""
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute('''
+            UPDATE staff_attendance 
+            SET check_out_time = datetime('now', 'localtime'), status = 'Completed'
+            WHERE user_id = ? AND date(check_in_time) = date('now', 'localtime')
+            AND check_out_time IS NULL
+        ''', (current_user.id,))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Successfully checked out.'})
+    except Exception as e:
         return jsonify({'success': False, 'message': str(e)}), 500
 
 

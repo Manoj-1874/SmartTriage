@@ -125,9 +125,8 @@
                         <th>Staff Name</th>
                         <th>Role</th>
                         <th>Health Center</th>
-                        <th>Phone</th>
                         <th>Check-in Time</th>
-                        <th>Check-out Time</th>
+                        <th>Trust Metrics</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -136,32 +135,33 @@
                     {% if staff_list %}
                         {% for staff in staff_list %}
                         <tr class="staff-row" data-center="{{ staff.center_id }}" data-status="{{ staff.status }}">
+                            <td><strong>{{ staff.name }}</strong></td>
                             <td>
-                                <strong>{{ staff.name }}</strong>
-                            </td>
-                            <td>
-                                <span style="font-size: 12px; color: var(--text-muted);">
-                                    {% if staff.role == 'doctor' %}
-                                        <i class="fas fa-user-md"></i> Doctor
-                                    {% elif staff.role == 'phc_nurse' %}
-                                        <i class="fas fa-user-nurse"></i> PHC Nurse
-                                    {% else %}
-                                        {{ staff.role }}
-                                    {% endif %}
+                                <span style="font-size: 11px; font-weight:700; color: var(--text-muted); text-transform:uppercase;">
+                                    {{ staff.role|replace('phc_', '') }}
                                 </span>
                             </td>
                             <td>{{ staff.center_name or 'Not Assigned' }}</td>
-                            <td>{{ staff.phone or '—' }}</td>
                             <td>
                                 {% if staff.checkin_time %}
-                                    {{ staff.checkin_time|strftime('%I:%M %p') }}
+                                    <div style="font-weight:700; font-size:14px;">{{ staff.checkin_time|strftime('%I:%M %p') }}</div>
+                                    <div style="font-size:10px; color:var(--text-muted);">{{ staff.checkin_time|strftime('%d %b') }}</div>
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
-                                {% if staff.checkout_time %}
-                                    {{ staff.checkout_time|strftime('%I:%M %p') }}
+                                {% if staff.checkin_time %}
+                                    <div style="display:flex; flex-direction:column; gap:4px;">
+                                        <div class="status-badge" style="background: rgba(11,155,122,0.1); color: var(--brand); font-size:10px; border:1px solid var(--brand);">
+                                            <i class="fas fa-brain"></i> {{ staff.ai_confidence or 0 }}% AI Trust
+                                        </div>
+                                        {% if staff.staff_lat %}
+                                            <a href="https://www.google.com/maps?q={{ staff.staff_lat }},{{ staff.staff_lon }}" target="_blank" class="status-badge" style="background: #f3f4f6; color: #4b5563; font-size:10px; text-decoration:none;">
+                                                <i class="fas fa-location-dot"></i> GPS Verified
+                                            </a>
+                                        {% endif %}
+                                    </div>
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}

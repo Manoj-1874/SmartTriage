@@ -240,7 +240,7 @@
                         <i class="far fa-clock"></i> Last Assessment: {{ report.last_checkup }}
                     </div>
 
-                    <a href="/patients" class="btn-view">View Full History ({{ report.total_records }})</a>
+                    <a href="/patient/report/{{ report.latest_report_id }}" class="btn-view">View Full History ({{ report.total_records }})</a>
                 </div>
                 {% endfor %}
             </div>
