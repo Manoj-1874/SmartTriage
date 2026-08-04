@@ -494,82 +494,7 @@ function showToast(msg,ico='fas fa-check-circle'){
 <div class="shell">
 
 <!-- ══ SIDEBAR ══ -->
-<aside class="sidebar" id="sidebar">
-  {% set u = current_user if current_user and current_user.is_authenticated else (user if user else None) %}
-  <div class="s-brand">
-    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-    <div class="s-brand-text">
-      <div class="s-brand-name">PriorityMed</div>
-      <div class="s-brand-tag">{% if u and u.role == 'doctor' %}Doctor Portal{% else %}Patient Portal{% endif %}</div>
-    </div>
-  </div>
-  <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
-  <div class="s-user">
-    <div class="s-ava">
-      <i class="fas fa-user"></i>
-      <div class="s-ava-dot"></div>
-    </div>
-    <div class="s-user-text">
-      <div class="s-uname">{{ u.fullname if u else 'Alex Johnson' }}</div>
-      <div class="s-urole">{% if u and u.role == 'doctor' %}Doctor Account{% else %}Patient Account{% endif %}</div>
-    </div>
-  </div>
-  <nav class="s-nav">
-    <div class="s-group">Overview</div>
-    <a href="{% if u and u.role == 'doctor' %}/doctor/dashboard{% else %}/patient/dashboard{% endif %}" class="s-link">
-      <div class="s-icon"><i class="fas fa-th-large"></i></div>
-      <span class="s-label">Dashboard</span>
-    </a>
-    {% if not u or u.role != 'doctor' and u.role != 'patient' %}
-    <a href="/health-report" class="s-link">
-      <div class="s-icon"><i class="fas fa-chart-line"></i></div>
-      <span class="s-label">Health Progress</span>
-    </a>
-    {% endif %}
-    {% if u and u.role == 'doctor' %}
-    <a href="/patients" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
-      <span class="s-label">Patients</span>
-    </a>
-    <a href="/doctor/reports" class="s-link">
-      <div class="s-icon"><i class="far fa-file-alt"></i></div>
-      <span class="s-label">Reports</span>
-    </a>
-    <a href="/phc/doctor/resources" class="s-link">
-      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
-      <span class="s-label">Resource Governance</span>
-    </a>
-    <a href="/phc/attendance" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-check"></i></div>
-      <span class="s-label">Staff Attendance</span>
-    </a>
-    {% endif %}
-    <div class="s-group">My Care</div>
-    <a href="/appointments" class="s-link active">
-      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-      <span class="s-label">Appointments</span>
-    </a>
-    <a href="/doctors" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-md"></i></div>
-      <span class="s-label">Find Doctors</span>
-    </a>
-    <div class="s-group">Support</div>
-    <a href="/messages" class="s-link">
-      <div class="s-icon"><i class="fas fa-comments"></i></div>
-      <span class="s-label">Messages</span>
-    </a>
-    <a href="/logout" class="s-link">
-      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-      <span class="s-label">Sign Out</span>
-    </a>
-  </nav>
-  <div class="s-footer">
-    <div class="s-status">
-      <div class="s-dot"></div>
-      <span class="s-status-txt">All Systems Operational</span>
-    </div>
-  </div>
-</aside>
+{% include 'sidebar.html' %}
 
 <!-- ══ MAIN ══ -->
 <div class="main" id="mainContent">
@@ -582,7 +507,6 @@ function showToast(msg,ico='fas fa-check-circle'){
       <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
       <span class="t-breadcrumb-active">Appointments</span>
     </div>
-    {% if u and u.role != 'doctor' %}
     <div class="t-right">
       <div class="t-clock" id="liveClock">--:-- --</div>
       <div class="theme-pill" id="themeToggle">
@@ -602,7 +526,6 @@ function showToast(msg,ico='fas fa-check-circle'){
         </div>
       </div>
     </div>
-    {% endif %}
   </header>
 
   <div class="page">
@@ -618,8 +541,10 @@ function showToast(msg,ico='fas fa-check-circle'){
           <h1 class="hero-title">Manage <span>Appointments</span></h1>
           <p class="hero-sub">View your full appointment history, track activity patterns, and schedule new consultations with your care team — all in one place.</p>
           <div class="hero-actions">
+            {% if u and u.role == 'patient' %}
             <button type="button" class="btn-white" onclick="openModal()"><i class="fas fa-plus"></i> New Appointment</button>
             <a href="/doctors" class="btn-outline-white"><i class="fas fa-user-md"></i> Find a Doctor</a>
+            {% endif %}
           </div>
         </div>
         <div class="hero-stats">
@@ -772,7 +697,9 @@ function showToast(msg,ico='fas fa-check-circle'){
           <div style="font-size:16px;font-weight:700;color:var(--t-head);">Appointments</div>
           <div style="font-size:12px;color:var(--t-muted);margin-top:2px;">Your complete appointment history and upcoming visits</div>
         </div>
+        {% if u and u.role == 'patient' %}
         <button class="btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> New Appointment</button>
+        {% endif %}
       </div>
 
       <!-- Tabs -->
@@ -823,15 +750,11 @@ function showToast(msg,ico='fas fa-check-circle'){
 
         <div class="form-group">
           <label class="form-label">Select Doctor <span class="req">*</span></label>
-          <select name="doctor_id" class="form-ctrl" required>
+          <select name="doctor_id" id="modalDoctor" class="form-ctrl" required>
             <option value="">— Choose a Doctor —</option>
             {% for doctor in all_doctors %}
             <option value="{{ doctor.id }}">Dr. {{ doctor.fullname }} — {{ doctor.specialization }} ({{ doctor.experience }} yrs exp)</option>
             {% endfor %}
-            <!-- Demo options for preview -->
-            <option value="1">Dr. Sarah Chen — Cardiology (12 yrs exp)</option>
-            <option value="2">Dr. Raj Kumar — General Medicine (8 yrs exp)</option>
-            <option value="3">Dr. Priya Sharma — Neurology (15 yrs exp)</option>
           </select>
         </div>
 
@@ -842,7 +765,23 @@ function showToast(msg,ico='fas fa-check-circle'){
           </div>
           <div class="form-group">
             <label class="form-label">Appointment Time <span class="req">*</span></label>
-            <input type="time" name="appointment_time" class="form-ctrl" required>
+            <select name="appointment_time" id="modalTime" class="form-ctrl" required>
+              <option value="">— Select Time —</option>
+              <option value="09:00">09:00 AM</option>
+              <option value="09:30">09:30 AM</option>
+              <option value="10:00">10:00 AM</option>
+              <option value="10:30">10:30 AM</option>
+              <option value="11:00">11:00 AM</option>
+              <option value="11:30">11:30 AM</option>
+              <option value="12:00">12:00 PM</option>
+              <option value="12:30">12:30 PM</option>
+              <option value="14:00">02:00 PM</option>
+              <option value="14:30">02:30 PM</option>
+              <option value="15:00">03:00 PM</option>
+              <option value="15:30">03:30 PM</option>
+              <option value="16:00">04:00 PM</option>
+              <option value="16:30">04:30 PM</option>
+            </select>
           </div>
         </div>
 
@@ -1104,7 +1043,9 @@ function renderAppts(){
         <div class="empty-ico"><i class="far fa-calendar-times"></i></div>
         <div class="empty-title">No appointments found</div>
         <p class="empty-sub">Try adjusting your filter or search, or book a new appointment.</p>
+        {% if u and u.role == 'patient' %}
         <button class="btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> Book Appointment</button>
+        {% endif %}
       </div>`;
     return;
   }
@@ -1152,6 +1093,7 @@ function buildActions(a,s){
     if(s==='pending'){
       html+=`<button type="button" class="act-btn act-history" onclick="viewPatientHistory(${a.patient_id})"><i class="fas fa-file-medical-alt"></i> History</button>`;
       html+=`<form action="/appointments/update/${a.id}" method="POST" style="display:inline"><input type="hidden" name="status" value="Approved"><button type="submit" class="act-btn act-approve"><i class="fas fa-check"></i> Approve</button></form>`;
+      html+=`<button type="button" class="act-btn act-reschedule" onclick="rescheduleAppt(${a.id}, '${a.appointment_date}', '${a.appointment_time}')" style="background:var(--clr-blue-bg);color:var(--clr-blue);"><i class="fas fa-clock"></i> Reschedule</button>`;
       html+=`<form action="/appointments/update/${a.id}" method="POST" style="display:inline"><input type="hidden" name="status" value="Rejected"><button type="submit" class="act-btn act-reject"><i class="fas fa-times"></i> Reject</button></form>`;
     } else if(s==='approved'){
       html+=`<form action="/appointments/update/${a.id}" method="POST" style="display:inline"><input type="hidden" name="status" value="Completed"><button type="submit" class="act-btn act-complete"><i class="fas fa-check-double"></i> Complete</button></form>`;
@@ -1288,26 +1230,171 @@ document.addEventListener('DOMContentLoaded',function(){
 
   // Setup notification dropdown button click handler
   const notifBtn = document.getElementById('notifBtn');
-  const notifDropdown = document.getElementById('notifDropdown');
-
   if (notifBtn) {
-    notifBtn.addEventListener('click', () => {
-      if (notifDropdown.style.display === 'none') {
-        openNotifDropdown();
-      } else {
-        closeNotifDropdown();
-      }
-    });
+    notifBtn.addEventListener('click', toggleNotifDropdown);
   }
 
   // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
+    const notifBtn = document.getElementById('notifBtn');
+    const notifDropdown = document.getElementById('notifDropdown');
     if (!notifBtn || !notifDropdown) return;
     if (!notifBtn.contains(e.target) && !notifDropdown.contains(e.target)) {
       closeNotifDropdown();
     }
   });
 });
+
+function toggleNotifDropdown() {
+    const dropdown = document.getElementById('notifDropdown');
+    if (!dropdown) return;
+    if (dropdown.style.display === 'none') {
+        dropdown.style.display = 'block';
+        fetchNotifications();
+    } else {
+        dropdown.style.display = 'none';
+    }
+}
+
+function closeNotifDropdown() {
+    const dropdown = document.getElementById('notifDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+}
+
+async function fetchNotifications() {
+    try {
+        const res = await fetch('/appointments/notifications');
+        const data = await res.json();
+        
+        if(data.success) {
+            const list = document.getElementById('notifList');
+            const badge = document.querySelector('.t-badge');
+            
+            if(data.notifications && data.notifications.length > 0) {
+                const unreadCount = data.notifications.filter(n => !n.is_read).length;
+                if (badge) {
+                    if (unreadCount > 0) {
+                        badge.style.display = 'block';
+                        badge.innerText = unreadCount;
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                
+                let html = '';
+                data.notifications.forEach(n => {
+                    const utcDate = new Date(n.created_at.replace(' ', 'T') + 'Z');
+                    html += `
+                    <div onclick="handleNotifClick(${n.id})" style="cursor:pointer; padding:12px 16px;border-bottom:1px solid var(--border);${!n.is_read ? 'background:rgba(11,155,122,0.05);' : ''}">
+                        <div style="font-weight:600;font-size:13px;color:var(--t-head);">${n.title}</div>
+                        <div style="font-size:12px;color:var(--t-muted);margin-top:4px;">${n.message}</div>
+                        <div style="font-size:11px;color:var(--t-faint);margin-top:6px;">${utcDate.toLocaleString()}</div>
+                    </div>`;
+                });
+                if (list) list.innerHTML = html;
+            } else {
+                if (badge) badge.style.display = 'none';
+                if (list) list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">No new notifications</div>';
+            }
+        }
+    } catch(e) {
+        console.error('Error fetching notifications:', e);
+        const list = document.getElementById('notifList');
+        if (list) list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Failed to load notifications</div>';
+    }
+}
+
+async function handleNotifClick(notifId) {
+    try {
+        await fetch(`/appointments/notifications/${notifId}/read`, { method: 'POST' });
+    } catch(e) {
+        console.error('Error marking as read', e);
+    }
+    window.location.href = '/appointments';
+}
+
+// Fetch notifications periodically
+setInterval(fetchNotifications, 30000);
+// Fetch on load
+document.addEventListener('DOMContentLoaded', fetchNotifications);
+// --- Doctor Availability Check ---
+const modalDoctor = document.getElementById('modalDoctor');
+const modalDateInput = document.getElementById('modalDate');
+const modalTime = document.getElementById('modalTime');
+
+async function checkAvailability() {
+    if (!modalDoctor || !modalDateInput || !modalTime) return;
+    
+    const doctorId = modalDoctor.value;
+    const date = modalDateInput.value;
+    
+    // Enable all options first
+    Array.from(modalTime.options).forEach(opt => {
+        opt.disabled = false;
+        opt.style.color = '';
+        if (opt.value !== "") {
+            opt.text = opt.text.replace(' (Booked)', '');
+        }
+    });
+    
+    if (!doctorId || !date) return;
+    
+    try {
+        const res = await fetch(`/api/doctor/${doctorId}/booked-times?date=${date}`);
+        const bookedTimes = await res.json();
+        
+        Array.from(modalTime.options).forEach(opt => {
+            // Options are like "09:00", DB might store "09:00" or "09:00:00"
+            if (opt.value && bookedTimes.some(bt => bt && bt.startsWith(opt.value))) {
+                opt.disabled = true;
+                opt.style.color = 'var(--t-faint)';
+                if (!opt.text.includes('(Booked)')) {
+                    opt.text += ' (Booked)';
+                }
+                if (modalTime.value === opt.value) {
+                    modalTime.value = ""; // Reset if currently selected
+                }
+            }
+        });
+    } catch(e) {
+        console.error('Error fetching availability:', e);
+    }
+}
+
+if (modalDoctor) modalDoctor.addEventListener('change', checkAvailability);
+if (modalDateInput) modalDateInput.addEventListener('change', checkAvailability);
+
+function rescheduleAppt(id, oldDate, oldTime) {
+    const newDate = prompt("Enter new date (YYYY-MM-DD):", oldDate);
+    if (!newDate) return;
+    const newTime = prompt("Enter new time (HH:MM):", oldTime);
+    if (!newTime) return;
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/appointments/update/${id}`;
+    
+    const statusInput = document.createElement('input');
+    statusInput.type = 'hidden';
+    statusInput.name = 'status';
+    statusInput.value = 'Rescheduled';
+    form.appendChild(statusInput);
+    
+    const dateInput = document.createElement('input');
+    dateInput.type = 'hidden';
+    dateInput.name = 'new_date';
+    dateInput.value = newDate;
+    form.appendChild(dateInput);
+    
+    const timeInput = document.createElement('input');
+    timeInput.type = 'hidden';
+    timeInput.name = 'new_time';
+    timeInput.value = newTime;
+    form.appendChild(timeInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
 </script>
 
 <!-- Patient History Modal -->

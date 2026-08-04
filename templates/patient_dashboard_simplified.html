@@ -58,128 +58,27 @@
             display: flex;
         }
 
-        /* ══ SIDEBAR STYLES ══ */
-        .sidebar {
-            width: 280px;
-            background: #FFFFFF;
-            padding: 30px 20px;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-            box-shadow: 2px 0 10px rgba(0,107,77,0.1);
-            z-index: 100;
-        }
-
-        .sidebar::-webkit-scrollbar { width: 5px; }
-        .sidebar::-webkit-scrollbar-track { background: transparent; }
-        .sidebar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 40px;
-            padding: 0 10px;
-        }
-
-        .logo i {
-            width: 40px;
-            height: 40px;
-            background: var(--brand-light);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            font-size: 20px;
-            box-shadow: 0 2px 8px rgba(52,201,165,0.3);
-            animation: logo-pulse 2s ease-in-out infinite;
-        }
-
-        @keyframes logo-pulse {
-            0%, 100% { transform: scale(1); box-shadow: 0 2px 8px rgba(52,201,165,0.3); }
-            50% { transform: scale(1.03); box-shadow: 0 3px 12px rgba(52,201,165,0.4); }
-        }
-
-        .logo-text {
-            font-size: 22px;
-            font-weight: 700;
-            color: var(--brand);
-            letter-spacing: -0.5px;
-        }
-
-        .user-profile {
-            background: var(--brand-faint);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 30px;
-            color: var(--t-head);
-        }
-
-        .user-profile h4 {
-            font-size: 15px;
-            font-weight: 600;
-            margin: 0 0 4px 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--t-head);
-        }
-
-        .user-profile p {
-            font-size: 12px;
-            color: var(--t-muted);
-            margin: 0;
-        }
-
-        .nav-menu {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-            flex: 1;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 14px 18px;
-            color: var(--t-muted);
-            text-decoration: none;
-            border-radius: 10px;
-            transition: all var(--t-base);
-            font-size: 15px;
-            font-weight: 500;
-            position: relative;
-            border-left: 3px solid transparent;
-        }
-
-        .nav-item:hover {
-            background: var(--hover);
-            color: var(--brand);
-            border-left-color: var(--brand-light);
-        }
-
-        .nav-item.active {
-            background: var(--brand-faint);
-            color: var(--brand);
-            box-shadow: 0 2px 8px rgba(52,201,165,0.3);
-            border-left-color: var(--brand-light);
-        }
-
-        .nav-item i {
-            font-size: 18px;
-            width: 24px;
-            text-align: center;
-        }
-
-        .nav-divider {
-            margin: 20px 0;
-            border-top: 1px solid var(--border);
-        }
+        /* Unified Sidebar CSS */
+        .sidebar { width: var(--sidebar-w, 280px); background: var(--base, #ffffff); border-right: 1px solid var(--border, #D9EDE5); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 1000; padding: 0; box-sizing: border-box; }
+        .s-brand { padding: 30px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border, #D9EDE5); }
+        .s-logo-box { width: 38px; height: 38px; background: #0B9B7A; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
+        .s-brand-name { font-weight: 800; font-size: 18px; color: #1A2E26; line-height: 1; margin:0; }
+        .s-brand-tag { font-size: 10px; font-weight: 700; color: #0B9B7A; text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+        .s-user { padding: 20px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border, #D9EDE5); }
+        .s-ava { width: 40px; height: 40px; border-radius: 12px; background: rgba(11,155,122,0.1); color: #0B9B7A; display: flex; align-items: center; justify-content: center; font-size: 18px; position: relative; }
+        .s-ava-dot { position: absolute; bottom: -2px; right: -2px; width: 12px; height: 12px; background: #10B981; border: 2px solid #fff; border-radius: 50%; }
+        .s-user-text { display:flex; flex-direction:column; }
+        .s-uname { font-weight: 700; font-size: 14px; color: #1A2E26; }
+        .s-urole { font-size: 12px; color: #5E8C7A; margin-top: 2px; text-transform: capitalize; }
+        .s-nav { padding: 20px 16px; flex: 1; overflow-y: auto; margin:0; }
+        .s-group { font-size: 11px; font-weight: 700; color: #5E8C7A; text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px 12px; }
+        .s-link { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; color: #5E8C7A; text-decoration: none; margin-bottom: 4px; font-weight: 600; transition: all 0.2s; font-size: 14px; }
+        .s-icon { width: 20px; display: flex; justify-content: center; }
+        .s-link:hover { background: rgba(11,155,122,0.05); color: #0B9B7A; }
+        .s-link.active { background: #0B9B7A; color: #fff; box-shadow: 0 4px 12px rgba(11, 155, 122, 0.25); }
+        .s-link.active .s-icon { color: #fff; }
+        .s-toggle { display: none; }
+        .s-footer { display:none; }
 
         .container {
             margin-left: 280px;
@@ -643,45 +542,7 @@
 </head>
 <body>
     <!-- SIDEBAR -->
-    <aside class="sidebar">
-        <div class="logo">
-            <i class="fas fa-heartbeat"></i>
-            <span class="logo-text">PriorityMed</span>
-        </div>
-
-        {% if user %}
-        <div class="user-profile">
-            <h4>
-                <i class="fas fa-user-circle"></i> {{ user.fullname }}
-            </h4>
-            <p>Patient Account</p>
-        </div>
-        {% endif %}
-
-        <nav class="nav-menu">
-            <a href="/patient/dashboard" class="nav-item active">
-                <i class="fas fa-home"></i>
-                <span>My Dashboard</span>
-            </a>
-            <a href="/appointments" class="nav-item">
-                <i class="far fa-calendar-alt"></i>
-                <span>Appointments</span>
-            </a>
-            <a href="/doctors" class="nav-item">
-                <i class="fas fa-user-md"></i>
-                <span>Find Doctors</span>
-            </a>
-            <a href="/messages" class="nav-item">
-                <i class="far fa-comment-dots"></i>
-                <span>Messages</span>
-            </a>
-            <div class="nav-divider"></div>
-            <a href="/logout" class="nav-item">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Logout</span>
-            </a>
-        </nav>
-    </aside>
+    {% include 'sidebar.html' %}
 
     <div class="container">
         <!-- HEADER WITH PROFILE -->
@@ -692,12 +553,31 @@
             </div>
             <div class="header-actions">
                 <button class="btn-icon" title="Refresh"><i class="fas fa-sync-alt"></i></button>
+                <form action="/patient/request_assessment" method="POST" style="margin: 0; display: inline-block;">
+                    <button type="submit" class="btn-primary" style="padding: 10px 16px; font-size: 13px; font-weight: 600;">
+                        <i class="fas fa-file-medical"></i> Request Assessment
+                    </button>
+                </form>
                 <button class="btn-icon" title="Settings"><i class="fas fa-cog"></i></button>
                 <button class="logout-btn" onclick="window.location.href='/logout'">
                     <i class="fas fa-sign-out-alt"></i> Sign Out
                 </button>
             </div>
         </div>
+
+        <!-- FLASH MESSAGES -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+            <div class="flash-messages-container" style="margin-bottom: 24px;">
+              {% for category, message in messages %}
+                <div class="alert alert-{{ category }}" style="padding: 16px; border-radius: 12px; margin-bottom: 12px; background-color: {% if category == 'success' %}#e8f5e9{% elif category == 'error' %}#ffebee{% else %}#e3f2fd{% endif %}; color: {% if category == 'success' %}#2e7d32{% elif category == 'error' %}#c62828{% else %}#1565c0{% endif %}; border: 1px solid {% if category == 'success' %}#c8e6c9{% elif category == 'error' %}#ffcdd2{% else %}#bbdefb{% endif %}; font-weight: 500; display: flex; align-items: center; justify-content: space-between;">
+                  <span><i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %}" style="margin-right: 8px;"></i> {{ message }}</span>
+                  <button onclick="this.parentElement.style.display='none'" style="background: none; border: none; cursor: pointer; color: inherit; font-size: 16px;"><i class="fas fa-times"></i></button>
+                </div>
+              {% endfor %}
+            </div>
+          {% endif %}
+        {% endwith %}
 
         <!-- QUICK STATS -->
         <div class="stats-grid">
@@ -775,9 +655,11 @@
                     <i class="fas fa-file-medical"></i>
                     <p class="empty-state-title">No Assessment Reports Yet</p>
                     <p>Your health assessments will appear here after a nurse completes your intake evaluation.</p>
-                    <button class="btn-primary" onclick="window.location.href='/phc/nurse/intake'">
-                        <i class="fas fa-plus-circle"></i> Request Assessment
-                    </button>
+                    <form action="/patient/request_assessment" method="POST" style="margin: 0; display: inline-block;">
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-plus-circle"></i> Request Assessment
+                        </button>
+                    </form>
                 </div>
             {% endif %}
         </div>
@@ -857,7 +739,7 @@
                         </div>
                     </div>
                     <div class="item-actions">
-                        <button class="btn-sm" onclick="alert('View appointment details')"><i class="fas fa-eye"></i> Details</button>
+                        <button class="btn-sm" onclick="window.location.href='/appointments'"><i class="fas fa-eye"></i> Details</button>
                     </div>
                 </div>
                 {% endfor %}

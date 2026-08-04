@@ -147,42 +147,7 @@
 </head>
 <body data-theme="light">
 <div class="shell">
-    <aside class="sidebar" id="sidebar">
-        <div class="s-brand">
-            <div class="s-logo-box"><i class="fas fa-hospital"></i></div>
-            <div class="s-brand-text" style="margin-left:10px">
-                <div style="font-weight:800; font-size:16px; color:var(--t-head)">PriorityMed</div>
-                <div style="font-size:10px; color:var(--brand); font-weight:600">PHC Nurse Center</div>
-            </div>
-        </div>
-        <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
-        <nav class="s-nav">
-            <a href="/phc/nurse/dashboard" class="s-link">
-                <div class="s-icon"><i class="fas fa-th-large"></i></div>
-                <span>Dashboard</span>
-            </a>
-            <a href="/phc/nurse/patients" class="s-link">
-                <div class="s-icon"><i class="fas fa-users"></i></div>
-                <span>Patients</span>
-            </a>
-            <a href="/phc/nurse/appointments" class="s-link">
-                <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-                <span>Appointments</span>
-            </a>
-            <a href="/phc/nurse/intake" class="s-link">
-                <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
-                <span>Patient Intake</span>
-            </a>
-            <a href="/phc/nurse/reports" class="s-link active">
-                <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
-                <span>Reports</span>
-            </a>
-            <a href="/logout" class="s-link" style="margin-top:auto">
-                <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-                <span>Sign Out</span>
-            </a>
-        </nav>
-    </aside>
+    {% include 'sidebar.html' %}
 
     <div class="main">
         <header class="topbar">

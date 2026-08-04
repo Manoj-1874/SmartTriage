@@ -59,6 +59,10 @@
                     <div class="s-icon">👥</div>
                     <span class="s-label">Workforce</span>
                 </a>
+                <a href="#facilities" class="s-link" onclick="showSection('facilities'); return false;">
+                    <div class="s-icon">🏥</div>
+                    <span class="s-label">District Expansion</span>
+                </a>
                 <a href="#reports-action" class="s-link" onclick="showSection('reports-action'); return false;">
                     <div class="s-icon">📋</div>
                     <span class="s-label">Patient Reports</span>
@@ -460,6 +464,80 @@
                     </div>
                 </section>
 
+                <!-- ━━━━ DISTRICT EXPANSION (FACILITIES) SECTION ━━━━ -->
+                <section class="content-section" id="facilities-section">
+                    <div class="section-header">
+                        <h1>District Facility Expansion</h1>
+                        <p>Register new PHCs or approve pending facility requests</p>
+                    </div>
+
+                    <div class="kpi-grid">
+                        <div class="kpi-card responding">
+                            <div class="kpi-icon">🏥</div>
+                            <div class="kpi-content">
+                                <h3>Active Centers</h3>
+                                <div class="kpi-value">{{ active_phcs|length if active_phcs else 7 }}</div>
+                                <small>Operating Facilities</small>
+                            </div>
+                        </div>
+                        <div class="kpi-card urgent">
+                            <div class="kpi-icon">📝</div>
+                            <div class="kpi-content">
+                                <h3>Pending Requests</h3>
+                                <div class="kpi-value">{{ pending_phcs|length if pending_phcs else 2 }}</div>
+                                <small>Awaiting DDHS Review</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top:30px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h3>Facility Master List</h3>
+                            <button class="btn-dispatch-quick" onclick="location.href='/register-phc'">+ Register New PHC</button>
+                        </div>
+                        <div class="alerts-table">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Center Name</th>
+                                        <th>Location / Block</th>
+                                        <th>Type</th>
+                                        <th>Contact</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for phc in active_phcs %}
+                                    <tr>
+                                        <td><strong>{{ phc.name }}</strong></td>
+                                        <td>{{ phc.location }}</td>
+                                        <td>Regular PHC</td>
+                                        <td>{{ phc.contact_info }}</td>
+                                        <td><span class="status-badge present">ACTIVE</span></td>
+                                        <td><button class="btn-small">View Staff</button></td>
+                                    </tr>
+                                    {% endfor %}
+                                    
+                                    <!-- Pending Requests -->
+                                    {% for phc in pending_phcs %}
+                                    <tr style="background:rgba(220,38,38,0.02);">
+                                        <td><strong>{{ phc.name }}</strong></td>
+                                        <td>{{ phc.location }}</td>
+                                        <td>NEW REQUEST</td>
+                                        <td>{{ phc.contact_info }}</td>
+                                        <td><span class="status-badge absent">PENDING</span></td>
+                                        <td>
+                                            <button class="btn-dispatch-quick" onclick="approveFacility('{{ phc.id }}', 'approve')">Approve</button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- ━━━━ PATIENT REPORTS & ACTION SECTION ━━━━ -->
                 <section class="content-section" id="reports-action-section">
                     <div class="section-header">
@@ -665,6 +743,35 @@
             </div>
         </main>
     </div>
+
+    <script>
+    async function approveFacility(phcId, action) {
+        if(!confirm(`Are you sure you want to ${action} this facility?`)) return;
+        
+        const formData = new FormData();
+        formData.append('action', action);
+        
+        const res = await fetch(`/ddhs-admin/approve-phc/${phcId}`, {
+            method: 'POST',
+            body: formData
+        });
+        const data = await res.json();
+        if(data.success) {
+            alert(data.message);
+            location.reload();
+        }
+    }
+
+    // Sidebar section handling
+    function showSection(id) {
+        document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+        document.querySelectorAll('.s-link').forEach(l => l.classList.remove('active'));
+        
+        document.getElementById(id + '-section').classList.add('active');
+        document.querySelector(`.s-link[href="#${id}"]`).classList.add('active');
+        document.getElementById('breadcrumbPage').innerText = id.charAt(0).toUpperCase() + id.slice(1);
+    }
+    </script>
 
     <script src="{{ url_for('static', filename='js/admin_dashboard.js') }}"></script>
 </body>

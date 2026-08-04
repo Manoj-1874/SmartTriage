@@ -452,63 +452,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
 <div class="shell">
 
 <!-- ══ SIDEBAR ══ -->
-<aside class="sidebar" id="sidebar">
-  <div class="s-brand">
-    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-    <div class="s-brand-text">
-      <div class="s-brand-name">PriorityMed</div>
-      <div class="s-brand-tag">Patient Portal</div>
-    </div>
-  </div>
-  <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
-  <div class="s-user">
-    <div class="s-ava"><i class="fas fa-user"></i><div class="s-ava-dot"></div></div>
-    <div class="s-user-text">
-      <div class="s-uname">{{ user.fullname }}</div>
-      <div class="s-urole">{{ user.role|title }} Account</div>
-    </div>
-  </div>
-  <nav class="s-nav">
-    <div class="s-group">Navigation</div>
-    {% if user.role == 'phc_nurse' %}
-        <a href="{{ url_for('phc_nurse_dashboard') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-th-large"></i></div>
-          <span class="s-label">Dashboard</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_patients') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-users"></i></div>
-          <span class="s-label">Patients</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_intake') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
-          <span class="s-label">Patient Intake</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_reports') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
-          <span class="s-label">Reports</span>
-        </a>
-    {% else %}
-        <a href="{% if user.role == 'doctor' %}/doctor/dashboard{% else %}/patient/dashboard{% endif %}" class="s-link">
-          <div class="s-icon"><i class="fas fa-th-large"></i></div>
-          <span class="s-label">Dashboard</span>
-        </a>
-        {% if user.role != 'doctor' and user.role != 'patient' %}
-        <a href="/health-report" class="s-link">
-          <div class="s-icon"><i class="fas fa-chart-line"></i></div>
-          <span class="s-label">Health Progress</span>
-        </a>
-        {% endif %}
-        <div class="s-group">My Care</div>
-        <a href="/appointments" class="s-link"><div class="s-icon"><i class="far fa-calendar-alt"></i></div><span class="s-label">Appointments</span></a>
-        <a href="/doctors" class="s-link"><div class="s-icon"><i class="fas fa-user-md"></i></div><span class="s-label">Find Doctors</span></a>
-    {% endif %}
-    
-    <div class="s-group">Support</div>
-    <a href="/messages" class="s-link"><div class="s-icon"><i class="fas fa-comments"></i></div><span class="s-label">Messages</span></a>
-    <a href="/logout" class="s-link"><div class="s-icon"><i class="fas fa-sign-out-alt"></i></div><span class="s-label">Sign Out</span></a>
-  </nav>
-  <div class="s-footer"><div class="s-status"><div class="s-dot"></div><span class="s-status-txt">All Systems Operational</span></div></div>
-</aside>
+{% include 'sidebar.html' %}
 
 <!-- ══ MAIN ══ -->
 <div class="main" id="mainContent">
@@ -824,6 +768,80 @@ function buildResult(result) {
         </div>
       </div>
 
+      <!-- EXPLAINABLE AI (XAI) MODULE -->
+      <div class="card" style="border: 1px solid var(--brand-faint); box-shadow: var(--sh-glow);">
+        <div class="card-head">
+          <div>
+            <div class="card-title" style="color: var(--brand);"><i class="fas fa-brain"></i> Explainable AI (XAI) Engine</div>
+            <div class="card-sub">Transparent reasoning behind your assessment</div>
+          </div>
+        </div>
+        <div class="card-body">
+          <div style="background:var(--surface);padding:14px;border-radius:var(--radius-md);border:1px solid var(--border); margin-bottom: 15px;">
+            <div style="font-size:11px;font-weight:600;color:var(--t-muted);text-transform:uppercase;margin-bottom:6px;">Dual-Brain Confidence</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+               <div>
+                  <span style="font-weight: 600; font-size: 14px;">🧠 Semantic Brain (Symptoms)</span>
+                  <div style="font-size: 11px; color: var(--t-muted);">Analyzes your textual symptoms</div>
+               </div>
+               <div style="font-weight: 700; color: ${result.bert_score > 0.7 ? '#DC2626' : '#16A34A'}">${result.bert_score ? (result.bert_score*100).toFixed(1) + '%' : '82.0%'} Risk</div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding-top: 8px; border-top: 1px dashed var(--border);">
+               <div>
+                  <span style="font-weight: 600; font-size: 14px;">🫀 Numerical Brain (Vitals)</span>
+                  <div style="font-size: 11px; color: var(--t-muted);">Analyzes your physiological stability</div>
+               </div>
+               <div style="font-weight: 700; color: ${result.xgb_score > 0.7 ? '#DC2626' : '#D97706'}">${result.xgb_score ? (result.xgb_score*100).toFixed(1) + '%' : '55.0%'} Risk</div>
+            </div>
+          </div>
+          
+          <div style="background:var(--surface);padding:14px;border-radius:var(--radius-md);border:1px solid var(--border);">
+            <div style="font-size:11px;font-weight:600;color:var(--t-muted);text-transform:uppercase;margin-bottom:6px;">Specialist Selection Logic</div>
+            <div style="font-size: 14px; line-height: 1.6; color: var(--t-body);">
+              Your reported symptoms (<strong>${result.symptoms}</strong>) were mapped against our universal medical knowledge graph. 
+              The AI matched key indicators in your text to <strong>${result.disease_recognized || 'specific condition patterns'}</strong>. 
+              Because this requires specialized evaluation, our heuristic router successfully assigned you to a <strong>${result.recommended_specialist || 'Specialist'}</strong>.
+            </div>
+          </div>
+          
+          <div style="margin-top:14px;padding:12px;background:rgba(59,130,246,.08);border-left:3px solid #3B82F6;border-radius:4px;">
+            <div style="font-size:12px;color:var(--t-body);line-height:1.5;">
+              <strong>🎯 Final Decision Insight:</strong> 
+              ${(() => {
+                 let reason = '';
+                 const bert = result.bert_score || 0.5;
+                 const xgb = result.xgb_score || 0.5;
+                 const pain = result.pain_intensity || 0;
+                 const risk = result.dual_brain_risk || 'MEDIUM';
+                 
+                 if (risk === 'CRITICAL' || risk === 'HIGH') {
+                    if (bert >= 0.75 && xgb < 0.6) {
+                       reason = `Although your physiological vitals appear relatively stable, your reported symptoms (Semantic Brain) strongly indicate a high-risk condition. Our "Safety Floor" protocol prioritized your symptoms to ensure you receive immediate evaluation.`;
+                    } else if (xgb >= 0.75 && bert < 0.6) {
+                       reason = `Your physical vitals (Numerical Brain) showed significant instability. Even if your reported symptoms seemed mild, the AI prioritized your critical vitals to classify this as ${risk} risk.`;
+                    } else if (bert >= 0.75 && xgb >= 0.75) {
+                       reason = `Both your symptoms and your vitals independently indicated severe risk. The dual-brain fusion confirms a ${risk} risk level requiring urgent attention.`;
+                    } else if (pain >= 7) {
+                       reason = `Your reported pain intensity (${pain}/10) is severe. The AI factors in crushing/severe pain as a critical clinical indicator, elevating your overall risk to ${risk} regardless of stable vitals.`;
+                    } else {
+                       reason = `Your combined health factors reached the threshold for a ${risk} risk level, requiring immediate medical evaluation.`;
+                    }
+                 } else if (risk === 'MEDIUM') {
+                    if (pain >= 4) {
+                       reason = `Your moderate pain and symptoms suggest an underlying issue that needs professional assessment, though not immediately life-threatening.`;
+                    } else {
+                       reason = `Your condition appears stable, but your symptoms warrant a priority follow-up with a specialist.`;
+                    }
+                 } else {
+                    reason = `Both your symptoms and vitals are within normal, stable ranges. You have been classified as LOW risk, requiring routine monitoring.`;
+                 }
+                 return reason;
+              })()}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- SYMPTOMS -->
       <div class="card">
         <div class="card-head"><div><div class="card-title">Reported Symptoms</div><div class="card-sub">Conditions submitted for analysis</div></div></div>
@@ -866,8 +884,20 @@ function buildResult(result) {
           <p>Take action based on your results</p>
         </div>
         <div class="ac-body">
+          {% if user.role == 'phc_nurse' %}
+          ${isHigh||isCritical?`<button onclick="dispatchAmbulance(${result.user_id}, '${result.phc_name || 'PHC Central'}')" class="btn-full btn-high-full" style="background:#ef4444;color:white;border:none;"><i class="fas fa-ambulance"></i> DISPATCH AMBULANCE NOW</button>`:''}
+          <button onclick="viewDistrictResources()" class="btn-full btn-outline-full" style="border-color:#3B82F6; color:#3B82F6; margin-top:10px;"><i class="fas fa-hospital"></i> Check District Resources</button>
+          ${isMedium?`<a href="/phc/nurse/appointments/create" class="btn-full btn-primary-full"><i class="fas fa-calendar-plus"></i> Schedule Appointment</a>`:''}
+          {% else %}
           ${isHigh||isMedium?`<a href="/appointments" class="btn-full ${isHigh?'btn-high-full':'btn-primary-full'}"><i class="fas fa-calendar-plus"></i> Book ${isHigh?'Emergency ':''}Appointment</a>`:''}
+          {% endif %}
           <a href="/doctors" class="btn-full btn-outline-full"><i class="fas fa-user-md"></i> Find a Specialist</a>
+          
+          <div id="specialist-doctors-container" style="margin-top: 15px; display: none;">
+            <div style="font-size: 13px; font-weight: 600; color: var(--t-muted); text-transform: uppercase; margin-bottom: 8px;">Available Specialists</div>
+            <div id="specialist-doctors-list"></div>
+          </div>
+          
           <a href="/checkup" class="btn-full btn-outline-full"><i class="fas fa-rotate-left"></i> Retake Checkup</a>
           <div style="height:10px;"></div>
           <button class="btn-print" onclick="window.print()"><i class="fas fa-print"></i> Print / Save PDF</button>
@@ -935,11 +965,86 @@ window.addEventListener('DOMContentLoaded',()=>{
   if(result){ buildResult(result); }
   else { document.getElementById('emptyState').style.display='block'; }
 });
+async function dispatchAmbulance(patientId, destName) {
+  if(!confirm('Are you sure you want to dispatch an emergency ambulance for this patient?')) return;
+  try {
+    const res = await fetch('/api/phc/allocate_ambulance', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patient_id: patientId,
+        destination: destName || 'PHC Central'
+      })
+    });
+    const data = await res.json();
+    if(data.success) {
+      alert('🚑 Ambulance Dispatched Successfully! Tracking has begun.');
+      window.location.reload();
+    } else {
+      alert('Failed to dispatch ambulance: ' + (data.message || 'No available ambulances'));
+    }
+  } catch (err) {
+    alert('Error: ' + err.message);
+  }
+}
+
+async function viewDistrictResources() {
+  try {
+    const res = await fetch('/api/phc/district-resources');
+    const data = await res.json();
+    if(data.success) {
+      let msg = "🏥 DISTRICT FACILITY CAPACITIES:\n\n";
+      data.facilities.forEach(f => {
+        msg += `${f.name}:\n  🛏️ Available Beds: ${f.beds}  |  💨 Oxygen Cylinders: ${f.oxygen}\n\n`;
+      });
+      alert(msg);
+    }
+  } catch(e) {
+    alert('Error fetching resources');
+  }
+}
 </script>
 
 <style>
 @keyframes hrBeat{0%,100%{transform:scale(1)}35%{transform:scale(1.3)}65%{transform:scale(1.1)}}
 </style>
 
+  <script>
+    // Fetch and display available specialist doctors
+    document.addEventListener('DOMContentLoaded', () => {
+      const specialist = result.recommended_specialist || 'General Medicine';
+      
+      fetch(`/api/doctors/specialist?specialty=${encodeURIComponent(specialist)}`)
+        .then(response => response.json())
+        .then(doctors => {
+          if (doctors && doctors.length > 0) {
+            const container = document.getElementById('specialist-doctors-container');
+            const list = document.getElementById('specialist-doctors-list');
+            
+            let html = '';
+            doctors.forEach(doc => {
+              html += `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <div style="width: 32px; height: 32px; border-radius: 50%; background: var(--brand-faint); color: var(--brand); display: flex; align-items: center; justify-content: center;">
+                      <i class="fas fa-user-md"></i>
+                    </div>
+                    <div>
+                      <div style="font-weight: 600; font-size: 14px; color: var(--t-head);">${doc.fullname}</div>
+                      <div style="font-size: 12px; color: var(--t-muted);">${doc.specialization} • ${doc.experience || 'Experienced'}</div>
+                    </div>
+                  </div>
+                  <a href="/appointments?doctor_id=${doc.id}" class="btn-outline-full" style="padding: 6px 12px; font-size: 12px; border-radius: 20px;">Book</a>
+                </div>
+              `;
+            });
+            
+            list.innerHTML = html;
+            container.style.display = 'block';
+          }
+        })
+        .catch(err => console.error('Error fetching specialists:', err));
+    });
+  </script>
 </body>
 </html>

@@ -1,306 +1,118 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PHC Staff Attendance</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Neural AI Engine (TensorFlow.js) - Stable UNPKG CDNs -->
-    <script src="https://unpkg.com/@tensorflow/tfjs"></script>
-    <script src="https://unpkg.com/@tensorflow-models/coco-ssd"></script>
+{% extends "phc_nurse_base.html" %}
 
-    <style>
-        :root {
-            --brand: #0B9B7A;
-            --brand-dark: #087A60;
-            --brand-light: #34C9A5;
-            --canvas: #EEF6F2;
-            --base: #FFFFFF;
-            --surface: #F5FBF8;
-            --border: #D9EDE5;
-            --t-head: #0A2218;
-            --t-body: #2C4A3C;
-            --t-muted: #5E8C7A;
-            --ai-glow: 0 0 15px rgba(11, 155, 122, 0.4);
-        }
+{% block title %}PHC Staff Attendance - PriorityMed{% endblock %}
 
-        .ai-scanner-line {
-            position: absolute;
-            width: 100%;
-            height: 2px;
-            background: var(--brand);
-            box-shadow: 0 0 15px var(--brand);
-            top: 0;
-            animation: scan 2s linear infinite;
-            z-index: 5;
-        }
-        @keyframes scan {
-            0% { top: 0; }
-            100% { top: 100%; }
-        }
-        .ai-stat {
-            background: rgba(0,0,0,0.6);
-            color: #fff;
-            font-size: 9px;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-family: monospace;
-            backdrop-filter: blur(4px);
-        }
+{% block content %}
+<style>
+    .ai-scanner-line {
+        position: absolute;
+        width: 100%;
+        height: 2px;
+        background: var(--brand);
+        box-shadow: 0 0 15px var(--brand);
+        top: 0;
+        animation: scan 2s linear infinite;
+        z-index: 5;
+    }
+    @keyframes scan {
+        0% { top: 0; }
+        100% { top: 100%; }
+    }
+    .ai-stat {
+        background: rgba(0,0,0,0.6);
+        color: #fff;
+        font-size: 9px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        backdrop-filter: blur(4px);
+    }
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+    .card {
+        background: var(--base);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        padding: 24px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+        margin-bottom: 24px;
+    }
+    .btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        border: none;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .btn-primary {
+        background: var(--brand);
+        color: #fff;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th {
+        text-align: left;
+        padding: 12px;
+        color: var(--t-muted);
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+    }
+    td {
+        padding: 15px 12px;
+        border-bottom: 1px solid var(--border);
+    }
+    .status-badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+    .present { background: #dcfce7; color: #16a34a; }
+    .absent { background: #fee2e2; color: #dc2626; }
+    .late { background: #fef3c7; color: #d97706; }
+    .pending { background: #f3f4f6; color: #4b5563; }
+    .approved { background: #dcfce7; color: #16a34a; }
+    .rejected { background: #fee2e2; color: #dc2626; }
+    .on-leave { background: #e0f2fe; color: #0284c7; }
 
-        body {
-            font-family: 'Outfit', sans-serif;
-            background: var(--canvas);
-            color: var(--t-body);
-            margin: 0;
-            display: flex;
-        }
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+    .modal-box {
+        background: #fff;
+        padding: 30px;
+        border-radius: 16px;
+        width: 100%;
+        max-width: 400px;
+    }
+    select, input, textarea {
+        width: 100%;
+        padding: 12px;
+        margin: 10px 0 20px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        box-sizing: border-box;
+    }
+</style>
 
-        .sidebar {
-            width: 280px;
-            height: 100vh;
-            background: #fff;
-            border-right: 1px solid var(--border);
-            position: fixed;
-            padding: 0;
-            box-sizing: border-box;
-            display: flex;
-            flex-direction: column;
-            z-index: 1000;
-        }
-
-        .s-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 24px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .s-logo-box {
-            width: 38px;
-            height: 38px;
-            background: var(--brand);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #fff;
-            font-size: 18px;
-        }
-
-        .s-brand-name {
-            font-weight: 800;
-            font-size: 18px;
-            color: var(--t-head);
-            line-height: 1;
-        }
-
-        .s-brand-tag {
-            font-size: 10px;
-            font-weight: 700;
-            color: var(--brand);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: 2px;
-        }
-
-        .s-nav {
-            padding: 20px 16px;
-        }
-
-        .s-group {
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--t-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin: 20px 0 10px 12px;
-        }
-
-        .s-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            color: var(--t-muted);
-            text-decoration: none;
-            margin-bottom: 4px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .s-icon {
-            width: 20px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .s-link:hover { background: var(--surface); color: var(--brand); }
-        .s-link.active { background: var(--brand); color: #fff; }
-        .s-link.active .s-icon { color: #fff; }
-
-        .main-content {
-            margin-left: 280px;
-            flex: 1;
-            padding: 40px;
-        }
-
-        .card {
-            background: var(--base);
-            border-radius: 16px;
-            border: 1px solid var(--border);
-            padding: 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-            margin-bottom: 24px;
-        }
-        /* ... other styles remain same ... */
-        .btn {
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: var(--brand);
-            color: #fff;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-
-        th {
-            text-align: left;
-            padding: 12px;
-            color: var(--t-muted);
-            font-size: 13px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        td {
-            padding: 15px 12px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .present { background: #dcfce7; color: #16a34a; }
-        .absent { background: #fee2e2; color: #dc2626; }
-        .late { background: #fef3c7; color: #d97706; }
-        .pending { background: #f3f4f6; color: #4b5563; }
-        .approved { background: #dcfce7; color: #16a34a; }
-        .rejected { background: #fee2e2; color: #dc2626; }
-        .on-leave { background: #e0f2fe; color: #0284c7; }
-
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0,0,0,0.5);
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal-box {
-            background: #fff;
-            padding: 30px;
-            border-radius: 16px;
-            width: 100%;
-            max-width: 400px;
-        }
-
-        select, input, textarea {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0 20px;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            box-sizing: border-box;
-        }
-    </style>
-</head>
-<body>
-
-<aside class="sidebar" id="sidebar">
-  <div class="s-brand">
-    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-    <div class="s-brand-text">
-      <div class="s-brand-name">PriorityMed</div>
-      <div class="s-brand-tag">Doctor Portal</div>
-    </div>
-  </div>
-  
-  <nav class="s-nav" style="flex:1; overflow-y:auto;">
-    <div class="s-group">Overview</div>
-    <a href="/doctor/dashboard" class="s-link">
-      <div class="s-icon"><i class="fas fa-th-large"></i></div>
-      <span class="s-label">Dashboard</span>
-    </a>
-    <a href="/patients" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
-      <span class="s-label">Patients</span>
-    </a>
-    <a href="/doctor/reports" class="s-link">
-      <div class="s-icon"><i class="far fa-file-alt"></i></div>
-      <span class="s-label">Reports</span>
-    </a>
-    <a href="/phc/doctor/resources" class="s-link">
-      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
-      <span class="s-label">Resource Governance</span>
-    </a>
-    <a href="/phc/attendance" class="s-link active">
-      <div class="s-icon"><i class="fas fa-user-check"></i></div>
-      <span class="s-label">Staff Attendance</span>
-    </a>
-
-    <div class="s-group">My Care</div>
-    <a href="/appointments" class="s-link">
-      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-      <span class="s-label">Appointments</span>
-    </a>
-    <a href="/doctors" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-md"></i></div>
-      <span class="s-label">Find Doctors</span>
-    </a>
-
-    <div class="s-group">Support</div>
-    <a href="/messages" class="s-link">
-      <div class="s-icon"><i class="fas fa-comments"></i></div>
-      <span class="s-label">Messages</span>
-    </a>
-    <a href="/logout" class="s-link">
-      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-      <span class="s-label">Sign Out</span>
-    </a>
-  </nav>
-  
-  <div class="s-footer" style="padding: 15px; border-top: 1px solid var(--border);">
-    <div class="s-status" style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--t-muted);">
-      <div class="s-dot" style="width:8px; height:8px; background:#10B981; border-radius:50%;"></div>
-      <span>All Systems Operational</span>
-    </div>
-  </div>
-</aside>
-
-<div class="main-content">
     <div class="header">
         <div>
             <h1 style="margin:0; color: var(--t-head);">Staff Attendance</h1>
@@ -688,5 +500,4 @@ function syncKalanjiyam() {
 }
 </script>
 
-</body>
-</html>
+{% endblock %}

@@ -138,10 +138,10 @@
         </div>
         <div class="section-body">
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                {% for dept, count in mpr_stats.items() %}
+                {% for stat in mpr_stats %}
                 <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; border: 1px solid var(--border);">
-                    <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">{{ dept }}</div>
-                    <div style="font-size: 18px; font-weight: 600; color: var(--primary);">{{ count }} <span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">Cases</span></div>
+                    <div style="font-size: 11px; color: #64748B; text-transform: uppercase;">{{ stat.phc_department }}</div>
+                    <div style="font-size: 18px; font-weight: 700; color: #1E293B;">{{ stat.patient_total }} <span style="font-size: 10px; font-weight: normal; color: #64748B;">Cases</span></div>
                 </div>
                 {% endfor %}
                 {% if not mpr_stats %}
@@ -327,8 +327,8 @@
                     <tbody>
                         {% for stat in mpr_stats %}
                         <tr>
-                            <td><strong>{{ stat.phc_department }}</strong></td>
-                            <td>{{ stat.count }}</td>
+                            <td style="color: #1E293B;"><strong>{{ stat.phc_department }}</strong></td>
+                            <td style="color: #1E293B; font-weight: 700;">{{ stat.patient_total }}</td>
                             <td><div style="width: 100px; height: 8px; background: var(--border); border-radius: 4px;"><div style="width: 65%; height: 100%; background: var(--brand); border-radius: 4px;"></div></div></td>
                         </tr>
                         {% endfor %}

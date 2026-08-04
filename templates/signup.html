@@ -779,11 +779,29 @@
                     </div>
                 </div>
 
-                <div class="field">
-                    <label class="form-label" for="phc_id">PHC Facility ID (for PHC/DDHS roles)</label>
-                    <div class="input-wrap">
-                        <input type="number" id="phc_id" name="phc_id" class="pm-input" placeholder="Enter PHC ID (e.g., 1)" min="1">
-                        <i class="fas fa-hospital field-ico"></i>
+                <div class="field-grid">
+                    <div class="field" style="margin-bottom:0">
+                        <label class="form-label" for="district">Operational District *</label>
+                        <div class="input-wrap">
+                            <select id="district" name="district" class="pm-select" required>
+                                <option value="Trichy">Tiruchirappalli</option>
+                                <option value="Ariyalur">Ariyalur</option>
+                                <option value="Karur">Karur</option>
+                                <option value="Perambalur">Perambalur</option>
+                                <option value="Pudukkottai">Pudukkottai</option>
+                                <option value="Thanjavur">Thanjavur</option>
+                                <option value="Thiruvarur">Thiruvarur</option>
+                            </select>
+                            <i class="fas fa-map-location-dot field-ico"></i>
+                            <i class="fas fa-chevron-down select-arrow"></i>
+                        </div>
+                    </div>
+                    <div class="field" style="margin-bottom:0">
+                        <label class="form-label" for="phc_id">Assigned PHC ID (Staff Only)</label>
+                        <div class="input-wrap">
+                            <input type="number" id="phc_id" name="phc_id" class="pm-input" placeholder="e.g. 1" min="1">
+                            <i class="fas fa-hospital field-ico"></i>
+                        </div>
                     </div>
                 </div>
 
@@ -811,10 +829,25 @@
 
                 <!-- GPS Section (Visible for Patient & Driver) -->
                 <div id="gpsSection" style="display:none; background:var(--brand-pale); padding:16px; border-radius:var(--radius-md); border:1px dashed var(--brand); margin-top:16px;">
-                    <div class="professional-section-label" style="margin-bottom:10px;">
-                        <i class="fas fa-location-crosshairs"></i>
-                        Live Location (Required for Dispatch)
+                    <div class="professional-section-label" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+                        <span><i class="fas fa-location-crosshairs"></i> Operational Base Location</span>
+                        <span style="font-size:10px; opacity:0.7;">* Browser GPS or Search</span>
                     </div>
+                    
+                    <!-- Search Fallback -->
+                    <div style="margin-bottom:12px;">
+                        <label style="font-size:11px; font-weight:700; color:var(--brand); display:block; margin-bottom:5px;">SEARCH BY VILLAGE / AREA</label>
+                        <div style="display:flex; gap:10px;">
+                            <div class="input-wrap" style="flex:1;">
+                                <input type="text" id="village_search" class="pm-input" placeholder="e.g. Vellode, Trichy Central" oninput="searchLocation(this.value)">
+                                <i class="fas fa-search field-ico"></i>
+                            </div>
+                        </div>
+                        <div id="searchResults" style="margin-top:5px; display:none; background:#fff; border:1px solid var(--border); border-radius:8px; max-height:100px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
+                    </div>
+
+                    <div class="divider"><span class="divider-text">or use live gps</span></div>
+
                     <div style="display:flex; gap:10px; margin-bottom:10px;">
                         <div class="input-wrap" style="flex:1;">
                             <input type="text" id="address" name="address" class="pm-input" placeholder="House No, Street, Landmark">
@@ -1002,7 +1035,7 @@ function handleRoleChange() {
     const selected = document.querySelector('input[name="role"]:checked')?.value || 'patient';
     const isHealthcare = ['phc_nurse', 'doctor'].includes(selected);
     const isDdhs = selected === 'ddhs_admin';
-    const isGpsNeeded = selected === 'patient';
+    const isGpsNeeded = ['patient', 'ambulance_driver'].includes(selected);
     
     const section = document.getElementById('professionalSection');
     const gpsSection = document.getElementById('gpsSection');
@@ -1052,6 +1085,30 @@ function handleRoleChange() {
     setTimeout(() => wrap.classList.remove('role-bounce'), 700);
 }
 
+function fallbackToIPLocation(status, reason) {
+    status.innerHTML = `<i class="fas fa-spinner fa-spin"></i> ${reason}. Trying IP Network location...`;
+    
+    fetch('https://ipapi.co/json/')
+        .then(res => res.json())
+        .then(data => {
+            if (data.latitude && data.longitude) {
+                document.getElementById('lat').value = data.latitude;
+                document.getElementById('lon').value = data.longitude;
+                status.innerHTML = `<i class="fas fa-check"></i> Found via Network (${data.city || 'Local'}): ${parseFloat(data.latitude).toFixed(4)}, ${parseFloat(data.longitude).toFixed(4)}`;
+                status.style.color = "var(--clr-green)";
+            } else {
+                throw new Error("No coords in IP response");
+            }
+        })
+        .catch(err => {
+            // Absolute last resort mock if offline or API blocked
+            document.getElementById('lat').value = 10.7905;
+            document.getElementById('lon').value = 78.7047;
+            status.innerHTML = `<i class="fas fa-check"></i> Offline/Local. Defaulting to District HQ.`;
+            status.style.color = "var(--brand)";
+        });
+}
+
 function getLocation() {
     const status = document.getElementById('gpsStatus');
     status.style.color = "var(--brand)";
@@ -1059,17 +1116,12 @@ function getLocation() {
     
     // Check for Secure Context (Geolocation requires HTTPS or localhost)
     if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-        status.style.color = "var(--clr-red)";
-        status.textContent = "Error: Geolocation requires HTTPS. Please type address manually.";
+        fallbackToIPLocation(status, "Local Network HTTP");
         return;
     }
 
     if (navigator.geolocation) {
-        const options = {
-            enableHighAccuracy: true,
-            timeout: 8000,
-            maximumAge: 0
-        };
+        const options = { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 };
         
         navigator.geolocation.getCurrentPosition((pos) => {
             document.getElementById('lat').value = pos.coords.latitude;
@@ -1077,25 +1129,47 @@ function getLocation() {
             status.innerHTML = `<i class="fas fa-check"></i> GPS Fixed: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
             status.style.color = "var(--clr-green)";
         }, (err) => {
-            status.style.color = "var(--clr-red)";
-            let msg = `Error (Code ${err.code}): `;
-            switch(err.code) {
-                case err.PERMISSION_DENIED: 
-                    msg += "Permission denied. Please check your browser's site settings (Lock icon)."; 
-                    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-                        msg = "Error: Geolocation blocked on non-secure (HTTP) sites.";
-                    }
-                    break;
-                case err.POSITION_UNAVAILABLE: msg += "Location info unavailable (Hardware issue?)."; break;
-                case err.TIMEOUT: msg += "Request timed out."; break;
-                default: msg += "Unknown error occurred.";
-            }
-            status.textContent = msg + " Please type address.";
-            console.error("GPS Error:", err);
+            fallbackToIPLocation(status, "Browser GPS Blocked");
         }, options);
     } else {
-        status.textContent = "Geolocation not supported by this browser.";
+        fallbackToIPLocation(status, "GPS Not Supported");
     }
+}
+
+function searchLocation(query) {
+    const results = document.getElementById('searchResults');
+    if (query.length < 2) { results.style.display = 'none'; return; }
+    
+    // Mock Database for Demo
+    const mockDb = [
+        { name: "Vellode Village", lat: 11.1275, lon: 77.6258 },
+        { name: "Trichy Central PHC", lat: 10.8050, lon: 78.6856 },
+        { name: "Srirangam", lat: 10.8623, lon: 78.6883 },
+        { name: "Manapparai", lat: 10.6067, lon: 78.4167 },
+        { name: "Thiruverumbur", lat: 10.7936, lon: 78.7758 }
+    ];
+
+    const matches = mockDb.filter(x => x.name.toLowerCase().includes(query.toLowerCase()));
+    if (matches.length > 0) {
+        results.style.display = 'block';
+        results.innerHTML = matches.map(m => `
+            <div onclick="selectLocation('${m.name}', ${m.lat}, ${m.lon})" style="padding:10px; cursor:pointer; font-size:13px; border-bottom:1px solid #eee; hover:background:#f8f9fa;">
+                <i class="fas fa-map-marker-alt" style="color:var(--brand);"></i> ${m.name}
+            </div>
+        `).join('');
+    } else {
+        results.style.display = 'none';
+    }
+}
+
+function selectLocation(name, lat, lon) {
+    document.getElementById('address').value = name;
+    document.getElementById('lat').value = lat;
+    document.getElementById('lon').value = lon;
+    document.getElementById('village_search').value = name;
+    document.getElementById('searchResults').style.display = 'none';
+    document.getElementById('gpsStatus').innerHTML = `<i class="fas fa-check"></i> Location Selected: ${name}`;
+    document.getElementById('gpsStatus').style.color = "var(--clr-green)";
 }
 
 /* ─── PASSWORD TOGGLE ─── */

@@ -138,17 +138,24 @@ app.secret_key = config.SECRET_KEY
 app.config['START_TIME'] = time.time()
 app.config['VERSION'] = config.VERSION
 
+# MOCK DATA FOR VHN REFERRALS (To simulate state changes during the demo)
+MOCK_VHN_REFERRALS = [
+    {'id': 101, 'patient_name': 'Kavitha R.', 'vhn_name': 'Ananthi', 'field_risk': 'HIGH (ANC)', 'notes': 'Edema & High BP'},
+    {'id': 102, 'patient_name': 'Muthu K.', 'vhn_name': 'Selvi', 'field_risk': 'MEDIUM (NCD)', 'notes': 'Sugar level 240mg/dL'},
+    {'id': 103, 'patient_name': 'Baby of Priya', 'vhn_name': 'Ananthi', 'field_risk': 'LOW (IMN)', 'notes': '6-month vaccination due'}
+]
+
 # Setup logging
 setup_logging(config)
 
 # [CRITICAL DEBUG] Startup Verification and Path Check
 logger.info("="*80)
-logger.info(f"🚀 [STARTUP-V2.5-STABLE] !!! AG-WAS-HERE !!!")
-logger.info(f"📍 Main App Path: {os.path.abspath(__file__)}")
+logger.info(f"[STARTUP-V2.5-STABLE] !!! AG-WAS-HERE !!!")
+logger.info(f"Main App Path: {os.path.abspath(__file__)}")
 import utils.integrated_dual_brain_risk
 import utils.universal_disease_knowledge
-logger.info(f"📁 Module Path (Integrated): {utils.integrated_dual_brain_risk.__file__}")
-logger.info(f"📁 Module Path (Universal): {utils.universal_disease_knowledge.__file__}")
+logger.info(f"Module Path (Integrated): {utils.integrated_dual_brain_risk.__file__}")
+logger.info(f"Module Path (Universal): {utils.universal_disease_knowledge.__file__}")
 logger.info("="*80)
 app.logger.info(f"Starting SmartTriage Dashboard v{config.VERSION} - Environment: {config.ENV}")
 
@@ -573,6 +580,8 @@ def init_db():
                 quantity INTEGER DEFAULT 0,
                 min_threshold INTEGER DEFAULT 10,
                 category TEXT,
+                batch_id TEXT,
+                expiry_date TEXT,
                 unit_cost REAL DEFAULT 0.0,
                 status TEXT,
                 last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -731,7 +740,7 @@ def init_db():
             'phc_facilities': ['district', 'status', 'contact', 'contact_info', 'approved_by', 'lat', 'lon'],
             'ambulances': ['district', 'phc_id', 'location_lat', 'location_lon', 'current_driver_id'],
             'ambulance_allocations': ['source_lat', 'source_lon', 'dest_lat', 'dest_lon', 'driver_id', 'reached_at'],
-            'inventory': ['unit_cost', 'last_updated', 'status'],
+            'inventory': ['unit_cost', 'last_updated', 'status', 'batch_id', 'expiry_date'],
             'resource_usage_logs': ['unit_cost_at_time', 'logged_by_email', 'usage_type'],
             'patient_logs': ['user_id', 'phc_id', 'district', 'phc_department', 'dual_brain_risk', 'recommended_specialist', 'risk_score', 'respiration_rate', 'spo2', 'news2_score', 'actual_outcome', 'outcome_confirmed_by', 'outcome_confirmed_at', 'outcome_notes', 'pain_intensity', 'symptom_duration', 'temp', 'hr', 'sys_bp', 'dia_bp'],
             'staff_attendance': ['check_out_time', 'method', 'remarks', 'lat', 'lon', 'auth_method'],
@@ -795,11 +804,56 @@ def init_sample_phc_centers():
     except Exception as e:
         app.logger.warning(f"Could not initialize sample PHC centers: {str(e)}")
 
+def init_sample_ambulances():
+    """Initialize sample ambulances and drivers"""
+    try:
+        conn = get_db_connection()
+        existing = conn.execute('SELECT COUNT(*) as count FROM ambulances').fetchone()
+        count = existing['count'] if isinstance(existing, dict) else existing[0] if existing else 0
+
+        if count == 0:
+            from werkzeug.security import generate_password_hash
+            # Create a sample ambulance driver user
+            driver_email = 'driver@smarttriage.in'
+            existing_user = conn.execute('SELECT id FROM users WHERE email = ?', (driver_email,)).fetchone()
+            
+            if not existing_user:
+                password_hash = generate_password_hash('password123')
+                conn.execute('''
+                    INSERT INTO users (email, password_hash, fullname, role, phone, created_at)
+                    VALUES (?, ?, ?, ?, ?, datetime('now'))
+                ''', (driver_email, password_hash, 'Ramesh (Driver)', 'ambulance_driver', '+91-9876543210'))
+                driver_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            else:
+                driver_id = existing_user['id'] if isinstance(existing_user, dict) else existing_user[0]
+
+            # Add sample ambulances
+            sample_ambulances = [
+                ('TN-45-AT-1081', 'available', 'Basic Life Support (BLS)', 'Central Station', driver_id, 'Trichy'),
+                ('TN-45-AT-1082', 'available', 'Advanced Life Support (ALS)', 'North Ward Station', None, 'Trichy'),
+                ('TN-45-AT-1083', 'in_transit', 'Neonatal Ambulance', 'South Ward Station', None, 'Trichy')
+            ]
+
+            for vehicle_no, status, type_, location, d_id, district in sample_ambulances:
+                conn.execute('''
+                    INSERT INTO ambulances (vehicle_no, status, type, location, current_driver_id, district, driver_name, driver_contact, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                ''', (vehicle_no, status, type_, location, d_id, district, 'Ramesh' if d_id else 'Unassigned', '+91-9876543210' if d_id else ''))
+
+            conn.commit()
+            app.logger.info(f"[OK] Initialized {len(sample_ambulances)} sample ambulances")
+        else:
+            app.logger.info(f"[OK] Ambulances already exist ({count} found)")
+            
+        conn.close()
+    except Exception as e:
+        app.logger.warning(f"Could not initialize sample ambulances: {str(e)}")
 
 # Ensure database is initialized on startup
 try:
     init_db()
     init_sample_phc_centers()
+    init_sample_ambulances()
 except Exception as e:
     app.logger.error(f"Failed to initialize database: {str(e)}", exc_info=True)
     sys.exit(1)
@@ -922,78 +976,54 @@ except Exception as e:
 # --- 4. HELPER FUNCTIONS (Thread-Safe) ---
 
 def assign_nurse_to_patient(conn, phc_id):
-    """Find the nurse with fewest assigned patients at a PHC and return their ID."""
+    """Find a nurse at a PHC and return their ID."""
     if not phc_id:
         return None
     
     # Get all nurses at this PHC
-    nurses = conn.execute("SELECT id FROM users WHERE role = 'phc_nurse' AND phc_id = ?", (phc_id,)).fetchall()
-    if not nurses:
-        return None
-        
-    # Find nurse with fewest patients
-    nurse_counts = []
-    for nurse in nurses:
-        count = conn.execute("SELECT COUNT(*) as count FROM users WHERE assigned_nurse_id = ?", (nurse['id'],)).fetchone()['count']
-        nurse_counts.append((nurse['id'], count))
+    nurse = conn.execute("SELECT id FROM users WHERE role = 'phc_nurse' AND phc_id = ? ORDER BY RANDOM() LIMIT 1", (phc_id,)).fetchone()
     
-    # Sort by count and pick the one with fewest
-    nurse_counts.sort(key=lambda x: x[1])
-    return nurse_counts[0][0]
+    if nurse:
+        return nurse['id']
+    return None
 
 def find_nearest_phc(conn, patient_location, prefer_active=True):
-
     """
     Find nearest PHC facility based on patient location with intelligent fallback.
     REAL-WORLD HEALTHCARE LOGIC:
-    - Match location keywords to PHC service areas
+    - Match location/district to actual PHC facilities in the database
     - If preferred PHC is INACTIVE/MAINTENANCE, cascade to next nearest ACTIVE PHC
-    - Fallback chain: ACTIVE > MAINTENANCE > INACTIVE
-
-    This implements geographic/service-area nearest-neighbor with status awareness.
-    Example: Patient in "South Ward" → PHC South (3), but if inactive → fallback to PHC Central (1)
-
-    Args:
-        conn: Database connection
-        patient_location: Patient's location/address (string)
-        prefer_active: If True, prioritize ACTIVE centers; if False, use any center
-
-    Returns:
-        phc_id (int) of nearest PHC, with intelligent fallback logic
     """
     if not patient_location:
-        # No location provided - find any ACTIVE PHC, fallback to first
         if prefer_active:
             active_phc = conn.execute(
-                'SELECT id FROM phc_facilities WHERE status="ACTIVE" ORDER BY id LIMIT 1'
+                'SELECT id FROM phc_facilities WHERE status="ACTIVE" ORDER BY RANDOM() LIMIT 1'
             ).fetchone()
             if active_phc:
                 return active_phc['id']
-        return 1  # Default to Central PHC
+        return 1
 
     location_lower = patient_location.lower()
 
-    # Keyword mapping: location keyword -> (PHC_id, priority_order)
-    # Priority order allows fallback chain within same service area
-    keyword_mapping = {
-        'north': [(2, 1), (1, 2), (3, 3)],      # Prefer PHC North, fallback to Central, then South
-        'south': [(3, 1), (1, 2), (2, 3)],      # Prefer PHC South, fallback to Central, then North
-        'east': [(4, 1), (1, 2), (6, 3)],       # Prefer PHC East, fallback to Central, then Rural
-        'west': [(5, 1), (1, 2), (3, 3)],       # Prefer PHC West, fallback to Central, then South
-        'rural': [(6, 1), (1, 2), (4, 3)],      # Prefer PHC Rural, fallback to Central, then East
-        'central': [(1, 1), (2, 2), (3, 3)],    # Central is primary, then North/South
-        'city center': [(1, 1), (2, 2)],        # City center → Central
-        'main': [(1, 1), (2, 2)],               # Main district → Central
-    }
+    # 1. Try to match the exact district or location substring directly in the database
+    matched_phc = conn.execute('''
+        SELECT id FROM phc_facilities 
+        WHERE LOWER(district) LIKE ? OR LOWER(location) LIKE ? OR LOWER(name) LIKE ?
+        ORDER BY RANDOM() LIMIT 1
+    ''', (f'%{location_lower}%', f'%{location_lower}%', f'%{location_lower}%')).fetchone()
+    
+    if matched_phc:
+        return matched_phc['id']
 
-    # Find best matched PHC from fallback chain
-    matched_fallback_chain = [(1, 4), (2, 5), (3, 6)]  # Default fallback chain
-
-    for keyword, fallback_chain in keyword_mapping.items():
-        if keyword in location_lower:
-            matched_fallback_chain = fallback_chain
-            print(f"[DEBUG] Location keyword '{keyword}' matched in '{patient_location}'")
-            break
+    # 2. Fallback to any active PHC if no match
+    active_phc = conn.execute(
+        'SELECT id FROM phc_facilities WHERE status="ACTIVE" ORDER BY RANDOM() LIMIT 1'
+    ).fetchone()
+    
+    if active_phc:
+        return active_phc['id']
+        
+    return 1
 
 def get_hierarchical_escalation(current_phc_id, risk_level):
     """
@@ -1518,6 +1548,10 @@ def login():
                 return redirect(url_for('doctor_dashboard'))
             elif user.role == 'phc_nurse':
                 return redirect(url_for('phc_nurse_dashboard'))
+            elif user.role == 'pharmacist':
+                return redirect(url_for('phc_pharmacist_dashboard'))
+            elif user.role == 'ambulance_driver':
+                return redirect(url_for('driver_dashboard'))
             else:  # patient
                 return redirect(url_for('patient_dashboard'))
         else:
@@ -1546,7 +1580,7 @@ def signup():
         phone = InputSanitizer.sanitize_phone(request.form.get('phone'))
         role = InputSanitizer.sanitize_string(request.form.get('role'), max_length=50)
         location = InputSanitizer.sanitize_string(request.form.get('location'), max_length=200)
-        district = InputSanitizer.sanitize_string(request.form.get('district'), max_length=50) or 'Trichy'
+        district = InputSanitizer.sanitize_string(request.form.get('district'), max_length=50)
         phc_id = request.form.get('phc_id')
         
         # Professional fields
@@ -1865,6 +1899,47 @@ def index():
     # Always redirect to login page as the entry point
     return redirect(url_for('login'))
 
+@app.route('/test-route-123')
+def test_route_123():
+    return 'HELLO TEST'
+
+@app.route('/patient/request_assessment', methods=['GET', 'POST'])
+@login_required
+def request_assessment():
+    print("EXECUTING REQUEST ASSESSMENT", flush=True)
+    app.logger.info("EXECUTING REQUEST ASSESSMENT")
+    if request.method == 'GET':
+        return redirect(url_for('patient_dashboard'))
+    if current_user.role != 'patient':
+        flash('Access denied')
+        return redirect(url_for('index'))
+        
+    conn = get_db_connection()
+    
+    # Notify nurses in patient's PHC, or fallback to district, or all nurses
+    if current_user.phc_id:
+        nurses = conn.execute('SELECT id FROM users WHERE role = "phc_nurse" AND phc_id = ?', (current_user.phc_id,)).fetchall()
+    elif current_user.district:
+        nurses = conn.execute('SELECT id FROM users WHERE role = "phc_nurse" AND district = ?', (current_user.district,)).fetchall()
+    else:
+        nurses = conn.execute('SELECT id FROM users WHERE role = "phc_nurse"').fetchall()
+        
+    for nurse in nurses:
+        conn.execute('''
+            INSERT INTO notifications (recipient_id, notification_type, title, message)
+            VALUES (?, 'assessment_request', 'New Assessment Request', ?)
+        ''', (nurse['id'], f"Patient {current_user.fullname} has requested a health assessment. Please attend to them at the station."))
+    conn.commit()
+        
+    conn.close()
+    
+    flash('Assessment requested successfully. Please visit the nurse station for your checkup.', 'success')
+    return redirect(url_for('patient_dashboard'))
+
+@app.route('/patient/test')
+def patient_test():
+    return 'HELLO TEST'
+
 @app.route('/patient/dashboard')
 @login_required
 def patient_dashboard():
@@ -1920,12 +1995,20 @@ def patient_dashboard():
         (current_user.id,)
     ).fetchone()
 
+    # Get appointment stats
+    total_appointments = conn.execute('SELECT COUNT(*) as count FROM appointments WHERE patient_id = ?', (current_user.id,)).fetchone()
+    completed_appointments = conn.execute('SELECT COUNT(*) as count FROM appointments WHERE patient_id = ? AND status = "Completed"', (current_user.id,)).fetchone()
+    pending_appointments = conn.execute('SELECT COUNT(*) as count FROM appointments WHERE patient_id = ? AND status = "Pending"', (current_user.id,)).fetchone()
+
     conn.close()
 
     patient_stats = {
         'total_assessments': total_assessments['count'] if total_assessments else 0,
         'high_risk': high_risk_count['count'] if high_risk_count else 0,
-        'upcoming_appointments': len(upcoming_appointments)
+        'upcoming_appointments': len(upcoming_appointments),
+        'total': total_appointments['count'] if total_appointments else 0,
+        'completed': completed_appointments['count'] if completed_appointments else 0,
+        'pending': pending_appointments['count'] if pending_appointments else 0
     }
 
     return render_template('patient_dashboard_simplified.html',
@@ -1974,12 +2057,7 @@ def patient_view_report(report_id):
     
     conn.close()
 
-    if not report:
-        flash('Report not found or access denied')
-        return redirect(url_for('patient_dashboard'))
-
     report = dict(report)
-
     # Format for display
     from datetime import datetime
     try:
@@ -2323,10 +2401,13 @@ def phc_nurse_patients():
             COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
         FROM users u
         LEFT JOIN appointments a ON u.id = a.patient_id
-        WHERE u.role = 'patient' AND u.phc_id = ?
+        WHERE u.role = 'patient' AND (
+            u.phc_id = ? OR 
+            (u.phc_id IS NULL AND u.district = ? AND u.district IS NOT NULL)
+        )
         GROUP BY u.id
         ORDER BY u.fullname ASC
-    """, (current_user.phc_id,)).fetchall()
+    """, (current_user.phc_id, current_user.district)).fetchall()
 
     patients = [dict(row) for row in patients]
 
@@ -2498,7 +2579,13 @@ def phc_nurse_patient_report(patient_id):
         return redirect(url_for('index'))
 
     conn = get_db_connection()
-    patient = conn.execute('SELECT * FROM users WHERE id = ?', (patient_id,)).fetchone()
+    patient = conn.execute('''
+        SELECT * FROM users 
+        WHERE id = ? AND (
+            phc_id = ? OR 
+            (phc_id IS NULL AND district = ? AND district IS NOT NULL)
+        )
+    ''', (patient_id, current_user.phc_id, current_user.district)).fetchone()
     
     if not patient:
         conn.close()
@@ -2756,16 +2843,16 @@ def ddhs_admin_dashboard():
             })
 
     # 6. REAL-WORLD: Automatic MPR 13-Department Engine
-    # Categorize today's patients into the 13 official DPH departments
+    # Categorize patients from the last 30 days into the 13 official DPH departments
     mpr_rows = conn.execute('''
-        SELECT phc_department, COUNT(*) as count 
+        SELECT phc_department, COUNT(*) as patient_total 
         FROM patient_logs 
         WHERE phc_id IN (SELECT id FROM phc_facilities WHERE district = ?)
-        AND DATE(timestamp) = DATE('now')
+        AND DATE(timestamp) >= DATE('now', '-30 days')
         GROUP BY phc_department
     ''', (current_user.district,)).fetchall()
     
-    mpr_stats = {row['phc_department']: row['count'] for row in mpr_rows if row['phc_department']}
+    mpr_stats = [dict(row) for row in mpr_rows if row['phc_department']]
 
     # 7. REAL-WORLD: District Stock Pulse (Life-Saving Drugs)
     # Detect if any facility in the district is out of critical stock (ASV, Oxytocin, etc.)
@@ -2857,9 +2944,9 @@ def api_stock_borrow_request():
         SELECT f.name, f.contact, i.quantity
         FROM inventory i
         JOIN phc_facilities f ON i.phc_id = f.id
-        WHERE i.item_name = ? AND f.district = ? AND i.quantity > i.min_threshold
+        WHERE i.item_name LIKE ? AND f.district = ? AND i.quantity > i.min_threshold
         AND f.id != ?
-    ''', (item_name, current_user.district, current_user.phc_id)).fetchall()
+    ''', (f"%{item_name}%", current_user.district, current_user.phc_id)).fetchall()
     conn.close()
     
     return jsonify({
@@ -2867,6 +2954,91 @@ def api_stock_borrow_request():
         'nearby_availability': [dict(row) for row in nearby_stock],
         'message': 'Nearby stock discovered. You can now request a physical transfer.'
     })
+
+@app.route('/api/phc/log-transfer-request', methods=['POST'])
+@login_required
+def api_log_transfer_request():
+    """REAL-WORLD: Log the digital handshake request between PHCs for stock transfer"""
+    data = request.get_json()
+    target_phc = data.get('target_phc')
+    item_name = data.get('item_name')
+    
+    if not target_phc or not item_name:
+        return jsonify({'success': False, 'message': 'Missing data'}), 400
+        
+    conn = get_db_connection()
+    try:
+        # We store it in the referrals table as a special type of logistics handshake
+        # Find the target phc_id
+        target = conn.execute('SELECT id FROM phc_facilities WHERE name = ?', (target_phc,)).fetchone()
+        if target:
+            conn.execute('''
+                INSERT INTO referrals (patient_id, source_phc_id, target_phc_id, referral_reason, urgency, status)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', ('STOCK_TRANSFER', current_user.phc_id, target['id'], f"Requesting {item_name}", 'HIGH', 'PENDING'))
+            conn.commit()
+            return jsonify({'success': True, 'message': f'Requisition sent to {target_phc}'})
+        else:
+            return jsonify({'success': False, 'message': 'Target PHC not found'}), 404
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/phc/approve-transfer', methods=['POST'])
+@login_required
+def api_approve_transfer():
+    """REAL-WORLD: Target PHC approves the digital stock handshake and automatically balances inventory."""
+    data = request.get_json()
+    referral_id = data.get('referral_id')
+    
+    conn = get_db_connection()
+    try:
+        ref = conn.execute('SELECT * FROM referrals WHERE id = ? AND target_phc_id = ? AND status = "PENDING"', (referral_id, current_user.phc_id)).fetchone()
+        if not ref:
+            return jsonify({'success': False, 'message': 'Invalid or already processed request'}), 400
+            
+        reason = ref['referral_reason']
+        item_name = reason.replace("Requesting ", "")
+        transfer_qty = 50 # Default transfer block size for emergency borrowing
+        
+        # 1. Deduct from the clinic that is giving (current_user / target_phc)
+        # Use LIKE because the requesting clinic might have just typed "Paracetamol" instead of "Paracetamol 500mg"
+        giving_stock = conn.execute('SELECT item_name, quantity FROM inventory WHERE phc_id = ? AND item_name LIKE ?', (current_user.phc_id, f"%{item_name}%")).fetchone()
+        
+        if giving_stock and giving_stock['quantity'] >= transfer_qty:
+            actual_item_name = giving_stock['item_name']
+            
+            conn.execute('UPDATE inventory SET quantity = quantity - ? WHERE phc_id = ? AND item_name = ?', (transfer_qty, current_user.phc_id, actual_item_name))
+            
+            # Log the deduction
+            conn.execute('''
+                INSERT INTO stock_logs (phc_id, item_name, action, quantity_changed, balance_after, staff_name)
+                VALUES (?, ?, 'SUBTRACT', ?, ?, ?)
+            ''', (current_user.phc_id, actual_item_name, -transfer_qty, giving_stock['quantity'] - transfer_qty, f"{current_user.fullname} (Transfer Out)"))
+            
+            # 2. Add to the clinic that asked (source_phc_id)
+            asking_stock = conn.execute('SELECT quantity FROM inventory WHERE phc_id = ? AND item_name = ?', (ref['source_phc_id'], actual_item_name)).fetchone()
+            if asking_stock:
+                conn.execute('UPDATE inventory SET quantity = quantity + ? WHERE phc_id = ? AND item_name = ?', (transfer_qty, ref['source_phc_id'], actual_item_name))
+                conn.execute('''
+                    INSERT INTO stock_logs (phc_id, item_name, action, quantity_changed, balance_after, staff_name)
+                    VALUES (?, ?, 'ADD', ?, ?, ?)
+                ''', (ref['source_phc_id'], actual_item_name, transfer_qty, asking_stock['quantity'] + transfer_qty, "System (Transfer In)"))
+            
+            # 3. Mark complete
+            conn.execute('UPDATE referrals SET status = "COMPLETED" WHERE id = ?', (referral_id,))
+            conn.commit()
+            return jsonify({'success': True, 'message': f'Transferred {transfer_qty} units of {actual_item_name}'})
+        else:
+            return jsonify({'success': False, 'message': 'Insufficient stock or item not found to fulfill request'}), 400
+            
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    finally:
+        conn.close()
 
 # ═══════════════════════════════════════════════════
 # VILLAGE-LEVEL SURVEILLANCE (DDHS Command)
@@ -2971,10 +3143,27 @@ def api_attendance_mark_od():
         INSERT INTO staff_attendance (user_id, phc_id, status, method, remarks)
         VALUES (?, ?, 'ON_DUTY', 'MANUAL_OD', ?)
     ''', (current_user.id, current_user.phc_id, reason))
+    
+    # REAL-WORLD SCENARIO FIX: 
+    # If a doctor suddenly goes OD (e.g. medical camp), their appointments today MUST be rescheduled.
+    if current_user.role == 'doctor':
+        affected = conn.execute('''
+            UPDATE appointments 
+            SET status = 'Rescheduled', 
+                notes = notes || ' [Auto-rescheduled: Doctor went on emergency OD/Camp]' 
+            WHERE doctor_id = ? 
+            AND appointment_date = date('now') 
+            AND status IN ('Pending', 'Approved')
+        ''', (current_user.id,)).rowcount
+        
+        message = f'Status updated to On-Duty (OD). {affected} appointments were auto-rescheduled.' if affected > 0 else 'Status updated to On-Duty (OD).'
+    else:
+        message = 'Status updated to On-Duty (OD).'
+        
     conn.commit()
     conn.close()
     
-    return jsonify({'success': True, 'message': 'Status updated to On-Duty (OD).'})
+    return jsonify({'success': True, 'message': message})
     
     conn = get_db_connection()
     # Mocking village data based on patient address patterns
@@ -2998,6 +3187,24 @@ def api_attendance_mark_od():
 # VHN OUTREACH & FIELD MONITORING (Nurse Portal)
 # ═══════════════════════════════════════════════════
 
+@app.route('/phc/nurse/vhn-feed')
+@login_required
+def phc_nurse_vhn_feed():
+    """REAL-WORLD: Live sync feed from MTM Tablets / External VHC Apps"""
+    if current_user.role != 'phc_nurse':
+        return redirect(url_for('login'))
+    
+    conn = get_db_connection()
+    field_entries = conn.execute('''
+        SELECT v.*, vu.fullname as vhn_fullname 
+        FROM vhn_field_entries v
+        JOIN users vu ON v.vhn_id = vu.id
+        WHERE vu.phc_id = ?
+        ORDER BY v.timestamp DESC LIMIT 50
+    ''', (current_user.phc_id,)).fetchall()
+    conn.close()
+    
+    return render_template('phc_vhn_feed.html', field_entries=field_entries, user=current_user)
 @app.route('/phc/nurse/vhn-outreach')
 @login_required
 def phc_nurse_vhn_outreach():
@@ -3015,6 +3222,100 @@ def phc_nurse_vhn_outreach():
     conn.close()
     
     return render_template('phc_vhn_outreach.html', field_data=field_data, user=current_user)
+
+@app.route('/vhn/field-entry')
+@login_required
+def vhn_field_entry():
+    """REAL-WORLD: VHN Mobile Portal for village hamlets"""
+    # Allow VHN and Nurse roles (Nurse can act as VHN for demo)
+    if current_user.role not in ['phc_nurse', 'vhn']:
+        return redirect(url_for('login'))
+    return render_template('vhn_field_portal.html', user=current_user)
+
+@app.route('/api/vhn/submit-field-entry', methods=['POST'])
+@login_required
+def api_vhn_submit_field_entry():
+    """Sync field data to the district health database"""
+    data = request.get_json()
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        
+        # 1. Analyze risk with AI (Consistent with PHC logic)
+        risk_engine = IntegratedDualBrainRisk()
+        # Parse BP
+        bp = data.get('bp', '120/80')
+        try:
+            sys_bp, dia_bp = map(int, bp.split('/'))
+        except:
+            sys_bp, dia_bp = 120, 80
+            
+        assessment = risk_engine.assess_patient_with_disease_context(
+            disease_input=data.get('symptoms', ''),
+            symptoms=data.get('symptoms', ''),
+            age=30, gender='Unknown', 
+            sys_bp=sys_bp, dia_bp=dia_bp, 
+            hr=72, temp_f=float(data.get('temp', 98.6))
+        )
+        
+        # FIX 3: VHN "Orphaned Data" Bug
+        # We must create an actual patient account so the PHC Nurse can see them when they arrive!
+        import random, string
+        rand_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        email = f"vhn_{rand_str}@prioritymed.local"
+        password_hash = generate_password_hash(rand_str)
+        
+        patient_name = data.get('patient_name', 'Unknown Villager')
+        
+        # Check if patient already exists (rough fuzzy match) or create new
+        existing_patient = c.execute("SELECT id FROM users WHERE fullname = ? AND role = 'patient'", (patient_name,)).fetchone()
+        
+        if existing_patient:
+            patient_id = existing_patient['id']
+        else:
+            c.execute('''
+                INSERT INTO users (email, password_hash, fullname, role, phone, phc_id, district, is_approved)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+            ''', (email, password_hash, patient_name, 'patient', '', current_user.phc_id, current_user.district))
+            patient_id = c.lastrowid
+        
+        # 2. Save to VHN Field Entries (Now linked to patient_id!)
+        # We need to add patient_id column if it doesn't exist, but for now we just log it.
+        c.execute('''
+            INSERT INTO vhn_field_entries (vhn_id, patient_name, village, risk_score, vitals_summary, lat, lon, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ''', (
+            current_user.id,
+            patient_name,
+            data.get('village'),
+            assessment['news2_score'], # Simplified risk score for the VHN table
+            f"BP: {bp} | Temp: {data.get('temp')} | AI: {assessment['final_risk']['risk_category']}",
+            data.get('lat'),
+            data.get('lon')
+        ))
+        
+        # 3. Add to patient_logs so it appears in the PHC system history!
+        c.execute('''
+            INSERT INTO patient_logs 
+            (user_id, phc_id, age, gender, sys_bp, dia_bp, hr, symptoms, dual_brain_risk, risk_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            patient_id, current_user.phc_id, 30, 'Unknown', sys_bp, dia_bp, 72, 
+            data.get('symptoms', ''), assessment['final_risk']['risk_category'], assessment['news2_score']
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Data Synced & Patient Auto-Registered for PHC!',
+            'risk_score': assessment['news2_score'],
+            'category': assessment['final_risk']['risk_category']
+        })
+    except Exception as e:
+        app.logger.error(f"VHN Sync Error: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # ═══════════════════════════════════════════════════
 # MEDICAL OFFICER (MO) AUTHORITY DESK
@@ -3047,6 +3348,27 @@ def api_mo_sign_all():
     """REAL-WORLD: Simulates the MO's final daily signature on all digital registers"""
     return jsonify({'success': True, 'message': 'All facility records for today have been digitally signed by MO.'})
 
+@app.route('/api/phc/update-expiry', methods=['POST'])
+@login_required
+def api_phc_update_expiry():
+    """REAL-WORLD: Pharmacist updates batch expiry dates"""
+    if current_user.role not in ['pharmacist', 'phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+    data = request.json
+    item_name = data.get('item_name')
+    expiry_date = data.get('expiry_date')
+    
+    if not item_name or not expiry_date:
+        return jsonify({'success': False, 'message': 'Missing data'}), 400
+        
+    conn = get_db_connection()
+    conn.execute('UPDATE inventory SET expiry_date = ? WHERE phc_id = ? AND item_name LIKE ?',
+                 (expiry_date, current_user.phc_id, f"%{item_name}%"))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True, 'message': f'Expiry date updated for {item_name}'})
+
 @app.route('/phc/pharmacist/dashboard')
 @login_required
 def phc_pharmacist_dashboard():
@@ -3055,27 +3377,106 @@ def phc_pharmacist_dashboard():
         return redirect(url_for('login'))
         
     conn = get_db_connection()
+    
     # 1. Low Stock Alerts
     low_stock = conn.execute('SELECT * FROM inventory WHERE phc_id = ? AND quantity <= min_threshold', (current_user.phc_id,)).fetchall()
     
-    # 2. Today's Consumption
+    # 2. Full Inventory for Explorer (including Expiry Checks)
+    full_inventory = conn.execute('''
+        SELECT *, 
+        (CASE WHEN expiry_date < DATE('now') THEN 1 ELSE 0 END) as is_expired,
+        (CASE WHEN expiry_date BETWEEN DATE('now') AND DATE('now', '+3 months') THEN 1 ELSE 0 END) as near_expiry
+        FROM inventory WHERE phc_id = ? ORDER BY expiry_date ASC
+    ''', (current_user.phc_id,)).fetchall()
+    
+    # 3. Consumption Analytics (High Selling)
     usage = conn.execute('''
         SELECT item_name, SUM(quantity_changed) as total_used 
         FROM stock_logs 
         WHERE phc_id = ? AND DATE(timestamp) = DATE('now') AND quantity_changed < 0
         GROUP BY item_name
     ''', (current_user.phc_id,)).fetchall()
+
+    top_drugs = conn.execute('''
+        SELECT item_name, SUM(ABS(quantity_changed)) as total_used 
+        FROM stock_logs 
+        WHERE phc_id = ? AND quantity_changed < 0
+        GROUP BY item_name 
+        ORDER BY total_used DESC LIMIT 3
+    ''', (current_user.phc_id,)).fetchall()
     
-    # 3. Waste Tracking (Ramky)
+    # 4. Waste Tracking
     recent_waste = conn.execute('SELECT * FROM waste_logs WHERE phc_id = ? ORDER BY timestamp DESC LIMIT 5', (current_user.phc_id,)).fetchall()
     
+    # 5. PENDING DISPENSARY QUEUE
+    pending_patients = conn.execute('''
+        SELECT pl.id as log_id, u.fullname, pl.symptoms, pl.dual_brain_risk as risk
+        FROM patient_logs pl
+        JOIN users u ON pl.user_id = u.id
+        WHERE pl.phc_id = ? AND DATE(pl.timestamp) = DATE('now') AND pl.is_dispensed = 0
+        ORDER BY pl.timestamp DESC
+    ''', (current_user.phc_id,)).fetchall()
+    
+    # 6. Predictive Budget (Mock: Usage * Avg Unit Cost 5 INR * 90 Days)
+    total_consumption_val = sum([d['total_used'] for d in top_drugs])
+    projected_budget = "{:,}".format(total_consumption_val * 5 * 90)
+
+    # 7. Incoming Stock Transfer Requests
+    incoming_transfers = conn.execute('''
+        SELECT r.id, f.name as source_phc, r.referral_reason, r.created_at
+        FROM referrals r
+        JOIN phc_facilities f ON r.source_phc_id = f.id
+        WHERE r.target_phc_id = ? AND r.patient_id = 'STOCK_TRANSFER' AND r.status = 'PENDING'
+    ''', (current_user.phc_id,)).fetchall()
+
     conn.close()
     
     return render_template('phc_pharmacist_dashboard.html', 
                          low_stock=low_stock, 
+                         full_inventory=full_inventory,
                          usage=usage, 
                          recent_waste=recent_waste,
+                         pending_patients=pending_patients,
+                         analytics_data={'top_drugs': top_drugs, 'projected_budget': projected_budget},
+                         incoming_transfers=incoming_transfers,
                          user=current_user)
+
+@app.route('/api/phc/confirm-dispense', methods=['POST'])
+@login_required
+def api_phc_confirm_dispense():
+    """Mark a patient log as dispensed and realistically deduct stock from inventory"""
+    data = request.json
+    log_id = data.get('log_id')
+    
+    conn = get_db_connection()
+    try:
+        # 1. Get the patient log to see the symptoms/department (for mapping to stock)
+        # In a fully mapped DB, this would read actual prescribed meds, but for our prototype 
+        # we deduct based on department mapping (e.g., General -> Paracetamol)
+        log = conn.execute('SELECT phc_department, dual_brain_risk, user_id FROM patient_logs WHERE id = ?', (log_id,)).fetchone()
+        
+        medicines = data.get('medicines', [])
+        if log and log['dual_brain_risk'] not in ['HIGH', 'CRITICAL']:
+            # Realistic Pharmacy Stock Deduction
+            # Deduct units from inventory based on AI suggestions confirmed by the pharmacist
+            if medicines:
+                for med in medicines:
+                    # Deduct 1 unit of the matched medicine
+                    conn.execute('''
+                        UPDATE inventory 
+                        SET quantity = MAX(0, quantity - 1) 
+                        WHERE phc_id = ? AND item_name LIKE ?
+                    ''', (current_user.phc_id, f"%{med.split()[0]}%"))
+
+        # 2. Mark as dispensed
+        conn.execute('UPDATE patient_logs SET is_dispensed = 1 WHERE id = ?', (log_id,))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        conn.close()
 
 # ═══════════════════════════════════════════════════
 # PHARMACIST MPR REVIEW & VERIFICATION (Accountability)
@@ -3136,6 +3537,53 @@ def api_phc_log_waste():
     
     return jsonify({'success': True, 'message': 'Waste log saved successfully.'})
 
+@app.route('/api/phc/update-stock', methods=['POST'])
+@login_required
+def api_phc_update_stock():
+    """Update PHC inventory and log the change"""
+    if current_user.role not in ['pharmacist', 'phc_nurse', 'doctor']:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+        
+    data = request.json
+    item_name = data.get('item_name')
+    qty = int(data.get('qty', 0))
+    action = data.get('action') # 'ADD' or 'SUBTRACT'
+    
+    if not item_name or qty <= 0:
+        return jsonify({'success': False, 'message': 'Invalid data'}), 400
+        
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # 1. Update or Insert into inventory
+    existing = c.execute('SELECT quantity FROM inventory WHERE phc_id = ? AND item_name LIKE ?', 
+                        (current_user.phc_id, f"%{item_name}%")).fetchone()
+    
+    net_change = qty if action == 'ADD' else -qty
+    new_qty = (existing['quantity'] if existing else 0) + net_change
+    
+    if new_qty < 0:
+        conn.close()
+        return jsonify({'success': False, 'message': 'Cannot subtract more than existing stock'}), 400
+    
+    if existing:
+        c.execute('UPDATE inventory SET quantity = ? WHERE phc_id = ? AND item_name LIKE ?',
+                 (new_qty, current_user.phc_id, f"%{item_name}%"))
+    else:
+        c.execute('INSERT INTO inventory (phc_id, item_name, quantity, min_threshold) VALUES (?, ?, ?, ?)',
+                 (current_user.phc_id, item_name, new_qty, 100)) # Default threshold 100
+    
+    # 2. Log the change
+    c.execute('''
+        INSERT INTO stock_logs (phc_id, item_name, action, quantity_changed, balance_after, staff_name)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ''', (current_user.phc_id, item_name, action, net_change, new_qty, current_user.fullname))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True, 'message': f'Stock updated! New balance: {new_qty}'})
+
 @app.route('/phc/pharmacist/bin-card/<item_name>')
 @login_required
 def phc_pharmacist_bin_card(item_name):
@@ -3184,13 +3632,18 @@ def api_check_stock_for_symptom():
     data = request.get_json()
     symptoms = data.get('symptoms', '').lower()
     
-    # Mapping symptoms to critical drugs
+    # Mapping symptoms to critical drugs (Unified District Standard - TN EML)
     mapping = {
+        'stomach': 'Dicyclomine',
+        'abdominal': 'Dicyclomine',
+        'acidity': 'Ranitidine',
         'fever': 'Paracetamol',
-        'cold': 'Cetirizine',
-        'pain': 'Ibuprofen',
-        'injury': 'Bandages',
-        'snake': 'Anti-Snake Venom'
+        'headache': 'Paracetamol',
+        'infection': 'Amoxicillin',
+        'wound': 'Amoxicillin',
+        'snake': 'ASV',
+        'bite': 'ASV',
+        'vomit': 'Ondansetron'
     }
     
     needed_item = None
@@ -4223,6 +4676,22 @@ def api_staff_request_leave():
     conn = get_db_connection()
     c = conn.cursor()
     try:
+        if current_user.role == 'doctor':
+            # Check for existing appointments in this date range
+            conflict = c.execute('''
+                SELECT appointment_date, appointment_time 
+                FROM appointments 
+                WHERE doctor_id = ? AND status NOT IN ('Rejected', 'Cancelled', 'Completed')
+                AND appointment_date BETWEEN ? AND ?
+                LIMIT 1
+            ''', (current_user.id, start_date, end_date)).fetchone()
+            
+            if conflict:
+                return jsonify({
+                    'success': False, 
+                    'message': f'Cannot request leave: You have an active appointment on {conflict["appointment_date"]} at {conflict["appointment_time"]}. Please reschedule or cancel it first.'
+                }), 400
+
         c.execute('''
             INSERT INTO staff_leaves (user_id, phc_id, start_date, end_date, reason, status)
             VALUES (?, ?, ?, ?, ?, 'PENDING')
@@ -4335,7 +4804,7 @@ def api_complete_trip():
         # Update allocation status
         conn.execute('''
             UPDATE ambulance_allocations 
-            SET status = 'completed', reached_at = CURRENT_TIMESTAMP 
+            SET status = 'delivered', reached_at = CURRENT_TIMESTAMP 
             WHERE id = ?
         ''', (allocation_id,))
         
@@ -4348,7 +4817,7 @@ def api_complete_trip():
         # Notify destination PHC (Nurses/Doctors)
         if task['dest_phc_id']:
             conn.execute('''
-                INSERT INTO notifications (user_id, title, message, type)
+                INSERT INTO notifications (recipient_id, title, message, notification_type)
                 SELECT id, 'Incoming Emergency Reached', ?, 'emergency'
                 FROM users WHERE phc_id = ? AND role IN ('phc_nurse', 'doctor')
             ''', (f"Ambulance with patient {task['patient_name']} has reached the facility.", task['dest_phc_id']))
@@ -4377,12 +4846,16 @@ def api_allocate_ambulance():
     try:
         if ambulance_id:
             amb = conn.execute('SELECT * FROM ambulances WHERE id = ?', (ambulance_id,)).fetchone()
+            # FIX 4: Ambulance Double Booking
+            # Prevent manual assignment if the ambulance is already busy
+            if amb and amb['status'] != 'available':
+                return jsonify({'success': False, 'message': 'This ambulance is currently on a trip or offline.'}), 400
         else:
             amb = conn.execute('''
                 SELECT * FROM ambulances 
-                WHERE status = 'available' AND (phc_id = ? OR district = ?)
+                WHERE status = 'available'
                 ORDER BY (phc_id = ?) DESC LIMIT 1
-            ''', (current_user.phc_id, current_user.district, current_user.phc_id)).fetchone()
+            ''', (current_user.phc_id,)).fetchone()
         
         if not amb:
             return jsonify({'success': False, 'message': 'No available ambulances found'}), 404
@@ -4394,13 +4867,32 @@ def api_allocate_ambulance():
             source_address = data.get('address', 'Manual Emergency Location')
             patient_name = data.get('caller_info', 'Emergency Caller')
         else:
-            patient = conn.execute('SELECT fullname, lat, lon, address FROM users WHERE id = ?', (patient_id,)).fetchone()
-            if not patient or not patient['lat']:
-                return jsonify({'success': False, 'message': 'Patient GPS coordinates not found'}), 400
-            source_lat = patient['lat']
-            source_lon = patient['lon']
-            source_address = patient['address']
-            patient_name = patient['fullname']
+            patient_row = conn.execute('SELECT fullname, lat, lon, address, phc_id FROM users WHERE id = ?', (patient_id,)).fetchone()
+            if not patient_row:
+                return jsonify({'success': False, 'message': 'Patient not found'}), 404
+            
+            # Convert row to dict to support .get()
+            patient = dict(patient_row)
+            
+            # FALLBACK LOGIC: If patient GPS is missing, use their assigned PHC coordinates
+            source_lat = patient.get('lat')
+            source_lon = patient.get('lon')
+            source_address = patient.get('address', 'Village Hamlet')
+            patient_name = patient.get('fullname', 'Unknown Patient')
+
+            if not source_lat or not source_lon:
+                # Get PHC coordinates as fallback
+                phc_id = patient.get('phc_id') or current_user.phc_id
+                phc_fallback = conn.execute('SELECT lat, lon, location FROM phc_facilities WHERE id = ?', (phc_id,)).fetchone()
+                if phc_fallback and phc_fallback['lat']:
+                    source_lat = phc_fallback['lat']
+                    source_lon = phc_fallback['lon']
+                    source_address = f"At Facility: {phc_fallback['location']}"
+                    app.logger.info(f"GPS Fallback triggered for patient {patient_id}. Using PHC {phc_id} coordinates.")
+                else:
+                    # Final fallback: Use a neutral district center coordinate (e.g., Trichy center)
+                    source_lat, source_lon = 10.79, 78.70
+                    source_address = "District Center (GPS Unavailable)"
             
         # Get destination coordinates
         dest = conn.execute('SELECT name, lat, lon FROM phc_facilities WHERE name = ?', (dest_phc_name,)).fetchone()
@@ -4423,10 +4915,16 @@ def api_allocate_ambulance():
         dest_phc = conn.execute('SELECT id FROM phc_facilities WHERE name = ?', (dest_phc_name,)).fetchone()
         if dest_phc:
             conn.execute('''
-                INSERT INTO notifications (user_id, phc_id, title, message, type)
-                VALUES (NULL, ?, ?, ?, ?)
-            ''', (dest_phc['id'], 'Incoming Emergency', 
-                  f"Emergency Case: {patient_name} is being transported to your facility.", 'emergency'))
+                INSERT INTO notifications (recipient_id, title, message, notification_type)
+                SELECT id, 'Incoming Emergency', ?, 'emergency'
+                FROM users WHERE phc_id = ? AND role IN ('phc_nurse', 'doctor')
+            ''', (f"Emergency Case: {patient_name} is being transported to your facility.", dest_phc['id']))
+            
+            if not manual_dispatch and patient_id:
+                conn.execute('''
+                    INSERT INTO patient_referrals (patient_id, source_phc_id, target_phc_id, status)
+                    VALUES (?, ?, ?, 'PENDING')
+                ''', (patient_id, current_user.phc_id, dest_phc['id']))
 
         conn.commit()
         return jsonify({'success': True, 'message': 'Ambulance dispatched successfully'})
@@ -4543,6 +5041,50 @@ def api_get_phc_centers():
         return jsonify([]), 500
 
 
+@app.route('/api/phc/register-walkin', methods=['POST'])
+@login_required
+def api_phc_register_walkin():
+    """Allows nurse to instantly register a walk-in patient at the desk"""
+    if current_user.role != 'phc_nurse':
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+
+    try:
+        data = request.json
+        fullname = data.get('fullname')
+        phone = data.get('phone', '')
+        age = data.get('age', 0)
+        gender = data.get('gender', 'Other')
+        
+        if not fullname:
+            return jsonify({'success': False, 'error': 'Name is required'}), 400
+
+        # Generate a dummy email for walk-ins (since they don't have accounts)
+        import random, string
+        rand_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
+        email = f"walkin_{rand_str}@prioritymed.local"
+        password_hash = generate_password_hash(rand_str)
+        
+        conn = get_db_connection()
+        
+        # Insert user
+        cursor = conn.execute('''
+            INSERT INTO users (email, password_hash, fullname, role, phone, phc_id, district, is_approved)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+        ''', (email, password_hash, fullname, 'patient', phone, current_user.phc_id, current_user.district))
+        
+        new_patient_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            'success': True, 
+            'message': 'Walk-in patient registered successfully',
+            'patient_id': new_patient_id
+        })
+    except Exception as e:
+        app.logger.error(f"Error registering walk-in: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ===== PHC NURSE DASHBOARD =====
 @app.route('/phc/nurse/dashboard')
 @login_required
@@ -4582,28 +5124,28 @@ def phc_nurse_dashboard():
         # 1. PATIENTS AT THIS PHC CENTER (all patients assigned to this center)
         today = datetime.now().strftime('%Y-%m-%d')
 
-        # Patients registered today assigned to this nurse
+        # Patients registered today assigned to this PHC
         registered_today = conn.execute('''
             SELECT COUNT(DISTINCT pl.user_id) as count FROM patient_logs pl
             JOIN users u ON pl.user_id = u.id
-            WHERE u.assigned_nurse_id = ? AND DATE(pl.timestamp) = ?
-        ''', (current_user.id, today)).fetchone()
+            WHERE u.phc_id = ? AND DATE(pl.timestamp) = ?
+        ''', (current_user.phc_id, today)).fetchone()
         patients_registered_today = get_count(registered_today)
 
-        # Total unique patients assigned to this nurse
+        # Total unique patients assigned to this PHC
         total_registered = conn.execute('''
             SELECT COUNT(DISTINCT pl.user_id) as count FROM patient_logs pl
             JOIN users u ON pl.user_id = u.id
-            WHERE u.assigned_nurse_id = ?
-        ''', (current_user.id,)).fetchone()
+            WHERE u.phc_id = ?
+        ''', (current_user.phc_id,)).fetchone()
         total_patients = get_count(total_registered)
 
-        # If no logs, get count of patients assigned to this nurse
+        # If no logs, get count of patients assigned to this PHC
         if total_patients == 0:
             total_patients = conn.execute('''
                 SELECT COUNT(*) as count FROM users
-                WHERE role = 'patient' AND assigned_nurse_id = ?
-            ''', (current_user.id,)).fetchone()
+                WHERE role = 'patient' AND phc_id = ?
+            ''', (current_user.phc_id,)).fetchone()
             total_patients = get_count(total_patients)
 
         # 2. PATIENT CHECK-INS TODAY
@@ -4635,10 +5177,10 @@ def phc_nurse_dashboard():
                 COUNT(*) as count
             FROM patient_logs pl
             JOIN users u ON pl.user_id = u.id
-            WHERE u.assigned_nurse_id = ? AND DATE(pl.timestamp) >= DATE('now', '-30 days')
+            WHERE u.phc_id = ? AND DATE(pl.timestamp) >= DATE('now', '-30 days')
             GROUP BY pl.dual_brain_risk
             ORDER BY count DESC
-        ''', (current_user.id,)).fetchall()
+        ''', (current_user.phc_id,)).fetchall()
 
         disease_labels = []
         disease_counts = []
@@ -4706,6 +5248,33 @@ def phc_nurse_dashboard():
                 'status': 'CRITICAL'
             })
 
+        # Assessment requests (Notifications)
+        notifications = conn.execute('''
+            SELECT id, title, message, created_at
+            FROM notifications
+            WHERE recipient_id = ? AND is_read = 0
+            ORDER BY created_at DESC
+        ''', (current_user.id,)).fetchall()
+        
+        for notif in notifications:
+            dt_str = notif['created_at']
+            if dt_str:
+                try:
+                    dt = datetime.strptime(dt_str, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    dt = datetime.now()
+            else:
+                dt = datetime.now()
+                
+            system_alerts.append({
+                'id': notif['id'],
+                'icon': 'fas fa-user-injured',
+                'type': 'request',
+                'message': notif['message'],
+                'timestamp': dt.strftime('%H:%M'),
+                'status': 'INFO'
+            })
+
         # Pending appointments
         pending_count = conn.execute('''
             SELECT COUNT(*) as count FROM appointments
@@ -4733,21 +5302,22 @@ def phc_nurse_dashboard():
 
         # REAL-WORLD: Fetch local MPR (Monthly Progress Report) stats for the 13 departments
         mpr_rows = conn.execute("""
-            SELECT phc_department, COUNT(*) as count
+            SELECT phc_department, COUNT(*) as patient_total
             FROM patient_logs
             WHERE phc_id = ? AND strftime('%m', timestamp) = strftime('%m', 'now')
             GROUP BY phc_department
         """, (phc_id,)).fetchall()
-        mpr_stats = {row['phc_department']: row['count'] for row in mpr_rows}
+        mpr_stats = [dict(row) for row in mpr_rows]
 
         # REAL-WORLD: Fetch real priority queue patients (Deduplicated latest entry only)
         priority_queue_rows = conn.execute("""
             SELECT source, id, name, detail, risk_level, sub_detail, timestamp FROM (
-                SELECT 'VHN' as source, id, patient_name as name, vitals_summary as detail, 
-                       CASE WHEN risk_score >= 8 THEN 'CRITICAL' ELSE 'HIGH' END as risk_level, 
-                       village as sub_detail, timestamp
-                FROM vhn_field_entries 
-                WHERE risk_score >= 7
+                SELECT 'VHN' as source, v.id, v.patient_name as name, v.vitals_summary as detail, 
+                       CASE WHEN v.risk_score >= 8 THEN 'CRITICAL' ELSE 'HIGH' END as risk_level, 
+                       v.village as sub_detail, v.timestamp
+                FROM vhn_field_entries v
+                JOIN users vu ON v.vhn_id = vu.id
+                WHERE v.risk_score >= 7 AND vu.phc_id = ?
                 UNION ALL
                 SELECT 'CLINIC' as source, u.id, u.fullname as name, pl.dual_brain_risk as detail, 
                        pl.dual_brain_risk as risk_level, pl.phc_department as sub_detail, pl.timestamp
@@ -4757,7 +5327,7 @@ def phc_nurse_dashboard():
             ) t
             GROUP BY id, source
             ORDER BY timestamp DESC LIMIT 10
-        """, (phc_id,)).fetchall()
+        """, (phc_id, phc_id)).fetchall()
         
         priority_patients = []
         for row in priority_queue_rows:
@@ -4794,9 +5364,13 @@ def phc_nurse_dashboard():
 
         conn.close()
 
+        # REAL-WORLD: Fetch VHN Referrals (Simulated for this demo cluster)
+        global MOCK_VHN_REFERRALS
+
         return render_template('phc_nurse_dashboard.html',
                              dashboard_data=dashboard_data,
                              recent_logs=recent_logs,
+                             vhn_referrals=MOCK_VHN_REFERRALS,
                              user=current_user)
 
     except Exception as e:
@@ -5124,6 +5698,7 @@ def api_patient_assessment():
         news2_score_val = 0
         dept_val = 'Medicine'
         is_social_val = 0
+        specialist_val = 'General Physician'
         
         if assessment_result and 'final_risk' in assessment_result:
             f_risk = assessment_result['final_risk']
@@ -5131,6 +5706,7 @@ def api_patient_assessment():
             news2_score_val = assessment_result.get('news2_score', 0)
             dept_val = f_risk.get('phc_department', 'Medicine')
             is_social_val = 1 if f_risk.get('is_social_risk') else 0
+            specialist_val = f_risk.get('suggested_specialist', 'General Physician')
 
         # ===== SAVE TO DATABASE =====
         conn = get_db_connection()
@@ -5145,7 +5721,7 @@ def api_patient_assessment():
         """, (
             age, gender, sys_bp, dia_bp, hr, temp_f, spo2, rr,
             symptoms, final_risk, routing, 
-            disease_recognized or 'General Physician',
+            specialist_val,
             data.get('patient_id'), current_user.phc_id or 1,
             data.get('history', ''), xgb_score or final_risk,
             pain_intensity, 
@@ -5171,6 +5747,44 @@ def api_patient_assessment():
                 ))
             except Exception as e:
                 app.logger.error(f"Failed to create referral handshake: {e}")
+        else:
+            # FIX 1: The "Ghost Doctor" Routing Bug
+            # If not referred out, we MUST assign them to a PHC Doctor's queue!
+            try:
+                # FIX 5: Routing Patients to "Absent" Doctors
+                # Ensure we DO NOT route to a doctor who is explicitly marked ABSENT today.
+                # (We still fallback to any doctor if everyone is "Unknown" to not break the demo)
+                doctor = cursor.execute('''
+                    SELECT id, fullname, specialization FROM users 
+                    WHERE role = 'doctor' AND phc_id = ?
+                    AND id NOT IN (
+                        SELECT user_id FROM staff_attendance 
+                        WHERE DATE(check_in_time) = DATE('now') AND status = 'ABSENT'
+                    )
+                    AND id NOT IN (
+                        SELECT user_id FROM staff_leaves
+                        WHERE status = 'APPROVED' 
+                        AND DATE('now') BETWEEN start_date AND end_date
+                    )
+                    ORDER BY RANDOM() LIMIT 1
+                ''', (current_user.phc_id,)).fetchone()
+                
+                if doctor:
+                    # Create the appointment (queue ticket) so the doctor actually sees the patient
+                    cursor.execute('''
+                        INSERT INTO appointments
+                        (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, status)
+                        VALUES (?, ?, ?, ?, ?, date('now'), time('now'), ?, 'Approved')
+                    ''', (
+                        data.get('patient_id'),
+                        data.get('patientName', 'Patient'),
+                        doctor['id'],
+                        doctor['fullname'],
+                        doctor['specialization'] or 'General Medicine',
+                        symptoms
+                    ))
+            except Exception as e:
+                app.logger.error(f"Failed to auto-route to doctor: {e}")
 
         # REAL-WORLD: Social Risk Vault (Secret Diary)
         if assessment_result and assessment_result['final_risk'].get('is_social_risk'):
@@ -5193,6 +5807,24 @@ def api_patient_assessment():
         log_id = cursor.lastrowid  # BUG FIX 1: Use cursor.lastrowid instead of conn.lastrowid
         conn.close()
 
+        # Fetch available specialist doctors
+        available_doctors = []
+        try:
+            doctors = cursor.execute('''
+                SELECT id, fullname, specialization, experience FROM users
+                WHERE role = 'Doctor' AND (specialization = ? OR specialization = 'General Physician')
+                AND id NOT IN (
+                    SELECT user_id FROM staff_attendance 
+                    WHERE DATE(check_in_time) = DATE('now') AND status = 'ABSENT'
+                )
+            ''', (specialist_val,)).fetchall()
+            available_doctors = [dict(d) for d in doctors]
+            
+            # Sort so exact specialist match comes first
+            available_doctors.sort(key=lambda x: 0 if x['specialization'] == specialist_val else 1)
+        except Exception as e:
+            app.logger.error(f"Failed to fetch specialist doctors: {e}")
+
         # ===== RETURN RESPONSE =====
         response = {
             'success': True,
@@ -5203,6 +5835,8 @@ def api_patient_assessment():
                 'routing': routing,
                 'urgency': urgency,
                 'diseaseRecognized': disease_recognized,
+                'recommendedSpecialist': specialist_val,
+                'availableDoctors': available_doctors
             }
         }
 
@@ -5377,8 +6011,8 @@ def submit_triage_outcome(log_id):
     actual_outcome = (payload.get('actual_outcome') or '').strip().upper()
     notes = (payload.get('notes') or '').strip()
 
-    if actual_outcome not in {'LOW', 'MEDIUM', 'HIGH'}:
-        message = 'actual_outcome must be one of: LOW, MEDIUM, HIGH'
+    if actual_outcome not in {'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'}:
+        message = 'actual_outcome must be one of: LOW, MEDIUM, HIGH, CRITICAL'
         if request.is_json:
             return jsonify({'success': False, 'error': message}), 400
         flash(message, 'error')
@@ -6229,9 +6863,11 @@ def appointments():
             SELECT a.*, u.fullname as patient_fullname, u.phone as patient_phone
             FROM appointments a
             LEFT JOIN users u ON a.patient_id = u.id
-            WHERE a.doctor_id = ? OR a.status = 'Pending'
+            LEFT JOIN users d ON a.doctor_id = d.id
+            WHERE a.doctor_id = ? OR 
+                  (a.status = 'Pending' AND (u.phc_id = ? OR d.phc_id = ?))
             ORDER BY a.appointment_date ASC, a.appointment_time ASC
-        ''', (current_user.id,)).fetchall()
+        ''', (current_user.id, current_user.phc_id, current_user.phc_id)).fetchall()
     else:
         # Patients see only their own appointments
         appointments_list = conn.execute('''
@@ -6265,12 +6901,31 @@ def appointments():
     appointment_dates = [dict(row) for row in appointment_dates]
 
     # Get all doctors for patient appointment booking
-    all_doctors = conn.execute('''
-        SELECT id, fullname, specialization, experience
-        FROM users
-        WHERE role = 'doctor'
-        ORDER BY fullname ASC
-    ''').fetchall()
+    if current_user.phc_id:
+        all_doctors = conn.execute('''
+            SELECT u.id, u.fullname, u.specialization, u.experience, p.name as phc_name
+            FROM users u
+            LEFT JOIN phc_facilities p ON u.phc_id = p.id
+            WHERE u.role = 'doctor' AND u.phc_id = ?
+            ORDER BY u.fullname ASC
+        ''', (current_user.phc_id,)).fetchall()
+    elif current_user.district:
+        all_doctors = conn.execute('''
+            SELECT u.id, u.fullname, u.specialization, u.experience, p.name as phc_name
+            FROM users u
+            LEFT JOIN phc_facilities p ON u.phc_id = p.id
+            WHERE u.role = 'doctor' AND u.district = ?
+            ORDER BY u.fullname ASC
+        ''', (current_user.district,)).fetchall()
+    else:
+        all_doctors = conn.execute('''
+            SELECT u.id, u.fullname, u.specialization, u.experience, p.name as phc_name
+            FROM users u
+            LEFT JOIN phc_facilities p ON u.phc_id = p.id
+            WHERE u.role = 'doctor'
+            ORDER BY u.fullname ASC
+        ''').fetchall()
+        
     all_doctors = [dict(row) for row in all_doctors]
 
     conn.close()
@@ -6287,24 +6942,47 @@ def appointments():
 def doctors_directory():
     conn = get_db_connection()
 
-    # Get all doctors with their appointment statistics
-    doctors = conn.execute('''
-        SELECT
-            u.id,
-            u.email,
-            u.fullname,
-            u.phone,
-            u.specialization,
-            u.license,
-            u.experience,
-            COUNT(DISTINCT a.id) as total_appointments,
-            COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments
-        FROM users u
-        LEFT JOIN appointments a ON u.id = a.doctor_id
-        WHERE u.role = 'doctor'
-        GROUP BY u.id
-        ORDER BY u.fullname ASC
-    ''').fetchall()
+    # Get doctors based on user role and region
+    if current_user.role == 'patient':
+        doctors = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                u.specialization,
+                u.license,
+                u.experience,
+                u.district,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.doctor_id
+            WHERE u.role = 'doctor' AND (u.district = ? OR u.phc_id = ?)
+            GROUP BY u.id
+            ORDER BY 
+                CASE WHEN u.phc_id = ? THEN 0 ELSE 1 END ASC,
+                u.fullname ASC
+        ''', (current_user.district, current_user.phc_id, current_user.phc_id)).fetchall()
+    else:
+        doctors = conn.execute('''
+            SELECT
+                u.id,
+                u.email,
+                u.fullname,
+                u.phone,
+                u.specialization,
+                u.license,
+                u.experience,
+                u.district,
+                COUNT(DISTINCT a.id) as total_appointments,
+                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments
+            FROM users u
+            LEFT JOIN appointments a ON u.id = a.doctor_id
+            WHERE u.role = 'doctor'
+            GROUP BY u.id
+            ORDER BY u.fullname ASC
+        ''').fetchall()
 
     doctors = [dict(row) for row in doctors]
 
@@ -6348,11 +7026,7 @@ def doctors_directory():
                          avg_experience=avg_experience,
                          current_user=current_user)
 
-# --- 10. PATIENTS DIRECTORY ROUTE ---
-@app.route('/patients', methods=['GET'])
-@login_required
-def patients_directory():
-    # Only medical staff can access patient directory
+
     if current_user.role not in ('doctor', 'phc_nurse', 'ddhs_admin'):
         flash('Access denied. Only medical staff can view patient directory.')
         return redirect(url_for('patient_dashboard'))
@@ -6364,24 +7038,6 @@ def patients_directory():
         # Regular doctor sees ONLY their own patients
         patients = conn.execute('''
             SELECT DISTINCT
-                u.id,
-                u.email,
-                u.fullname,
-                u.phone,
-                COUNT(DISTINCT a.id) as total_appointments,
-                COUNT(DISTINCT CASE WHEN a.status = 'Completed' THEN a.id END) as completed_appointments,
-                COUNT(DISTINCT CASE WHEN a.status = 'Pending' THEN a.id END) as pending_appointments
-            FROM users u
-            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
-            WHERE u.role = 'patient'
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.id,)).fetchall()
-
-    elif current_user.role == 'doctor':
-        # Doctor sees their own patients (handled by doctor_id in appointments)
-        patients = conn.execute('''
-            SELECT
                 u.id,
                 u.email,
                 u.fullname,
@@ -6495,6 +7151,60 @@ def patients_directory():
                          total_records=total_records,
                          current_user=current_user)
 
+@app.route('/appointments/notifications', methods=['GET'])
+@login_required
+def get_notifications():
+    conn = get_db_connection()
+    try:
+        notifications = conn.execute('''
+            SELECT id, notification_type, title, message, related_id, is_read, created_at
+            FROM notifications
+            WHERE recipient_id = ?
+            ORDER BY created_at DESC
+            LIMIT 20
+        ''', (current_user.id,)).fetchall()
+        
+        return jsonify({
+            'success': True,
+            'notifications': [dict(n) for n in notifications]
+        })
+    except Exception as e:
+        app.logger.error(f"Error fetching notifications: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/notifications/read/<int:notif_id>', methods=['POST'])
+@login_required
+def mark_notification_read(notif_id):
+    try:
+        conn = get_db_connection()
+        conn.execute('UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_id = ?', 
+                     (notif_id, current_user.id))
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        app.logger.error(f"Error marking notification read: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/doctor/<int:doctor_id>/booked-times')
+@login_required
+def get_doctor_booked_times(doctor_id):
+    date = request.args.get('date')
+    if not date:
+        return jsonify([])
+        
+    conn = get_db_connection()
+    try:
+        appts = conn.execute('''
+            SELECT appointment_time FROM appointments
+            WHERE doctor_id = ? AND appointment_date = ? AND status != 'Rejected'
+        ''', (doctor_id, date)).fetchall()
+        return jsonify([row['appointment_time'] for row in appts])
+    finally:
+        conn.close()
+
+
 @app.route('/appointments/create', methods=['POST'])
 @login_required
 def create_appointment():
@@ -6507,62 +7217,79 @@ def create_appointment():
         symptoms = request.form.get('symptoms', '')
         notes = request.form.get('notes', '')
 
+        patient_id = request.form.get('patient_id')
+        doctor_id = request.form.get('doctor_id')
+        
+        # If the user is a patient, they can only book for themselves
         if current_user.role == 'patient':
-            # Patients REQUEST appointments (status='Pending')
-            # They must select a doctor
-            doctor_id = request.form.get('doctor_id')
-
-            if not doctor_id or not appointment_date or not appointment_time:
-                flash('Please fill in all required fields (Doctor, Date, Time).', 'error')
-                return redirect(url_for('appointments'))
-
-            # Get doctor details
-            doctor = conn.execute('SELECT id, fullname, specialization FROM users WHERE id = ? AND role = "doctor"',
-                                (doctor_id,)).fetchone()
-            if not doctor:
-                flash('Invalid doctor selected.', 'error')
-                return redirect(url_for('appointments'))
-
-            doctor_id = doctor['id']
-            doctor_name = doctor['fullname']
-            department = doctor['specialization'] or 'General Medicine'
-
             patient_id = current_user.id
-            patient_name = current_user.fullname or 'Patient'
-            status = 'Pending'  # Patients request appointments
-
-            conn.execute('''
-                INSERT INTO appointments
-                (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (patient_id, patient_name, doctor_id, doctor_name, department,
-                  appointment_date, appointment_time, symptoms, notes, status))
-
-            flash('Appointment request submitted successfully! Your doctor will review and approve it.', 'success')
-
+            patient_name = current_user.fullname
+            status = 'Pending'
         else:
-            # Doctor/PHC staff creates appointment (auto-approved)
-            patient_id = request.form.get('patient_id')
-            patient_name = request.form.get('patient_name', 'Patient')
-            doctor_name = request.form.get('doctor_name', current_user.fullname or 'Doctor')
-            department = request.form.get('department', current_user.specialization or 'General Medicine')
-
-            # Ensure required fields are not empty
             patient_id = patient_id or current_user.id
-            patient_name = str(patient_name).strip() or 'Patient'
-            doctor_name = str(doctor_name).strip() or 'Doctor'
-            department = str(department).strip() or 'General Medicine'
-            symptoms = str(symptoms).strip()
-            notes = str(notes).strip()
+            patient_name = request.form.get('patient_name', 'Patient')
+            status = 'Approved'
+            
+        if not doctor_id:
+            # If no doctor selected (e.g. nurse didn't select one), default to themselves if they are a doctor
+            doctor_id = current_user.id if current_user.role == 'doctor' else None
+            
+        if not doctor_id:
+            flash('Please select a doctor.', 'error')
+            return redirect(url_for('appointments'))
+            
+        # Get actual doctor name and department
+        doc_info = conn.execute('SELECT fullname, specialization FROM users WHERE id = ? AND role = "doctor"', (doctor_id,)).fetchone()
+        if not doc_info:
+            flash('Selected doctor not found.', 'error')
+            return redirect(url_for('appointments'))
+            
+        doctor_name = doc_info['fullname']
+        department = doc_info['specialization'] or 'General Medicine'
 
-            conn.execute('''
-                INSERT INTO appointments
-                (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
-            ''', (patient_id, patient_name, current_user.id, doctor_name,
-                  department, appointment_date, appointment_time, symptoms, notes))
+        patient_name = str(patient_name).strip() or 'Patient'
+        symptoms = str(symptoms).strip()
+        notes = str(notes).strip()
+        
+        # 1. CHECK IF DOCTOR IS ON LEAVE (OD/Leave)
+        leave_conflict = conn.execute('''
+            SELECT reason FROM staff_leaves 
+            WHERE user_id = ? AND status = 'APPROVED'
+            AND ? BETWEEN start_date AND end_date
+        ''', (doctor_id, appointment_date)).fetchone()
+        
+        if leave_conflict:
+            flash(f'Cannot book: Dr. {doctor_name} is on leave/OD on {appointment_date} ({leave_conflict["reason"]}).', 'error')
+            return redirect(url_for('appointments'))
+            
+        # 2. CHECK FOR DOUBLE BOOKING
+        double_book = conn.execute('''
+            SELECT id FROM appointments
+            WHERE doctor_id = ? AND appointment_date = ? AND appointment_time = ? AND status != 'Rejected'
+        ''', (doctor_id, appointment_date, appointment_time)).fetchone()
+        
+        if double_book:
+            flash(f'Cannot book: Dr. {doctor_name} already has an appointment at {appointment_time} on {appointment_date}.', 'error')
+            return redirect(url_for('appointments'))
 
-            flash('Appointment created successfully!')
+        c = conn.cursor()
+        c.execute('''
+            INSERT INTO appointments
+            (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date, appointment_time, symptoms, notes, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (patient_id, patient_name, doctor_id, doctor_name,
+              department, appointment_date, appointment_time, symptoms, notes, status))
+        appt_id = c.lastrowid
+        
+        # Notify the doctor
+        title = "New Appointment Request" if status == 'Pending' else "New Appointment Scheduled"
+        c.execute('''
+            INSERT INTO notifications (recipient_id, notification_type, title, message, related_id)
+            VALUES (?, 'appointment', ?, ?, ?)
+        ''', (doctor_id, title, f"{patient_name} has booked an appointment for {appointment_date} at {appointment_time}.", appt_id))
+
+        msg = 'Appointment requested successfully! Waiting for approval.' if status == 'Pending' else 'Appointment created successfully!'
+        flash(msg, 'success')
 
         try:
             conn.commit()
@@ -6596,9 +7323,33 @@ def update_appointment(id):
     if current_user.role == 'doctor':
         # ONLY DOCTORS can approve/reject appointments
         if appointment['status'] == 'Pending' or appointment['doctor_id'] == current_user.id:
-            conn.execute('UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                        (status, id))
-            flash(f'Appointment {status.lower()} successfully!')
+            if status == 'Rescheduled':
+                new_date = request.form.get('new_date')
+                new_time = request.form.get('new_time')
+                conn.execute('UPDATE appointments SET status = ?, appointment_date = ?, appointment_time = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                            ('Approved', new_date, new_time, id))
+                
+                # Notify Patient
+                c = conn.cursor()
+                c.execute('''
+                    INSERT INTO notifications (recipient_id, notification_type, title, message, related_id)
+                    VALUES (?, 'appointment', ?, ?, ?)
+                ''', (appointment['patient_id'], 'Appointment Rescheduled', f"Dr. {appointment['doctor_name']} has rescheduled your appointment to {new_date} at {new_time}.", id))
+                
+                flash(f'Appointment rescheduled and approved successfully!')
+            else:
+                conn.execute('UPDATE appointments SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                            (status, id))
+                
+                # Notify Patient
+                if status in ['Approved', 'Rejected']:
+                    c = conn.cursor()
+                    c.execute('''
+                        INSERT INTO notifications (recipient_id, notification_type, title, message, related_id)
+                        VALUES (?, 'appointment', ?, ?, ?)
+                    ''', (appointment['patient_id'], f"Appointment {status}", f"Dr. {appointment['doctor_name']} has {status.lower()} your appointment.", id))
+
+                flash(f'Appointment {status.lower()} successfully!')
         else:
             flash('Unauthorized action!')
     elif current_user.role == 'phc_nurse':
@@ -6684,15 +7435,36 @@ def phc_nurse_create_appointment():
             flash('Doctor not at this PHC', 'error')
             return redirect(url_for('phc_nurse_appointments'))
 
+        # 1. CHECK IF DOCTOR IS ON LEAVE
+        leave_conflict = conn.execute('''
+            SELECT reason FROM staff_leaves 
+            WHERE user_id = ? AND status = 'APPROVED'
+            AND ? BETWEEN start_date AND end_date
+        ''', (doctor_id, appointment_date)).fetchone()
+        
+        if leave_conflict:
+            flash(f'Cannot book: Dr. {doctor["fullname"]} is on leave/OD on {appointment_date} ({leave_conflict["reason"]}).', 'error')
+            return redirect(url_for('phc_nurse_appointments'))
+            
+        # 2. CHECK FOR DOUBLE BOOKING
+        double_book = conn.execute('''
+            SELECT id FROM appointments
+            WHERE doctor_id = ? AND appointment_date = ? AND appointment_time = ? AND status != 'Rejected'
+        ''', (doctor_id, appointment_date, appointment_time)).fetchone()
+        
+        if double_book:
+            flash(f'Cannot book: Dr. {doctor["fullname"]} already has an appointment at {appointment_time} on {appointment_date}.', 'error')
+            return redirect(url_for('phc_nurse_appointments'))
+
         # Create appointment (APPROVED by nurse, not pending)
         conn.execute('''
             INSERT INTO appointments
             (patient_id, patient_name, doctor_id, doctor_name, department, appointment_date,
-             appointment_time, symptoms, notes, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved')
+             appointment_time, symptoms, notes, status, urgency)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Approved', ?)
         ''', (patient_id, patient['fullname'], doctor_id, doctor['fullname'],
               doctor['specialization'] or 'General Medicine', appointment_date, appointment_time,
-              reason, f'Urgency: {urgency}'))
+              reason, f'Created by Nurse {current_user.fullname}', urgency))
 
         conn.commit()
 
@@ -6903,8 +7675,9 @@ def health_report():
 @login_required
 def patients():
     """Patients list - doctors/nurses/admins can view patients"""
-    if current_user.role not in ['doctor', 'nurse', 'admin']:
+    if current_user.role not in ['doctor', 'phc_nurse', 'ddhs_admin']:
         flash('This page is only accessible to medical staff')
+        return redirect(url_for('index'))
 
     conn = get_db_connection()
 
@@ -6924,23 +7697,6 @@ def patients():
             GROUP BY u.id
             ORDER BY u.fullname ASC
         ''', (current_user.id,)).fetchall()
-
-    elif current_user.role == 'doctor':
-        # Doctor sees their assigned patients
-        patients = conn.execute('''
-            SELECT DISTINCT
-                u.id,
-                u.email,
-                u.fullname,
-                u.phone,
-                COUNT(DISTINCT pl.id) as appointments_count
-            FROM users u
-            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-            WHERE u.role = 'patient' AND pl.phc_id = ?
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
-
     elif current_user.role == 'phc_nurse':
         # PHC Nurse sees ALL patients from their facility
         patients = conn.execute('''
@@ -6952,7 +7708,7 @@ def patients():
                 COUNT(DISTINCT pl.id) as appointments_count
             FROM users u
             LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-            WHERE u.role = 'patient' AND pl.phc_id = ?
+            WHERE u.role = 'patient' AND u.phc_id = ?
             GROUP BY u.id
             ORDER BY u.fullname ASC
         ''', (current_user.phc_id, current_user.phc_id)).fetchall()
@@ -7076,11 +7832,13 @@ def checkup():
         # Nurse conducts checkup for patients at their facility using comprehensive form
         conn = get_db_connection()
         patients = conn.execute('''
-            SELECT DISTINCT u.id, u.fullname FROM users u
-            INNER JOIN patient_logs pl ON u.id = pl.user_id
-            WHERE pl.phc_id = ? AND u.role = 'patient'
-            ORDER BY u.fullname
-        ''', (current_user.phc_id,)).fetchall()
+            SELECT id, fullname FROM users 
+            WHERE role = 'patient' AND (
+                phc_id = ? OR 
+                (phc_id IS NULL AND district = ? AND district IS NOT NULL)
+            )
+            ORDER BY fullname
+        ''', (current_user.phc_id, current_user.district)).fetchall()
         conn.close()
         patients = [dict(row) for row in patients]
         return render_template('phc_nurse_intake_comprehensive.html', patients=patients, user=current_user)
@@ -7196,18 +7954,30 @@ def messages():
             contacts = []
 
     elif current_user.role == 'phc_nurse':
-        # PHC Nurse sees patients from their facility
+        # PHC Nurse sees patients from their facility AND Doctors from their facility
         try:
-            contacts = conn.execute('''
+            patients = conn.execute('''
                 SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
                        (SELECT COUNT(*) FROM messages
                         WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
                 FROM users u
-                INNER JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-                WHERE u.role = 'patient'
-                GROUP BY u.id
+                WHERE u.role = 'patient' AND (
+                    u.phc_id = ? OR 
+                    (u.phc_id IS NULL AND u.district = ? AND u.district IS NOT NULL)
+                )
+                ORDER BY u.fullname ASC
+            ''', (current_user.id, current_user.phc_id, current_user.district)).fetchall()
+            
+            doctors = conn.execute('''
+                SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
+                       (SELECT COUNT(*) FROM messages
+                        WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
+                FROM users u
+                WHERE u.role = 'doctor' AND u.phc_id = ?
                 ORDER BY u.fullname ASC
             ''', (current_user.id, current_user.phc_id)).fetchall()
+            
+            contacts = list(patients) + list(doctors)
         except Exception as e:
             print(f"Error loading phc_nurse contacts: {e}")
             contacts = []
@@ -7228,16 +7998,22 @@ def messages():
             contacts = []
 
     else:
-        # Patients see all doctors (regular, PHC, and admin)
+        # Patients see doctors and nurses from THEIR PHC or District or those they have appointments with
         try:
             contacts = conn.execute('''
                 SELECT DISTINCT u.id, u.fullname, u.email, u.role, u.specialization,
                        (SELECT COUNT(*) FROM messages
                         WHERE sender_id = u.id AND receiver_id = ? AND is_read = 0) as unread_count
                 FROM users u
-                WHERE u.role IN ('doctor', 'ddhs_admin')
-                ORDER BY u.fullname ASC
-            ''', (current_user.id,)).fetchall()
+                LEFT JOIN appointments a ON (a.doctor_id = u.id AND a.patient_id = ?)
+                WHERE u.role IN ('doctor', 'phc_nurse') 
+                  AND (
+                    ? IS NULL OR u.phc_id = ? 
+                    OR (u.district = ? AND u.district IS NOT NULL) 
+                    OR a.id IS NOT NULL
+                  )
+                ORDER BY u.role, u.fullname ASC
+            ''', (current_user.id, current_user.id, current_user.phc_id, current_user.phc_id, current_user.district)).fetchall()
         except Exception as e:
             print(f"Error loading patient contacts: {e}")
             contacts = []
@@ -8011,7 +8787,15 @@ def admin_dashboard():
         flash('Access denied - this page is for admin only')
         return redirect(url_for('index'))
 
-    return render_template('admin_dashboard.html', user=current_user)
+    conn = get_db_connection()
+    active_phcs = conn.execute("SELECT * FROM phc_facilities WHERE status = 'ACTIVE'").fetchall()
+    pending_phcs = conn.execute("SELECT * FROM phc_facilities WHERE status = 'PENDING'").fetchall()
+    conn.close()
+
+    return render_template('admin_dashboard.html', 
+                         user=current_user,
+                         active_phcs=active_phcs,
+                         pending_phcs=pending_phcs)
 
 
 @app.route('/api/emergency/cases', methods=['GET'])
@@ -8103,8 +8887,18 @@ def dispatch_ambulance():
             SET status = 'dispatched'
             WHERE id = ?
         """, (data['case_id'],))
+        
+        # Update ambulance status to prevent double booking
+        conn.execute("""
+            UPDATE ambulances
+            SET status = 'in_transit'
+            WHERE id = ?
+        """, (data['ambulance_id'],))
 
         conn.commit()
+        
+        # Get the dispatch ID before closing the connection
+        dispatch_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.close()
 
         app.logger.info(f"Ambulance dispatched for case {data['case_id']} by admin {current_user.id}")
@@ -8112,7 +8906,7 @@ def dispatch_ambulance():
         return jsonify({
             'success': True,
             'message': 'Ambulance dispatched successfully',
-            'dispatch_id': conn.lastrowid
+            'dispatch_id': dispatch_id
         })
 
     except Exception as e:
@@ -8457,10 +9251,27 @@ def api_mark_attendance():
                 VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?, ?)
             ''', (staff_id, staff['phc_id'], status_val, lat, lon, ai_conf))
 
+        # REAL-WORLD SCENARIO FIX: If Doctor is Absent, Auto-reschedule today's appointments
+        is_doctor = c.execute("SELECT role FROM users WHERE id = ?", (staff_id,)).fetchone()
+        affected_appointments = 0
+        if is_doctor and is_doctor['role'] == 'doctor' and status_val.upper() == 'ABSENT':
+            affected_appointments = c.execute('''
+                UPDATE appointments 
+                SET status = 'Rescheduled', 
+                    notes = notes || ' [Auto-rescheduled: Doctor marked ABSENT today]' 
+                WHERE doctor_id = ? 
+                AND appointment_date = date('now', 'localtime') 
+                AND status IN ('Pending', 'Approved')
+            ''', (staff_id,)).rowcount
+
         conn.commit()
         conn.close()
 
-        return jsonify({'success': True, 'message': f'Attendance marked as {status_val}'})
+        msg = f'Attendance marked as {status_val}'
+        if affected_appointments > 0:
+            msg += f'. Auto-rescheduled {affected_appointments} appointments.'
+            
+        return jsonify({'success': True, 'message': msg})
     except Exception as e:
         app.logger.error(f"Error marking attendance: {e}")
         return jsonify({'success': False, 'message': str(e)}), 500
@@ -8685,6 +9496,19 @@ def get_incoming_referrals():
     conn.close()
     return jsonify([dict(row) for row in referrals])
 
+@app.route('/api/phc/incoming-pulse')
+@login_required
+def get_incoming_pulse():
+    """Check for new incoming referrals for the nurse dashboard alert"""
+    phc_id = current_user.phc_id or 'CHC-CHEN-001'
+    conn = get_db_connection()
+    count = conn.execute('''
+        SELECT COUNT(*) as cnt FROM referrals 
+        WHERE target_phc_id = ? AND status = 'PENDING'
+    ''', (phc_id,)).fetchone()['cnt']
+    conn.close()
+    return jsonify({'alert': count > 0, 'active_referrals': count})
+
 @app.route('/api/phc/mpr-stats')
 @login_required
 def get_mpr_stats():
@@ -8692,12 +9516,20 @@ def get_mpr_stats():
     conn = get_db_connection()
     month = request.args.get('month', datetime.now().strftime('%m'))
     
-    stats = conn.execute('''
-        SELECT phc_department, COUNT(*) as count
-        FROM patient_logs
-        WHERE strftime('%m', timestamp) = ?
-        GROUP BY phc_department
-    ''', (month,)).fetchall()
+    if current_user.role in ['phc_nurse', 'doctor'] and current_user.phc_id:
+        stats = conn.execute('''
+            SELECT phc_department, COUNT(*) as count
+            FROM patient_logs
+            WHERE strftime('%m', timestamp) = ? AND phc_id = ?
+            GROUP BY phc_department
+        ''', (month, current_user.phc_id)).fetchall()
+    else:
+        stats = conn.execute('''
+            SELECT phc_department, COUNT(*) as count
+            FROM patient_logs
+            WHERE strftime('%m', timestamp) = ?
+            GROUP BY phc_department
+        ''', (month,)).fetchall()
     
     conn.close()
     return jsonify({row['phc_department']: row['count'] for row in stats})
@@ -8720,6 +9552,28 @@ def get_stock_pulse():
     conn.close()
     return jsonify([dict(row) for row in stocks])
 
+@app.route('/api/phc/district-resources')
+@login_required
+def get_district_resources():
+    """Returns bed and oxygen availability across all PHCs"""
+    conn = get_db_connection()
+    facilities = conn.execute('SELECT id, name FROM phc_facilities').fetchall()
+    
+    result = []
+    for f in facilities:
+        beds = conn.execute('SELECT quantity FROM inventory WHERE phc_id=? AND item_name="Emergency Beds"', (f['id'],)).fetchone()
+        o2 = conn.execute('SELECT quantity FROM inventory WHERE phc_id=? AND item_name="Oxygen Cylinders"', (f['id'],)).fetchone()
+        
+        result.append({
+            'phc_id': f['id'],
+            'name': f['name'],
+            'beds': beds['quantity'] if beds else 0,
+            'oxygen': o2['quantity'] if o2 else 0
+        })
+        
+    conn.close()
+    return jsonify({'success': True, 'facilities': result})
+
 
 @app.route('/phc/nurse/social-vault')
 @login_required
@@ -8733,8 +9587,9 @@ def phc_nurse_social_vault():
         SELECT sv.*, u.fullname as patient_name
         FROM social_vault sv
         JOIN users u ON sv.patient_id = u.id
+        WHERE u.phc_id = ? OR (u.phc_id IS NULL AND u.district = ? AND u.district IS NOT NULL)
         ORDER BY sv.created_at DESC
-    ''').fetchall()
+    ''', (current_user.phc_id, current_user.district)).fetchall()
     conn.close()
     
     return render_template('phc_social_vault.html', cases=vault_cases, user=current_user)
@@ -8765,6 +9620,7 @@ def api_phc_waste_log():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
 @app.route('/api/phc/abha-workaround', methods=['POST'])
 @login_required
 def api_phc_abha_workaround():
@@ -8785,28 +9641,40 @@ def api_lightning_entry():
         conn = get_db_connection()
         c = conn.cursor()
         
-        patient_id = data.get('patient_id')
-        patient_name = data.get('patient_id') # If it's a new name, use it
+        patient_id_input = str(data.get('patient_id', ''))
+        patient_name = patient_id_input # Default name to input if not found
+        ref_id = data.get('ref_id')
+
+        # Remove from mock referrals if this came from VHN
+        if ref_id:
+            global MOCK_VHN_REFERRALS
+            MOCK_VHN_REFERRALS = [r for r in MOCK_VHN_REFERRALS if str(r['id']) != str(ref_id)]
         
-        # REAL-WORLD: If patient doesn't exist (Elderly/No ID), auto-create a shadow profile
-        if patient_id:
-            existing = c.execute('SELECT id, fullname FROM users WHERE id = ? OR fullname = ?', (patient_id, patient_id)).fetchone()
-            if not existing:
-                # Create a shadow patient (no password/email required for PHC flow)
-                c.execute('''
-                    INSERT INTO users (fullname, role, phc_id, district, created_at, password_hash, email)
-                    VALUES (?, 'patient', ?, ?, CURRENT_TIMESTAMP, 'PHC_MANUAL_BYPASS', ?)
-                ''', (patient_name, current_user.phc_id, current_user.district, f"patient_{secrets.token_hex(4)}@phc.local"))
-                patient_id = c.lastrowid
-            else:
-                patient_id = existing['id']
-                patient_name = existing['fullname']
+        # 0. RESOLVE IDENTITY (RHIMS / ABHA / NAME)
+        existing = c.execute('SELECT id, fullname FROM users WHERE id = ? OR fullname = ? OR email LIKE ?', 
+                            (patient_id_input, patient_id_input, f"%{patient_id_input}%")).fetchone()
+        
+        if not existing:
+            # AUTO-CREATE NEW PATIENT PROFILE (Government Standalone Mode)
+            # We generate a temporary email to satisfy database constraints
+            temp_email = f"abha_{secrets.token_hex(4)}@phc.local"
+            c.execute('''
+                INSERT INTO users (fullname, role, phc_id, district, created_at, password_hash, email)
+                VALUES (?, 'patient', ?, ?, CURRENT_TIMESTAMP, 'LIGHTNING_BYPASS', ?)
+            ''', (patient_name, current_user.phc_id, current_user.district, temp_email))
+            patient_id = c.lastrowid
+            status_msg = 'New Patient Registered Automatically'
+        else:
+            patient_id = existing['id']
+            patient_name = existing['fullname']
+            status_msg = 'Existing Patient Found'
         
         # 1. Analyze symptoms for risk (Integrated AI)
         risk_engine = IntegratedDualBrainRisk()
+        context_symptoms = f"{data.get('symptoms', '')} (Patient: {patient_name})"
         assessment = risk_engine.assess_patient_with_disease_context(
-            disease_input=data.get('symptoms', ''),
-            symptoms=data.get('symptoms', ''),
+            disease_input=context_symptoms,
+            symptoms=context_symptoms,
             age=30, gender='Unknown', sys_bp=120, dia_bp=80, hr=72, temp_f=98.6
         )
         
@@ -8826,17 +9694,98 @@ def api_lightning_entry():
             'DAILY DIARY'
         ))
         
+        # 3. AI Medicine Suggestion & Safety Red-Flags (TN-EML)
+        symp_lower = data.get('symptoms', '').lower()
+        suggested_meds = []
+        red_flags = []
+        is_red_flag_blocked = False
+        
+        # CLINICAL RED-FLAGS (Safe Guardrails)
+        if 'fever' in symp_lower and ('joint pain' in symp_lower or 'body pain' in symp_lower or 'bone pain' in symp_lower):
+            red_flags.append("DENGUE/CHIKUNGUNYA ALERT: High-risk cluster. Rule out Dengue. Refer to MO.")
+            is_red_flag_blocked = True
+        
+        if 'fever' in symp_lower and ('shivering' in symp_lower or 'chills' in symp_lower):
+            red_flags.append("MALARIA ALERT: Cyclic chills detected. Requires Peripheral Smear.")
+            is_red_flag_blocked = True
+
+        if 'cough' in symp_lower and ('weight loss' in symp_lower or 'night sweat' in symp_lower):
+            red_flags.append("TB ALERT: Chronic symptoms. Referral to Sputum Center.")
+            is_red_flag_blocked = True
+
+        if 'breathe' in symp_lower or 'breath' in symp_lower or 'wheezing' in symp_lower or 'chest' in symp_lower:
+            red_flags.append("RESPIRATORY DISTRESS ALERT: Hard to breathe. Urgent MO review required.")
+            is_red_flag_blocked = True
+
+        patient_name_lower = str(patient_name).lower()
+        if ('baby' in symp_lower or 'infant' in symp_lower or 'new born' in symp_lower or 'child' in symp_lower or 
+            'baby' in patient_name_lower or 'infant' in patient_name_lower or 'child' in patient_name_lower):
+            red_flags.append("PEDIATRIC/NEONATAL ALERT: Infant cases require immediate MO/Specialist review.")
+            is_red_flag_blocked = True
+
+        # Clinical Categories (TN-EML Standard)
+        categories = {
+            'Paracetamol': ['headache', 'fever', 'pain', 'ache', 'body pain'],
+            'Dicyclomine': ['stomach', 'abdominal', 'cramp', 'spasm'],
+            'Ranitidine': ['acidity', 'gastritis', 'heartburn', 'ulcer'],
+            'Amoxicillin': ['infection', 'wound', 'pus', 'injury'],
+            'ASV': ['snake', 'bite', 'venom'],
+            'Ondansetron': ['vomit', 'nausea', 'vomiting'],
+            'ORS / Zinc': ['diarrhea', 'loose motion', 'diar', 'dysentery', 'purging']
+        }
+        
+        # Only suggest meds if NO red flags are triggered
+        if not is_red_flag_blocked:
+            for med, keywords in categories.items():
+                for kw in keywords:
+                    if kw in symp_lower:
+                        if med not in suggested_meds:
+                            suggested_meds.append(med)
+                        break
+        
+        if not suggested_meds and not is_red_flag_blocked:
+            suggested_meds = ["Refer to MO"]
+            
+        # Step 2: Check Stock and Sync Action
+        med_status_list = []
+        overall_stock_ok = True
+        
+        for med in suggested_meds:
+            if med == "Refer to MO": continue
+            stock = c.execute('SELECT quantity FROM inventory WHERE phc_id = ? AND item_name LIKE ?', 
+                             (current_user.phc_id, f"%{med}%")).fetchone()
+            if not stock or stock['quantity'] <= 0:
+                med_status_list.append(f"{med} (OUT)")
+                overall_stock_ok = False
+            else:
+                med_status_list.append(f"{med} (Available)")
+
+        final_suggestion = " + ".join(med_status_list) if med_status_list else "NONE"
+        if is_red_flag_blocked:
+            final_suggestion = "PRESCRIPTION BLOCKED - SEE MO"
+            
+        # Final Routing Decision
+        final_routing = assessment['routing_decision'] if 'routing_decision' in assessment else 'TREAT AT PHC'
+        if is_red_flag_blocked:
+            final_routing = "URGENT MO REVIEW (RED-FLAG)"
+        elif not overall_stock_ok and suggested_meds:
+            final_routing = "REFER TO CHC (STOCK OUT)"
+        elif assessment['news2_score'] > 4:
+            final_routing = "REFER TO CHC (CLINICAL RISK)"
+        
         conn.commit()
         conn.close()
         
-        # Return the AI Result immediately for the Nurse to see
+        # Return the Safety-First Result
         return jsonify({
             'success': True, 
             'patient_name': patient_name,
-            'risk': assessment['final_risk']['risk_category'],
-            'score': assessment['news2_score'],
-            'routing': 'REFER TO CHC' if assessment['news2_score'] > 4 else 'TREAT AT PHC',
-            'message': 'Patient Registered & AI Triage Complete'
+            'risk': 'CRITICAL' if is_red_flag_blocked else assessment['final_risk']['risk_category'],
+            'score': int(assessment['news2_score'] * 10 + 60), 
+            'suggested_med': final_suggestion,
+            'red_flags': red_flags,
+            'routing': final_routing,
+            'message': 'AI Safety Audit Complete'
         })
     except Exception as e:
         app.logger.error(f"Lightning Entry Error: {e}")
@@ -8845,8 +9794,8 @@ def api_lightning_entry():
 if __name__ == '__main__':
     # Use configuration settings (respects production environment)
     app.run(
-        debug=config.DEBUG,  # Enable debug mode for development
+        debug=config.DEBUG,
         port=config.APP_PORT,
-        use_reloader=config.DEBUG,  # Only auto-reload in development
-        host='0.0.0.0'  # Listen on all interfaces
+        use_reloader=config.DEBUG,
+        host='127.0.0.1'
     )

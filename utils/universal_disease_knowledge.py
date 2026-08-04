@@ -57,44 +57,76 @@ class EmergencyManifest:
         return None
 
 class SNOMEDIntegration:
-    SNOMED_APIS = ["https://browser.ihtsdotools.org/snowstorm/snomed-ct", "https://snowstorm.ihtsdotools.org/snowstorm/snomed-ct"]
-    LATEST_BRANCHES = ["MAIN", "SNOMEDCT-US"]
-
     @staticmethod
     def search_disease(disease_name: str) -> Dict:
         if not disease_name: return {'found': False}
-        params = {'term': disease_name, 'activeFilter': 'true', 'limit': 1}
-        headers = {'User-Agent': 'SmartTriage/2.5', 'Accept': 'application/json'}
-        for server in SNOMEDIntegration.SNOMED_APIS:
-            for branch in SNOMEDIntegration.LATEST_BRANCHES:
-                try:
-                    url = f"{server.rstrip('/')}/browser/{branch}/descriptions"
-                    resp = requests.get(url, params=params, headers=headers, timeout=2.5)
-                    if resp.status_code == 200:
-                        items = resp.json().get('items', [])
-                        if items:
-                            match = items[0]
-                            return {
-                                'found': True,
-                                'preferred_term': match.get('concept', {}).get('pt', {}).get('term') or match.get('term'),
-                                'source': f'SNOMED-CT ({branch})'
-                            }
-                except: continue
+        try:
+            # Replaced broken SNOMED with robust NIH Clinical Tables API
+            url = "https://clinicaltables.nlm.nih.gov/api/conditions/v3/search"
+            params = {'terms': disease_name, 'maxList': 1}
+            resp = requests.get(url, params=params, timeout=2.5)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data[0] > 0 and len(data) >= 4 and len(data[3]) > 0:
+                    matched_term = data[3][0][0]
+                    return {
+                        'found': True,
+                        'preferred_term': matched_term,
+                        'source': 'NIH Clinical Database'
+                    }
+        except:
+            pass
         return {'found': False}
 
 class MedicalDiseaseAPI:
     @staticmethod
     def get_disease_from_web(disease_name: str) -> Dict:
         try:
-            url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{disease_name.replace(' ', '_')}"
             headers = {
                 'User-Agent': 'SmartTriageBot/1.0 (https://smarttriage.phc; admin@smarttriage.phc) requests/2.25.1',
                 'Accept': 'application/json'
             }
-            resp = requests.get(url, headers=headers, timeout=3.0)
-            if resp.status_code == 200:
-                data = resp.json()
-                return {'source': 'Wikipedia', 'description': data.get('extract', '')}
+            # 1. Search Wikipedia for closest matching article
+            search_url = "https://en.wikipedia.org/w/api.php"
+            params = {'action': 'query', 'list': 'search', 'srsearch': disease_name, 'utf8': '', 'format': 'json', 'srlimit': 1}
+            search_resp = requests.get(search_url, params=params, headers=headers, timeout=3.0)
+            
+            if search_resp.status_code == 200:
+                search_data = search_resp.json()
+                results = search_data.get('query', {}).get('search', [])
+                if results:
+                    best_title = results[0]['title']
+                    
+                    # 2. Get Summary for the matched article
+                    summary_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{best_title.replace(' ', '_')}"
+                    sum_resp = requests.get(summary_url, headers=headers, timeout=3.0)
+                    if sum_resp.status_code == 200:
+                        data = sum_resp.json()
+                        extract = data.get('extract', '')
+                        
+                        # Extract specialist using keyword heuristics on the summary
+                        specialist = "General Physician"
+                        text_lower = extract.lower()
+                        if any(w in text_lower for w in ['heart', 'cardiac', 'myocardial', 'cardiology', 'arrhythmia']): specialist = "Cardiologist"
+                        elif any(w in text_lower for w in ['brain', 'neuro', 'stroke', 'seizure']): specialist = "Neurologist"
+                        elif any(w in text_lower for w in ['lung', 'respiratory', 'pulmonary', 'asthma']): specialist = "Pulmonologist"
+                        elif any(w in text_lower for w in ['cancer', 'tumor', 'oncology', 'malignant']): specialist = "Oncologist"
+                        elif any(w in text_lower for w in ['bone', 'orthopedic', 'fracture', 'joint']): specialist = "Orthopedic Surgeon"
+                        elif any(w in text_lower for w in ['skin', 'dermatology', 'rash', 'lesion']): specialist = "Dermatologist"
+                        elif any(w in text_lower for w in ['stomach', 'gastric', 'gastro', 'liver', 'bowel']): specialist = "Gastroenterologist"
+                        elif any(w in text_lower for w in ['kidney', 'renal', 'nephrology']): specialist = "Nephrologist"
+                        elif any(w in text_lower for w in ['pregnancy', 'maternal', 'obgyn', 'obstetrics', 'gynecology']): specialist = "OB/GYN Specialist"
+                        elif any(w in text_lower for w in ['eye', 'vision', 'ophthalmology', 'retina']): specialist = "Ophthalmologist"
+                        elif any(w in text_lower for w in ['children', 'pediatric', 'infant']): specialist = "Pediatrician"
+                        elif any(w in text_lower for w in ['diabetes', 'thyroid', 'endocrine', 'metabolic']): specialist = "Endocrinologist"
+                        elif any(w in text_lower for w in ['infection', 'virus', 'bacteria', 'sepsis']): specialist = "Infectious Disease Specialist"
+                        elif any(w in text_lower for w in ['blood', 'anemia', 'leukemia']): specialist = "Hematologist"
+                        
+                        return {
+                            'source': 'Wikipedia', 
+                            'description': extract,
+                            'suggested_specialist': specialist
+                        }
         except Exception as e:
             logger.error(f"Wikipedia API error for {disease_name}: {e}")
         return None
@@ -151,7 +183,7 @@ class UniversalDiseaseRiskAssessment:
                     
                     # CRITICAL KEYWORDS BOOSTER
                     critical_keywords = ['failure', 'infarction', 'stroke', 'hemorrhage', 'rupture', 'sepsis', 'shock', 'arrest', 'acute', 'ischemia', 'embolism', 'aneurysm', 'ecclampsia', 'poisoning', 'snake']
-                    high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'syndrome', 'disease', 'disorder', 'toxicity', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'anc', 'pnc', 'maternal', 'pregnancy']
+                    high_keywords = ['cancer', 'carcinoma', 'malignant', 'tumor', 'toxicity', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'anc', 'pnc', 'maternal', 'pregnancy']
                     
                     if any(w in snomed_term for w in critical_keywords):
                         score, cat = 0.90, 'CRITICAL'
@@ -165,15 +197,19 @@ class UniversalDiseaseRiskAssessment:
                     })
 
             # Step 3: Web
-            web = MedicalDiseaseAPI.get_disease_from_web(term)
+            search_term = term
+            if 'snomed' in locals() and snomed.get('found'):
+                search_term = snomed['preferred_term']
+                
+            web = MedicalDiseaseAPI.get_disease_from_web(search_term)
             if web:
                 desc = web.get('description', '').lower()
                 # Dynamic severity boost based on description
                 score, cat = 0.60, 'MEDIUM'
                 
                 # CRITICAL DESCRIPTOR BOOSTER
-                critical_desc = ['fatal', 'emergency', 'life-threatening', 'sudden death', 'critical', 'organ failure', 'severe hemorrhage', 'respiratory failure', 'aortic dissection', 'snake bite', 'poisoning']
-                high_desc = ['cancer', 'carcinoma', 'malignant', 'progressive', 'severe', 'chronic', 'serious', 'tumor', 'metabolic', 'genetic', 'disorder', 'syndrome', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'pregnancy risk', 'high risk anc']
+                critical_desc = ['fatal', 'emergency', 'life-threatening', 'sudden death', 'critical', 'organ failure', 'severe hemorrhage', 'respiratory failure', 'aortic dissection', 'snake bite', 'poisoning', 'myocardial infarction', 'heart attack']
+                high_desc = ['cancer', 'carcinoma', 'malignant', 'tumor', 'metabolic', 'genetic', 'storage', 'fibrosis', 'sclerosis', 'cystic', 'pulmonary', 'leukemia', 'lymphoma', 'myeloma', 'amyotrophic', 'pregnancy risk', 'high risk anc']
                 
                 if any(w in desc for w in critical_desc):
                     score, cat = 0.92, 'CRITICAL'
@@ -181,9 +217,10 @@ class UniversalDiseaseRiskAssessment:
                     score, cat = 0.80, 'HIGH'
                     
                 all_findings.append({
-                    'disease_identified': term, 'risk_score': score, 'risk_category': cat,
-                    'description': web.get('description', 'Medical knowledge result.'),
-                    'source': 'Medical Knowledge API', 'term': term
+                    'disease_identified': search_term, 'risk_score': score, 'risk_category': cat,
+                    'description': web.get('description', 'Medical knowledge result.')[:150] + "...",
+                    'suggested_specialist': web.get('suggested_specialist', 'General Physician'),
+                    'source': 'Wikipedia Knowledge', 'term': term
                 })
 
         result['all_findings'] = all_findings

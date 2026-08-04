@@ -272,10 +272,16 @@ function logUsage(itemId, itemName) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ item_id: itemId, quantity: 1, usage_type: 'Manual Log' })
     })
-    .then(r => r.json())
+    .then(r => {
+        if(!r.ok) throw new Error("Server Error");
+        return r.json();
+    })
     .then(data => {
         if(data.success) location.reload();
         else alert('Error: ' + data.error);
+    })
+    .catch(err => {
+        alert('Failed to log usage: ' + err.message);
     });
 }
 
@@ -292,14 +298,20 @@ function submitNewItem() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
     })
-    .then(r => r.json())
+    .then(r => {
+        if(!r.ok) throw new Error("Server Error");
+        return r.json();
+    })
     .then(data => {
         if(data.success) {
             alert(data.message);
             location.reload();
         } else {
-            alert('Error: ' + data.error);
+            alert('Error: ' + data.message);
         }
+    })
+    .catch(err => {
+        alert('Failed to add item: ' + err.message);
     });
 }
 </script>

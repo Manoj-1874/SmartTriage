@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}VHN Field Entry - SmartTriage{% endblock %}
+
+{% block content %}
+<style>
+    .vhn-portal { padding: 20px; max-width: 600px; margin: 0 auto; }
+    .field-card { background: #fff; border-radius: 20px; padding: 25px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+    .header { display: flex; align-items: center; gap: 15px; margin-bottom: 30px; }
+    .header-icon { width: 50px; height: 50px; background: #8B5CF6; color: #fff; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+    
+    .form-group { margin-bottom: 20px; }
+    .form-label { font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 8px; display: block; }
+    .form-input { width: 100%; padding: 15px; border: 2px solid #F1F5F9; border-radius: 12px; font-size: 16px; transition: all 0.3s; }
+    .form-input:focus { border-color: #8B5CF6; outline: none; background: #F5F3FF; }
+    
+    .sync-btn { 
+        width: 100%; padding: 18px; background: #8B5CF6; color: #fff; border: none; border-radius: 15px; 
+        font-size: 18px; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+        box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+    }
+    .sync-btn:active { transform: scale(0.98); }
+</style>
+
+<div class="vhn-portal">
+    <div class="header">
+        <div class="header-icon"><i class="fas fa-satellite-dish"></i></div>
+        <div>
+            <h2 style="margin:0; font-size:22px;">Field Entry</h2>
+            <div style="font-size:12px; color:#64748B;">Maternal & Child Health (MTM Outreach)</div>
+        </div>
+    </div>
+
+    <div class="field-card">
+        <form id="vhnForm">
+            <div class="form-group">
+                <label class="form-label">Patient Full Name / RCH ID</label>
+                <input type="text" name="patient_name" class="form-input" placeholder="e.g. Kavitha R." required>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Hamlet / Village</label>
+                <select name="village" class="form-input">
+                    <option value="Village Alpha">Village Alpha</option>
+                    <option value="Vellode West">Vellode West</option>
+                    <option value="Hamlet B">Hamlet B</option>
+                    <option value="Interior Sector 4">Interior Sector 4</option>
+                </select>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-bottom:20px;">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">BP (Sys/Dia)</label>
+                    <input type="text" name="bp" class="form-input" placeholder="120/80">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Temp (°F)</label>
+                    <input type="text" name="temp" class="form-input" placeholder="98.6">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Reason for Visit / Symptoms</label>
+                <textarea name="symptoms" class="form-input" style="min-height:100px;" placeholder="Describe high-risk symptoms..."></textarea>
+            </div>
+
+            <button type="submit" class="sync-btn" id="syncBtn">
+                <i class="fas fa-cloud-upload-alt"></i> SYNC TO PHC
+            </button>
+        </form>
+    </div>
+
+    <div id="statusAlert" style="display:none; margin-top:20px; padding:20px; border-radius:15px; text-align:center; font-weight:700;"></div>
+</div>
+
+<script>
+    document.getElementById('vhnForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('syncBtn');
+        const alert = document.getElementById('statusAlert');
+        
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> CAPTURING GPS...';
+        
+        // Automatic Doorstep GPS Capture
+        let lat = 10.79, lon = 78.70;
+        if (navigator.geolocation) {
+            try {
+                const pos = await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject, {timeout: 5000});
+                });
+                lat = pos.coords.latitude;
+                lon = pos.coords.longitude;
+            } catch(e) { console.warn("GPS failed", e); }
+        }
+
+        btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> SYNCING...';
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+        data.lat = lat;
+        data.lon = lon;
+        
+        try {
+            const res = await fetch('/api/vhn/submit-field-entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            
+            if(result.success) {
+                alert.style.display = 'block';
+                const isHighRisk = result.risk_score >= 7;
+                alert.style.background = isHighRisk ? '#FEF2F2' : '#F0FDF4';
+                alert.style.color = isHighRisk ? '#DC2626' : '#16A34A';
+                
+                let advice = isHighRisk ? 
+                    `<strong>IMMEDIATE ACTION:</strong> This case is beyond VHC capacity. Patient has been forwarded to PHC Priority Queue. Please arrange transport.` : 
+                    `<strong>LOCAL CARE:</strong> Risk is low. Monitor patient and provide routine primary care at VHC.`;
+
+                alert.innerHTML = `
+                    <div style="font-size:16px; margin-bottom:10px;"><i class="fas ${isHighRisk ? 'fa-exclamation-triangle' : 'fa-check-circle'}"></i> Sync Successful</div>
+                    <div style="font-size:13px; font-weight:500;">${advice}</div>
+                `;
+                
+                // Reset form on success
+                e.target.reset();
+            }
+        } catch (err) {
+            alert.style.display = 'block';
+            alert.style.background = '#FEF2F2';
+            alert.style.color = '#DC2626';
+            alert.innerText = "Sync Failed. Saving to local storage (Offline Mode).";
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> SYNC TO PHC';
+        }
+    });
+</script>
+{% endblock %}

@@ -105,7 +105,10 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ item_name: item })
         })
-        .then(r => r.json())
+        .then(r => {
+            if(!r.ok) throw new Error("Server error: " + r.statusText);
+            return r.json();
+        })
         .then(data => {
             document.getElementById('loading').style.display = 'none';
             
@@ -116,11 +119,11 @@
                         <div class="phc-card">
                             <div class="phc-info">
                                 <h4>${res.name}</h4>
-                                <p><i class="fas fa-phone"></i> ${res.contact} | <i class="fas fa-map-marker-alt"></i> ${res.distance || 'Nearby'}</p>
+                                <p><i class="fas fa-phone"></i> ${res.contact || 'No contact provided'} | <i class="fas fa-map-marker-alt"></i> ${res.distance || 'Nearby'}</p>
                             </div>
                             <div style="text-align:right;">
                                 <div class="stock-pill">${res.quantity} In Stock</div>
-                                <button class="btn-sync" style="margin-top:10px; font-size:11px;" onclick="requestTransfer('${res.name}')">Request Transfer</button>
+                                <button class="btn-sync" style="margin-top:10px; font-size:11px;" onclick="requestTransfer(this, \`${res.name.replace(/`/g, '')}\`, \`${item.replace(/`/g, '')}\`)">Request Transfer</button>
                             </div>
                         </div>
                     `;
@@ -130,11 +133,42 @@
                 document.getElementById('noResults').style.display = 'block';
                 document.getElementById('noResults').innerHTML = `<i class="fas fa-times-circle fa-2x"></i><p>No neighboring centers have surplus stock of "${item}" at this time.</p>`;
             }
+        })
+        .catch(err => {
+            document.getElementById('loading').style.display = 'none';
+            alert("Connection Error: " + err.message);
         });
     }
 
-    function requestTransfer(phcName) {
-        alert("TRANSFER REQUEST SENT: A digital requisition has been sent to " + phcName + ". Please coordinate with 108 for transport if urgent.");
+    async function requestTransfer(btn, phcName, itemName) {
+        btn.disabled = true;
+        const originalText = btn.innerText;
+        btn.innerText = "Requesting...";
+        btn.style.opacity = "0.7";
+
+        try {
+            const res = await fetch('/api/phc/log-transfer-request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_phc: phcName, item_name: itemName })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            
+            if (data.success) {
+                btn.innerText = "Requested";
+                btn.style.background = "var(--clr-green)";
+                btn.style.color = "white";
+                alert("TRANSFER REQUEST SENT: A digital requisition has been sent to " + phcName + ". Please coordinate with 108 for transport if urgent.");
+            } else {
+                throw new Error(data.message);
+            }
+        } catch (err) {
+            alert("Failed to send request: " + err.message);
+            btn.disabled = false;
+            btn.innerText = originalText;
+            btn.style.opacity = "1";
+        }
     }
 </script>
 {% endblock %}

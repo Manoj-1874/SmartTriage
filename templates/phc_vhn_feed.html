@@ -1,0 +1,64 @@
+{% extends "phc_nurse_base.html" %}
+
+{% block title %}VHN Field Feed - SmartTriage{% endblock %}
+
+{% block content %}
+<style>
+    .feed-container { padding: 40px; }
+    .feed-card { background: var(--card); border-radius: 20px; border: 1px solid var(--border); padding: 30px; }
+    .feed-item { 
+        padding: 20px; border-bottom: 1px solid var(--border); 
+        display: grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap: 20px; align-items: center;
+        transition: background 0.3s;
+    }
+    .feed-item:hover { background: var(--glass); }
+    .risk-badge { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+</style>
+
+<div class="feed-container">
+    <div class="banner" style="margin-bottom:30px;">
+        <div class="banner-left">
+            <div class="banner-eyebrow">FIELD SURVEILLANCE</div>
+            <div class="banner-name">VHN Village Referral Feed</div>
+            <p class="banner-sub">Real-time sync from MTM Tablets and Sub-Center Apps.</p>
+        </div>
+    </div>
+
+    <div class="feed-card">
+        <div style="display:grid; grid-template-columns: 1fr 2fr 1fr 1fr; gap:20px; padding:0 20px 15px 20px; border-bottom: 2px solid var(--border); font-size:11px; font-weight:800; color:var(--t-faint);">
+            <div>PATIENT / VILLAGE</div>
+            <div>FIELD NOTES & VITALS</div>
+            <div>AI RISK LEVEL</div>
+            <div>ACTION</div>
+        </div>
+        
+        <div id="vhnFeedItems">
+            {% for entry in field_entries %}
+            <div class="feed-item">
+                <div>
+                    <div style="font-weight:700; font-size:14px;">{{ entry.patient_name }}</div>
+                    <div style="font-size:11px; color:var(--brand);">{{ entry.village }}</div>
+                </div>
+                <div style="font-size:12px; color:var(--t-muted);">
+                    {{ entry.vitals_summary }}
+                </div>
+                <div>
+                    {% set score = entry.risk_score|float %}
+                    <span class="risk-badge" style="background:{% if score >= 8 %}#FEF2F2{% elif score >= 5 %}#FFFBEB{% else %}#F0FDF4{% endif %}; color:{% if score >= 8 %}#DC2626{% elif score >= 5 %}#D97706{% else %}#16A34A{% endif %};">
+                        {% if score >= 8 %}CRITICAL{% elif score >= 5 %}HIGH{% else %}LOW{% endif %}
+                    </span>
+                </div>
+                <div>
+                    <button class="btn btn-primary" style="padding:8px 15px; font-size:11px;" onclick="openIntakeWithVHNData('{{ entry.id }}')">
+                        Process Intake
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not field_entries %}
+            <div style="padding:50px; text-align:center; color:var(--t-faint);">No active field referrals today.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

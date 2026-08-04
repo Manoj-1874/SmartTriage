@@ -14,10 +14,22 @@ appointments_bp = Blueprint('appointments', __name__, url_prefix='/appointments'
 logger = logging.getLogger(__name__)
 
 
+from flask import g
+import sqlite3
+from config import Config
+
 def get_appointment_manager():
-    """Get appointment manager with current database connection"""
-    conn = db_manager.get_connection()
-    return AppointmentManager(conn)
+    """Get appointment manager with current database connection via Flask g"""
+    if 'appt_db' not in g:
+        g.appt_db = sqlite3.connect('triage.db', check_same_thread=False, timeout=30)
+        g.appt_db.row_factory = sqlite3.Row
+    return AppointmentManager(g.appt_db)
+
+@appointments_bp.teardown_request
+def close_db(exception):
+    db = g.pop('appt_db', None)
+    if db is not None:
+        db.close()
 
 
 # ===========================
@@ -241,7 +253,8 @@ def get_appointment_details(appointment_id):
         manager = get_appointment_manager()
 
         # Get appointment
-        conn = db_manager.get_connection()
+        conn = sqlite3.connect('triage.db')
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM appointments WHERE id = ?", (appointment_id,))
         columns = [description[0] for description in cursor.description]
@@ -281,7 +294,8 @@ def get_messages(appointment_id):
     """Get all messages for an appointment conversation"""
     try:
         # Get appointment to find the other user
-        conn = db_manager.get_connection()
+        conn = sqlite3.connect('triage.db')
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         cursor.execute(
@@ -340,7 +354,8 @@ def send_message(appointment_id):
         if not message_text or not message_text.strip():
             return jsonify({'error': 'Message cannot be empty'}), 400
 
-        conn = db_manager.get_connection()
+        conn = sqlite3.connect('triage.db')
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         # Get appointment

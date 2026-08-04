@@ -105,6 +105,23 @@
     .btn-p-view { background: var(--glass); border: 1px solid var(--border); color: #fff; }
     .btn-p-dispatch { background: var(--clr-red-bg); color: var(--clr-red); border: none; }
     .btn-p-dispatch:hover { background: var(--clr-red); color: #fff; }
+    .modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.8); backdrop-filter: blur(5px);
+        display: none; align-items: center; justify-content: center; z-index: 1000;
+    }
+    .modal-content {
+        background: #ffffff; border: 1px solid var(--border);
+        border-radius: 24px; padding: 40px; width: 100%; max-width: 500px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.1); color: var(--t-main);
+    }
+    .field { margin-bottom: 20px; }
+    .form-control {
+        width: 100%; padding: 15px; background: #f8faf9;
+        border: 1px solid var(--border); border-radius: 12px; color: var(--t-main);
+        font-family: 'Outfit'; font-size: 14px; font-weight: 600;
+    }
+    .btn-p-view { background: #f1f5f9; border: 1px solid #e2e8f0; color: #64748b; }
 </style>
 
 <div class="patient-container">
@@ -115,7 +132,9 @@
             <p class="banner-sub">Active patient monitoring and emergency resource allocation for your assigned sector.</p>
         </div>
         <div class="banner-actions">
-            <button class="btn-primary" onclick="openManualDispatchModal()"><i class="fas fa-plus-circle"></i> Manual Emergency Dispatch</button>
+            <button class="btn-p btn-p-dispatch" style="padding: 12px 25px; font-size: 14px;" onclick="openDispatchModal(null, 'Manual Emergency', '')">
+                <i class="fas fa-plus-circle"></i> Manual Emergency Dispatch
+            </button>
         </div>
     </div>
 
@@ -169,34 +188,34 @@
     </div>
 </div>
 
-<!-- Reusing existing Modals from original page but with updated styles -->
+<!-- Dispatch Modal -->
 <div class="modal-overlay" id="dispatchModal">
-    <div class="modal-content" style="background:var(--card); border:1px solid var(--border); color:#fff;">
-        <h2 style="margin-bottom: 20px;"><i class="fas fa-ambulance"></i> Dispatch Emergency</h2>
-        <p style="font-size: 14px; margin-bottom: 20px; color:var(--t-faint);">Allocating resource for: <strong id="dispatchPatientName" style="color:var(--brand);"></strong></p>
+    <div class="modal-content">
+        <h2 style="margin: 0 0 10px 0; font-size: 24px;"><i class="fas fa-ambulance" style="color:var(--clr-red);"></i> Emergency Dispatch</h2>
+        <p style="font-size: 14px; margin-bottom: 30px; color:var(--t-faint);">Assigning vehicle for: <strong id="dispatchPatientName" style="color:#fff;"></strong></p>
         
         <form id="dispatchForm">
             <input type="hidden" id="dispatchPatientId">
             <div class="field">
-                <label style="color:var(--t-faint);">Available Ambulances</label>
-                <select class="form-control" id="ambulanceId" required style="background:#000; color:#fff; border-color:var(--border);">
+                <label style="color:var(--t-faint); font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; display: block;">Available Ambulances</label>
+                <select class="form-control" id="ambulanceId" required>
                     <option value="">Select an Ambulance</option>
                     {% for amb in available_ambulances %}
-                    <option value="{{ amb.id }}">{{ amb.ambulance_number }} - {{ amb.vehicle_type }}</option>
+                    <option value="{{ amb.id }}">{{ amb.ambulance_number }} - {{ amb.driver_name }} ({{ amb.location }})</option>
                     {% endfor %}
                 </select>
             </div>
             <div class="field">
-                <label style="color:var(--t-faint);">Destination Facility</label>
-                <select class="form-control" id="destFacility" required style="background:#000; color:#fff; border-color:var(--border);">
+                <label style="color:var(--t-faint); font-size: 11px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; display: block;">Destination PHC</label>
+                <select class="form-control" id="destFacility" required>
                     {% for f in facilities %}
-                    <option value="{{ f.name }}">{{ f.name }}</option>
+                    <option value="{{ f.name }}" {% if f.id == user.phc_id %}selected{% endif %}>{{ f.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div style="display: flex; gap: 10px; margin-top: 30px;">
-                <button type="button" class="btn-p btn-p-view" onclick="closeDispatchModal()">Cancel</button>
-                <button type="submit" class="btn-p btn-p-dispatch" style="background:var(--clr-red); color:#fff; flex:2;">Confirm Dispatch</button>
+            <div style="display: flex; gap: 15px; margin-top: 40px;">
+                <button type="button" class="btn-p btn-p-view" onclick="closeDispatchModal()" style="flex:1;">Cancel</button>
+                <button type="submit" class="btn-p" style="background:var(--brand); color:#fff; flex:2;">Initiate Dispatch</button>
             </div>
         </form>
     </div>
@@ -204,13 +223,50 @@
 
 <script>
     function openDispatchModal(id, name, address) {
-        document.getElementById('dispatchPatientId').value = id;
+        document.getElementById('dispatchPatientId').value = id || '';
         document.getElementById('dispatchPatientName').textContent = name;
         document.getElementById('dispatchModal').style.display = 'flex';
     }
+    
     function closeDispatchModal() {
         document.getElementById('dispatchModal').style.display = 'none';
     }
-    // Form submission logic remains the same...
+    
+    document.getElementById('dispatchForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const patientId = document.getElementById('dispatchPatientId').value;
+        const ambulanceId = document.getElementById('ambulanceId').value;
+        const destination = document.getElementById('destFacility').value;
+        
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching...';
+        
+        try {
+            const res = await fetch('/api/phc/allocate_ambulance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    patient_id: patientId || null,
+                    ambulance_id: ambulanceId,
+                    destination: destination,
+                    manual_dispatch: !patientId
+                })
+            });
+            
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            
+            const result = await res.json();
+            if (result.success) {
+                alert('AMBULANCE DISPATCHED: Vehicle is en route to the patient location.');
+                location.reload();
+            } else {
+                alert('ERROR: ' + result.message);
+                submitBtn.innerHTML = 'Initiate Dispatch';
+            }
+        } catch (err) {
+            alert('System Connection Error: ' + err.message);
+            submitBtn.innerHTML = 'Initiate Dispatch';
+        }
+    };
 </script>
 {% endblock %}

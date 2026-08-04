@@ -297,14 +297,15 @@ class IntegratedDualBrainRisk:
             # 1. KEYWORD-BASED SEMANTIC OVERRIDE (Real-world PHC keywords)
             text_lower = symptoms_text.lower()
             critical_keywords = [
-                'emergency', 'critical', 'unbearable', 'severe bleeding', 'crushing chest pain', 
+                'emergency', 'critical', 'unbearable', 'severe bleeding', 'crushing chest pain', 'chest pain',
                 'stroke', 'cardiac arrest', 'failure', 'aortic dissection',
                 'active labour', 'ecclampsia', 'post-partum hemorrhage', 'pph' # Added Maternal Emergencies
             ]
             high_keywords = [
                 'cancer', 'carcinoma', 'malignant', 'tumor', 'progressive', 'severe', 'chronic', 
                 'high risk pregnancy', 'anc complication', 'dropout', 'teenage pregnancy', # Added Rural/Social risks
-                'tb', 'leprosy', 'xanthomatosis', 'fibrosis', 'sclerosis', 'cystic'
+                'tb', 'leprosy', 'xanthomatosis', 'fibrosis', 'sclerosis', 'cystic',
+                'infant', 'baby', 'newborn', 'neonatal', 'child' # Pediatric risks
             ]
             
             # 2. AI MODEL PREDICTION (if available - check for latency)
@@ -314,6 +315,13 @@ class IntegratedDualBrainRisk:
                     if prediction:
                         top = prediction[0]
                         label = top.get('label', 'MEDIUM').upper()
+                        
+                        # Map HuggingFace generic labels
+                        if label == 'LABEL_0': label = 'LOW'
+                        elif label == 'LABEL_1': label = 'MEDIUM'
+                        elif label == 'LABEL_2': label = 'HIGH'
+                        elif label == 'LABEL_3': label = 'CRITICAL'
+
                         # Map internal labels to risk
                         score = {'CRITICAL': 0.95, 'HIGH': 0.80, 'MEDIUM': 0.55, 'LOW': 0.30}.get(label, 0.55)
                         result.update({'risk_label': label, 'confidence': top.get('score', 0.5), 'risk_score': score})
@@ -340,9 +348,21 @@ class IntegratedDualBrainRisk:
             features = self._prepare_xgboost_features(age, gender, symptoms, sys_bp, dia_bp, hr, temp_f, pre_conditions)
             result['features_used'] = features
             xgb_prediction = self.xgb_model.predict_proba(self.scaler.transform(np.array([features])))[0]
-            risk_prob = xgb_prediction[2] if len(xgb_prediction) >= 3 else xgb_prediction[1]
+            
+            # Correctly handle 3-class (0: LOW, 1: MEDIUM, 2: HIGH)
+            if len(xgb_prediction) >= 3:
+                # Weighted risk score: 20% for LOW, 55% for MEDIUM, 85% for HIGH
+                risk_prob = (xgb_prediction[0] * 0.20) + (xgb_prediction[1] * 0.55) + (xgb_prediction[2] * 0.85)
+                
+                # Determine label by taking the max probability class
+                max_class = int(np.argmax(xgb_prediction))
+                label = 'HIGH' if max_class == 2 else 'MEDIUM' if max_class == 1 else 'LOW'
+            else:
+                risk_prob = xgb_prediction[1] if len(xgb_prediction) > 1 else 0.5
+                label = 'HIGH' if risk_prob >= 0.75 else 'MEDIUM' if risk_prob >= 0.50 else 'LOW'
+                
             result['risk_score'] = float(risk_prob)
-            result['risk_label'] = 'HIGH' if risk_prob >= 0.75 else 'MEDIUM' if risk_prob >= 0.50 else 'LOW'
+            result['risk_label'] = label
         except Exception as e:
             logger.error(f"XGBoost error: {str(e)}")
         return result
@@ -380,9 +400,12 @@ class IntegratedDualBrainRisk:
         
         # Vitals multipliers (Physical instability ALWAYS boosts risk)
         v_mult = 1.0
-        if sys_bp < 90 or dia_bp < 60: v_mult *= 1.3
+        if sys_bp < 90 or sys_bp > 180 or dia_bp < 60 or dia_bp > 110: v_mult *= 1.3
         if spo2 < 92: v_mult *= 1.4
-        if temp_f > 103.5: v_mult *= 1.3
+        elif spo2 < 95: v_mult *= 1.2
+        if temp_f > 103.5 or temp_f < 95.0: v_mult *= 1.3
+        if hr > 120 or hr < 50: v_mult *= 1.3
+        if respiration_rate > 24 or respiration_rate < 10: v_mult *= 1.3
         
         # Safety Floor: If Knowledge OR Symptoms detect a crisis, result MUST NOT be LOW
         if is_emergency:
@@ -399,13 +422,17 @@ class IntegratedDualBrainRisk:
 
         # SPECIALIST MAPPING
         disease_name = str(disease_context.get('disease_identified', '')).lower()
-        specialist = "General Physician"
-        if any(k in disease_name for k in ['stroke', 'neurological', 'brain', 'seizure']): specialist = "Neurologist"
-        elif any(k in disease_name for k in ['pulmonary', 'respiratory', 'lung', 'bronchitis']): specialist = "Pulmonologist"
-        elif any(k in disease_name for k in ['heart', 'infarction', 'cardiac', 'hypertension', 'bp']): specialist = "Cardiologist"
-        elif any(k in disease_name for k in ['alkaptonuria', 'ochronosis', 'metabolic']): specialist = "Metabolic Specialist / Geneticist"
-        elif any(k in disease_name for k in ['diabetes', 'thyroid']): specialist = "Endocrinologist"
-        elif any(k in disease_name for k in ['malaria', 'dengue', 'sepsis']): specialist = "Infectious Disease Specialist"
+        specialist = disease_context.get('suggested_specialist')
+        if not specialist or specialist == "General Physician":
+            specialist = "General Physician"
+            if any(k in disease_name for k in ['stroke', 'neurological', 'brain', 'seizure']): specialist = "Neurologist"
+            elif any(k in disease_name for k in ['pulmonary', 'respiratory', 'lung', 'bronchitis', 'asthma']): specialist = "Pulmonologist"
+            elif any(k in disease_name for k in ['heart', 'infarction', 'cardiac', 'hypertension', 'bp']): specialist = "Cardiologist"
+            elif any(k in disease_name for k in ['alkaptonuria', 'ochronosis', 'metabolic']): specialist = "Endocrinologist"
+            elif any(k in disease_name for k in ['diabetes', 'thyroid']): specialist = "Endocrinologist"
+            elif any(k in disease_name for k in ['malaria', 'dengue', 'sepsis']): specialist = "Infectious Disease Specialist"
+            elif any(k in disease_name for k in ['cancer', 'tumor', 'oncology']): specialist = "Oncologist"
+            elif any(k in disease_name for k in ['pregnancy', 'maternal', 'obgyn']): specialist = "OB/GYN Specialist"
 
         return {
             'final_risk_score': final_score, 'risk_category': cat, 'urgency': urg,

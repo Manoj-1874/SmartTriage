@@ -1557,76 +1557,33 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
     <div class="shell">
 
 <!-- ══ SIDEBAR ══ -->
-<aside class="sidebar" id="sidebar">
-  <div class="s-brand">
-    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-    <div class="s-brand-text">
-      <div class="s-brand-name">PriorityMed</div>
-      <div class="s-brand-tag">Doctor Portal</div>
-    </div>
-  </div>
-  <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
-  <div class="s-user">
-    <div class="s-ava">
-      <i class="fas fa-user"></i>
-      <div class="s-ava-dot"></div>
-    </div>
-    <div class="s-user-text">
-      <div class="s-uname">{{ user.fullname if user else 'Alex Johnson' }}</div>
-      <div class="s-urole">{{ 'Doctor Account' if user and user.role == 'doctor' else 'Patient Account' }}</div>
-    </div>
-  </div>
-  <nav class="s-nav">
-    <div class="s-group">Overview</div>
-    <a href="/doctor/dashboard" class="s-link active">
-      <div class="s-icon"><i class="fas fa-th-large"></i></div>
-      <span class="s-label">Dashboard</span>
-    </a>
-    <a href="/patients" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
-      <span class="s-label">Patients</span>
-    </a>
-    <a href="/doctor/reports" class="s-link">
-      <div class="s-icon"><i class="far fa-file-alt"></i></div>
-      <span class="s-label">Reports</span>
-    </a>
-    <a href="/phc/doctor/resources" class="s-link">
-      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
-      <span class="s-label">Resource Governance</span>
-    </a>
-    <a href="/phc/attendance" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-check"></i></div>
-      <span class="s-label">Staff Attendance</span>
-    </a>
-    <div class="s-group">My Care</div>
-    <a href="/appointments" class="s-link">
-      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-      <span class="s-label">Appointments</span>
-    </a>
-    <a href="/doctors" class="s-link">
-      <div class="s-icon"><i class="fas fa-user-md"></i></div>
-      <span class="s-label">Find Doctors</span>
-    </a>
-    <div class="s-group">Support</div>
-    <a href="/messages" class="s-link">
-      <div class="s-icon"><i class="fas fa-comments"></i></div>
-      <span class="s-label">Messages</span>
-    </a>
-    <a href="/logout" class="s-link">
-      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-      <span class="s-label">Sign Out</span>
-    </a>
-  </nav>
-  <div class="s-footer">
-    <div class="s-status">
-      <div class="s-dot"></div>
-      <span class="s-status-txt">All Systems Operational</span>
-    </div>
-  </div>
-</aside>
+{% include 'sidebar.html' %}
 
 <!-- ══ MAIN ══ -->
 <div class="main" id="mainContent">
+  <header class="topbar">
+    <div class="t-breadcrumb">
+      <span>PriorityMed</span>
+      <span class="t-sep"><i class="fas fa-chevron-right"></i></span>
+      <span class="t-breadcrumb-active">Doctor Dashboard</span>
+    </div>
+    <div class="t-right">
+      <div class="t-clock" id="liveClock">--:-- --</div>
+      <div style="position:relative;">
+        <button type="button" class="t-btn" id="notifBtn" aria-label="Notifications" onclick="toggleNotifDropdown()"><i class="fas fa-bell"></i><div class="t-badge" style="display:none;" id="notifBadge"></div></button>
+        <div id="notifDropdown" style="display:none;position:absolute;top:48px;right:-8px;width:340px;background:var(--base);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.15);z-index:1000;overflow:hidden;">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700;color:var(--t-head);">Notifications</div>
+            <button onclick="closeNotifDropdown()" style="background:none;border:none;color:var(--t-muted);cursor:pointer;font-size:14px;padding:0;"><i class="fas fa-times"></i></button>
+          </div>
+          <div id="notifList" style="max-height:400px;overflow-y:auto;">
+            <div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Loading notifications...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
             <!-- Welcome Section -->
             <div class="welcome-section">
                 <h1>Welcome back, {% if user %}{{ user.fullname }}{% else %}Doctor{% endif %}</h1>
@@ -1879,6 +1836,107 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
                 }
             }
         });
+
+        // NOTIFICATIONS LOGIC
+        function toggleNotifDropdown() {
+            const dropdown = document.getElementById('notifDropdown');
+            if (dropdown.style.display === 'none') {
+                dropdown.style.display = 'block';
+                fetchNotifications();
+            } else {
+                dropdown.style.display = 'none';
+            }
+        }
+        
+        function closeNotifDropdown() {
+            document.getElementById('notifDropdown').style.display = 'none';
+        }
+        
+        async function fetchNotifications() {
+            try {
+                const res = await fetch('/appointments/notifications');
+                const data = await res.json();
+                
+                if(data.success) {
+                    const list = document.getElementById('notifList');
+                    const badge = document.getElementById('notifBadge');
+                    
+                    if(data.notifications && data.notifications.length > 0) {
+                        const unreadCount = data.notifications.filter(n => !n.is_read).length;
+                        if (badge) {
+                            if (unreadCount > 0) {
+                                badge.style.display = 'block';
+                                badge.innerText = unreadCount;
+                            } else {
+                                badge.style.display = 'none';
+                            }
+                        }
+                        
+                        let html = '';
+                        data.notifications.forEach(n => {
+                            const utcDate = new Date(n.created_at.replace(' ', 'T') + 'Z');
+                            html += `
+                            <div onclick="handleNotifClick(${n.id})" style="cursor:pointer; padding:12px 16px;border-bottom:1px solid var(--border);${!n.is_read ? 'background:rgba(11,155,122,0.05);' : ''}">
+                                <div style="font-weight:600;font-size:13px;color:var(--t-head);">${n.title}</div>
+                                <div style="font-size:12px;color:var(--t-muted);margin-top:4px;">${n.message}</div>
+                                <div style="font-size:11px;color:var(--t-faint);margin-top:6px;">${utcDate.toLocaleString()}</div>
+                            </div>`;
+                        });
+                        if (list) list.innerHTML = html;
+                    } else {
+                        if (badge) badge.style.display = 'none';
+                        if (list) list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">No new notifications</div>';
+                    }
+                }
+            } catch(e) {
+                console.error('Error fetching notifications:', e);
+                document.getElementById('notifList').innerHTML = '<div style="padding:24px;text-align:center;color:var(--t-muted);font-size:13px;">Failed to load notifications</div>';
+            }
+        }
+        
+        async function handleNotifClick(notifId) {
+            try {
+                await fetch(`/appointments/notifications/${notifId}/read`, { method: 'POST' });
+            } catch(e) {
+                console.error('Error marking as read', e);
+            }
+            window.location.href = '/appointments';
+        }
+        
+        // Fetch notifications periodically
+        setInterval(fetchNotifications, 30000);
+        // Fetch on load
+        document.addEventListener('DOMContentLoaded', fetchNotifications);
+        
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            if (!document.getElementById('notifBtn').contains(e.target) && !document.getElementById('notifDropdown').contains(e.target)) {
+                closeNotifDropdown();
+            }
+        });
+
+        // Topbar Clock
+        function tick(){
+            const el = document.getElementById('liveClock');
+            if(el) {
+                el.textContent = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+            }
+        }
+        setInterval(tick, 1000);
+        tick();
+
+        // Theme Toggle
+        const themeBtn = document.getElementById('themeToggle');
+        if(themeBtn) {
+            themeBtn.addEventListener('click', () => {
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+                const ico = document.getElementById('themeIco');
+                if(ico) {
+                    ico.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+                }
+            });
+        }
     </script>
 </body>
 </html>

@@ -1,0 +1,138 @@
+<aside class="sidebar" id="sidebar">
+  <div class="s-brand">
+    <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
+    <div class="s-brand-text">
+      <div class="s-brand-name">PriorityMed</div>
+      <div class="s-brand-tag" style="text-transform: uppercase;">
+        {% if user.role == 'doctor' %}Doctor Portal
+        {% elif user.role == 'phc_nurse' %}Nurse Portal
+        {% elif user.role == 'pharmacist' %}Pharmacist Command
+        {% elif user.role == 'patient' %}Patient Portal
+        {% else %}Staff Portal{% endif %}
+      </div>
+    </div>
+  </div>
+  <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
+  
+  {% if user %}
+  <div class="s-user">
+    <div class="s-ava">
+      <i class="fas fa-user{% if user.role == 'phc_nurse' %}-nurse{% elif user.role == 'doctor' %}-md{% endif %}"></i>
+      <div class="s-ava-dot"></div>
+    </div>
+    <div class="s-user-text">
+      <div class="s-uname">{{ user.fullname }}</div>
+      <div class="s-urole">{{ user.role|replace('_', ' ')|title }}</div>
+    </div>
+  </div>
+  {% endif %}
+
+  <nav class="s-nav" style="flex:1; overflow-y:auto;">
+    {% if user.role == 'doctor' %}
+    <div class="s-group">Overview</div>
+    <a href="/doctor/dashboard" class="s-link {% if request.path == '/doctor/dashboard' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-th-large"></i></div>
+      <span class="s-label">Dashboard</span>
+    </a>
+    <a href="/patients" class="s-link {% if request.path == '/patients' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-user-injured"></i></div>
+      <span class="s-label">Patients</span>
+    </a>
+    <a href="/doctor/reports" class="s-link {% if request.path == '/doctor/reports' %}active{% endif %}">
+      <div class="s-icon"><i class="far fa-file-alt"></i></div>
+      <span class="s-label">Reports</span>
+    </a>
+    <a href="/phc/doctor/resources" class="s-link {% if request.path == '/phc/doctor/resources' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-boxes-stacked"></i></div>
+      <span class="s-label">Resource Governance</span>
+    </a>
+    <a href="/appointments" class="s-link {% if request.path == '/appointments' %}active{% endif %}">
+      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+      <span class="s-label">Appointments</span>
+    </a>
+    <a href="/phc/mo/approval-inbox" class="s-link {% if request.path == '/phc/mo/approval-inbox' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-file-signature"></i></div>
+      <span class="s-label">MO Approval Desk</span>
+    </a>
+    {% endif %}
+
+    {% if user.role == 'phc_nurse' or user.role == 'doctor' %}
+    <div class="s-group">Nurse Station</div>
+    <a href="/phc/nurse/dashboard" class="s-link {% if request.path == '/phc/nurse/dashboard' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-grid-2"></i></div>
+      <span class="s-label">Command Center</span>
+    </a>
+    <a href="/phc/nurse/patients" class="s-link {% if request.path == '/phc/nurse/patients' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-users"></i></div>
+      <span class="s-label">Patient Monitor</span>
+    </a>
+    {% if user.role == 'phc_nurse' %}
+    <a href="/phc/nurse/daily-diary" class="s-link {% if request.path == '/phc/nurse/daily-diary' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-book-medical"></i></div>
+      <span class="s-label">Daily Diary</span>
+    </a>
+    <a href="/phc/nurse/maternal-tracking" class="s-link {% if request.path == '/phc/nurse/maternal-tracking' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-person-pregnant"></i></div>
+      <span class="s-label">Maternal (PICME)</span>
+    </a>
+    {% endif %}
+    {% endif %}
+
+    {% if user.role == 'pharmacist' or user.role == 'doctor' %}
+    <div class="s-group">Pharmacy Operations</div>
+    <a href="/phc/pharmacist/dashboard" class="s-link {% if request.path == '/phc/pharmacist/dashboard' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-pills"></i></div>
+      <span class="s-label">Pharmacy Command</span>
+    </a>
+    <a href="/phc/stock-borrowing" class="s-link {% if request.path == '/phc/stock-borrowing' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-exchange-alt"></i></div>
+      <span class="s-label">Stock Discovery</span>
+    </a>
+    {% endif %}
+
+    {% if user.role == 'patient' %}
+    <div class="s-group">My Care</div>
+    <a href="/patient/dashboard" class="s-link {% if request.path == '/patient/dashboard' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-th-large"></i></div>
+      <span class="s-label">Dashboard</span>
+    </a>
+    <a href="/appointments" class="s-link {% if request.path == '/appointments' %}active{% endif %}">
+      <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
+      <span class="s-label">Appointments</span>
+    </a>
+    <a href="/doctors" class="s-link {% if request.path == '/doctors' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-user-md"></i></div>
+      <span class="s-label">Find Doctors</span>
+    </a>
+    <a href="/health-report" class="s-link {% if request.path == '/health-report' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-file-medical-alt"></i></div>
+      <span class="s-label">Health Report</span>
+    </a>
+    {% endif %}
+
+    {% if user.role != 'patient' %}
+    <div class="s-group">HR & Ops</div>
+    <a href="/phc/attendance" class="s-link {% if request.path == '/phc/attendance' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-user-check"></i></div>
+      <span class="s-label">Staff Attendance</span>
+    </a>
+    {% endif %}
+
+    <div class="s-group">Support</div>
+    <a href="/messages" class="s-link {% if request.path == '/messages' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-comments"></i></div>
+      <span class="s-label">Messages</span>
+    </a>
+    <a href="/logout" class="s-link" style="color: #dc2626;">
+      <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
+      <span class="s-label">Sign Out</span>
+    </a>
+  </nav>
+  
+  <div class="s-footer" style="padding: 15px; border-top: 1px solid var(--border);">
+    <div class="s-status" style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--t-muted);">
+      <div class="s-dot" style="width:8px; height:8px; background:#10B981; border-radius:50%;"></div>
+      <span>All Systems Operational</span>
+    </div>
+  </div>
+</aside>

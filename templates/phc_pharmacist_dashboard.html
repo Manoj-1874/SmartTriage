@@ -47,6 +47,34 @@
 
 <div class="pharmacy-grid">
     <div class="left-col">
+        <!-- REAL-WORLD: PENDING DISPENSARY QUEUE (From Lightning/Doctor Entries) -->
+        <div class="p-card" style="margin-bottom: 25px; border-left: 5px solid var(--brand);">
+            <div class="p-head">
+                <div class="p-title" style="font-size:16px; font-weight:700;"><i class="fas fa-clipboard-list" style="color:var(--brand);"></i> Pending Dispensary</div>
+                <span class="mpr-badge" style="background:var(--brand-pale); color:var(--brand);">LIVE PULSE</span>
+            </div>
+            <div id="dispensaryQueue">
+                {% for p in pending_patients %}
+                <div class="stock-row" style="padding:12px; background:var(--surface); border-radius:10px; margin-bottom:10px; border:1px solid var(--border);">
+                    <div style="flex:1;">
+                        <div style="font-weight:800; font-size:14px;">{{ p.fullname }}</div>
+                        <div style="font-size:10px; color:var(--t-muted);">{{ p.symptoms }} • Risk: <span style="color:{% if p.risk == 'HIGH' %}var(--clr-red){% else %}var(--brand){% endif %}; font-weight:700;">{{ p.risk }}</span></div>
+                    </div>
+                    <button class="btn btn-primary" style="padding:6px 12px; font-size:10px;" 
+                            onclick="openDispenseModal('{{ p.log_id }}', '{{ p.fullname|replace("'", "\\'") }}', '{{ p.symptoms|replace("'", "\\'") }}', '{{ p.risk }}')">
+                        Dispense
+                    </button>
+                </div>
+                {% endfor %}
+                {% if not pending_patients %}
+                <div style="padding:20px; text-align:center; color:var(--t-muted); font-size:12px;">
+                    <i class="fas fa-check-circle" style="color:var(--brand); display:block; margin-bottom:8px;"></i>
+                    No patients currently waiting for pharmacy.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
         <!-- Low Stock Alerts -->
         <div class="p-card" style="margin-bottom: 25px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -72,23 +100,76 @@
 
         <!-- Today's Consumption (Real-world: Daily Diary Auto-updates) -->
         <div class="p-card">
-            <h3 style="margin-bottom:20px;"><i class="fas fa-chart-line"></i> Today's Automated Consumption</h3>
-            <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Every dose logged in the Nurse OP Diary is automatically subtracted here.</p>
-            {% for u in usage %}
-            <div class="stock-row">
-                <div>{{ u.item_name }}</div>
-                <div style="color:var(--clr-red); font-weight:800;">-{{ u.total_used|abs }} units</div>
+            <div class="p-head">
+                <div class="p-title"><i class="fas fa-chart-line"></i> Strategic Analytics Pulse</div>
             </div>
-            {% endfor %}
-            {% if not usage %}
-            <div style="padding:40px; text-align:center; color:var(--t-faint);">
-                <p>Waiting for today's OP data sync...</p>
+            
+            <!-- High-Selling / High-Demand Drugs -->
+            <div style="margin-bottom:25px;">
+                <div style="font-size:12px; color:var(--brand); font-weight:800; text-transform:uppercase; margin-bottom:12px;">Top 3 High-Demand Drugs</div>
+                {% for drug in analytics_data.top_drugs %}
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; background:var(--glass); padding:10px; border-radius:10px;">
+                    <div style="font-weight:700; font-size:13px;">{{ drug.item_name }}</div>
+                    <div style="font-size:11px; font-weight:800; color:var(--brand);">{{ drug.total_used|abs }} Units Used</div>
+                </div>
+                {% endfor %}
             </div>
-            {% endif %}
+
+            <!-- Predictive Budgeting -->
+            <div style="padding:15px; background:var(--brand-pale); border:1px solid var(--brand); border-radius:15px;">
+                <div style="font-size:11px; color:var(--brand); font-weight:800; text-transform:uppercase; margin-bottom:5px;">Next Quarter Budget Projection</div>
+                <div style="font-size:24px; font-weight:800; color:var(--brand);">₹{{ analytics_data.projected_budget }}</div>
+                <div style="font-size:10px; color:var(--t-muted);">Based on 30-day consumption trends</div>
+            </div>
         </div>
     </div>
 
     <div class="right-col">
+        <!-- Incoming Stock Transfers -->
+        <div class="p-card" style="margin-bottom: 25px; border:2px solid var(--clr-green); background: rgba(16,185,129,0.05);">
+            <h3 style="margin-bottom:15px; color:var(--clr-green);"><i class="fas fa-hand-holding-medical"></i> Incoming Requisitions</h3>
+            <p style="font-size:11px; color:var(--t-muted); margin-bottom:15px;">Nearby facilities requesting emergency stock.</p>
+            
+            {% for req in incoming_transfers %}
+            <div class="stock-row" style="border-left:4px solid var(--clr-green); padding-left:15px; margin-bottom:10px;">
+                <div style="flex:1;">
+                    <div style="font-weight:800; font-size:14px; color:var(--clr-green);">{{ req.referral_reason|replace('Requesting ', '') }}</div>
+                    <div style="font-size:10px; color:var(--t-muted);">From: <b>{{ req.source_phc }}</b></div>
+                </div>
+                <button class="btn btn-primary" style="background:var(--clr-green); border:none; font-size:10px; padding:6px 12px;" onclick="approveTransfer({{ req.id }}, this)">Approve Transfer</button>
+            </div>
+            {% endfor %}
+            {% if not incoming_transfers %}
+            <div style="padding:15px; text-align:center; color:var(--t-faint); font-size:11px;">No pending requisitions.</div>
+            {% endif %}
+        </div>
+        
+        <!-- ACTIONABLE PULSE: Only show the 20% that matters -->
+        <div class="p-card" style="margin-bottom: 25px; border:2px solid var(--clr-red); background: rgba(220,38,38,0.02);">
+            <h3 style="margin-bottom:15px; color:var(--clr-red);"><i class="fas fa-hourglass-half"></i> High-Value Expiry Alerts</h3>
+            <p style="font-size:11px; color:var(--t-muted); margin-bottom:15px;">Automated scan of TN-MSC batches expiring within 3 months.</p>
+            
+            {% set alerts = [] %}
+            {% for item in full_inventory %}
+                {% if item.is_expired or item.near_expiry %}
+                    {% set _ = alerts.append(1) %}
+                    <div class="stock-row" style="border-left:4px solid {% if item.is_expired %}var(--clr-red){% else %}var(--clr-amber){% endif %}; padding-left:15px; margin-bottom:10px;">
+                        <div>
+                            <div style="font-weight:800; font-size:14px;">{{ item.item_name }}</div>
+                            <div style="font-size:10px; color:{% if item.is_expired %}var(--clr-red){% else %}var(--clr-amber){% endif %};">BATCH: {{ item.batch_id or 'TN-MSC' }} | EXP: {{ item.expiry_date }}</div>
+                        </div>
+                        <div class="waste-badge" style="background:{% if item.is_expired %}var(--clr-red-bg){% else %}var(--clr-amber-bg){% endif %}; color:{% if item.is_expired %}var(--clr-red){% else %}var(--clr-amber){% endif %};">
+                            {% if item.is_expired %}ACT NOW{% else %}MONITOR{% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+            
+            {% if not alerts %}
+                <div style="padding:15px; text-align:center; color:var(--t-faint); font-size:11px;">No batches expiring soon.</div>
+            {% endif %}
+        </div>
+
         <!-- Waste Tracking (Ramky Pickup) -->
         <div class="p-card" style="margin-bottom: 25px; background: rgba(37,99,235,0.05); border-color:var(--brand);">
             <h3 style="margin-bottom:20px;"><i class="fas fa-truck-pickup"></i> Waste & Logistics</h3>
@@ -108,12 +189,93 @@
             {% endif %}
         </div>
 
-        <!-- Quick Links -->
-        <div class="p-card">
-            <h3 style="margin-bottom:20px;">Logistics Shortcuts</h3>
+        <div class="p-card" style="background:var(--surface);">
+            <h3 style="margin-bottom:20px;"><i class="fas fa-cubes"></i> Inventory Actions</h3>
+            <button class="btn btn-primary" style="width:100%; margin-bottom:10px;" onclick="openStockModal()">
+                <i class="fas fa-plus-circle"></i> Quick Stock Update
+            </button>
             <button class="btn btn-outline-white" style="width:100%; margin-bottom:10px;" onclick="location.href='/phc/pharmacist/mpr-review'">13-Dept MPR Review</button>
-            <button class="btn btn-outline-white" style="width:100%; margin-bottom:10px;" onclick="location.href='/phc/pharmacist/bin-card/Paracetamol'">View Paracetamol Bin Card</button>
             <button class="btn btn-outline-white" style="width:100%;" onclick="openWasteModal()">New Waste Receipt</button>
+        </div>
+    </div>
+</div>
+
+<!-- FULL INVENTORY & EXPIRY EXPLORER -->
+<div class="p-card" style="margin: 0 40px 40px; border-top: 5px solid var(--brand);">
+    <div class="p-head">
+        <div class="p-title"><i class="fas fa-boxes"></i> Full Inventory & Expiry Explorer</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-outline" style="font-size:11px;"><i class="fas fa-download"></i> Export TN-MSC Report</button>
+            <button class="btn btn-primary" onclick="openStockModal()"><i class="fas fa-plus"></i> New Shipment</button>
+        </div>
+    </div>
+    <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr style="text-align:left; border-bottom:2px solid var(--border); color:var(--t-muted); font-size:11px; text-transform:uppercase;">
+                    <th style="padding:15px;">Medicine Name</th>
+                    <th>Current Stock</th>
+                    <th>Batch ID</th>
+                    <th>Expiry Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in full_inventory %}
+                <tr style="border-bottom:1px solid var(--border); font-size:14px;">
+                    <td style="padding:15px; font-weight:700;">{{ item.item_name }}</td>
+                    <td><span style="font-weight:800; color:{% if item.quantity < 100 %}var(--clr-red){% else %}var(--t-main){% endif %};">{{ item.quantity }}</span> Units</td>
+                    <td style="font-family:monospace; color:var(--t-muted);">{{ item.batch_id or 'TN-MAIN-01' }}</td>
+                    <td style="font-weight:600;">{{ item.expiry_date or '31-DEC-2026' }}</td>
+                    <td>
+                        {% if item.is_expired %}
+                            <span class="status-badge absent">EXPIRED</span>
+                        {% elif item.near_expiry %}
+                            <span class="status-badge amber">NEAR EXPIRY</span>
+                        {% else %}
+                            <span class="status-badge present">STABLE</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-outline" style="padding:5px 10px; font-size:11px;" 
+                                onclick="openExpiryUpdateModal('{{ item.item_name|replace("'", "\\'") }}', '{{ item.expiry_date }}')">Update Expiry</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Stock Update Modal -->
+<div class="modal-overlay" id="stockModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div class="p-card" style="width:400px; background:var(--card); border:1px solid var(--border); box-shadow:0 10px 40px rgba(0,0,0,0.1);">
+        <h2 style="margin-bottom:10px; font-weight:800; letter-spacing:-0.5px;"><i class="fas fa-pills" style="color:var(--brand);"></i> Quick Stock Update</h2>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Manual stock adjustment or shipment receipt.</p>
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">Medicine Name</label>
+            <input type="text" id="sItemName" placeholder="e.g. Paracetamol" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:700;">
+        </div>
+
+        <div style="display:flex; gap:15px; margin-bottom:15px;">
+            <div style="flex:1;">
+                <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">Quantity</label>
+                <input type="number" id="sQty" placeholder="0" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:700;">
+            </div>
+            <div style="flex:1;">
+                <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">Action</label>
+                <select id="sAction" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:600;">
+                    <option value="ADD">Received (+)</option>
+                    <option value="SUBTRACT">Used/Lost (-)</option>
+                </select>
+            </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:25px;">
+            <button class="btn" style="flex:1; background:#F1F5F9; color:#475569; border:1px solid #CBD5E1;" onclick="closeStockModal()">Cancel</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="submitStockUpdate()">Save Changes</button>
         </div>
     </div>
 </div>
@@ -126,7 +288,7 @@
         
         <div style="margin-bottom:15px;">
             <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">Bag Category</label>
-            <select id="wBagColor" style="width:100%; padding:12px; background:var(--surface); border:1px solid var(--border); color:var(--t-main); border-radius:12px; font-weight:600;">
+            <select id="wBagColor" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:600;">
                 <option value="Yellow">Yellow (Anatomical)</option>
                 <option value="Red">Red (Contaminated)</option>
                 <option value="Blue">Blue (Glassware)</option>
@@ -136,38 +298,300 @@
         
         <div style="margin-bottom:15px;">
             <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">Net Weight (KG)</label>
-            <input type="number" id="wWeight" step="0.1" placeholder="e.g. 4.5" style="width:100%; padding:12px; background:var(--surface); border:1px solid var(--border); color:var(--t-main); border-radius:12px; font-weight:700;">
+            <input type="number" id="wWeight" step="0.1" placeholder="e.g. 4.5" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:700;">
         </div>
 
         <div style="display:flex; gap:10px; margin-top:25px;">
-            <button class="btn" style="flex:1; background:var(--surface); color:var(--t-muted);" onclick="closeWasteModal()">Cancel</button>
+            <button class="btn" style="flex:1; background:#F1F5F9; color:#475569; border:1px solid #CBD5E1;" onclick="closeWasteModal()">Cancel</button>
             <button class="btn btn-primary" style="flex:1;" onclick="submitWaste()">Save Receipt</button>
         </div>
     </div>
 </div>
 
+<!-- Expiry Update Modal -->
+<div class="modal-overlay" id="expiryModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div class="p-card" style="width:400px; background:var(--card); border:1px solid var(--border); box-shadow:0 10px 40px rgba(0,0,0,0.1);">
+        <h2 style="margin-bottom:10px; font-weight:800; letter-spacing:-0.5px;"><i class="fas fa-calendar-alt" style="color:var(--brand);"></i> Update Expiry Date</h2>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">Adjust the shelf-life for <strong id="eItemNameDisplay">...</strong></p>
+        
+        <input type="hidden" id="eItemName">
+        <div style="margin-bottom:20px;">
+            <label style="font-size:11px; font-weight:700; color:var(--brand); text-transform:uppercase; display:block; margin-bottom:5px;">New Expiry Date</label>
+            <input type="date" id="eNewDate" style="width:100%; padding:12px; background:#F8FAFC; border:2px solid #E2E8F0; color:#1E293B; border-radius:12px; font-weight:700;">
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <button class="btn" style="flex:1; background:#F1F5F9; color:#475569;" onclick="closeExpiryModal()">Cancel</button>
+            <button class="btn btn-primary" style="flex:1;" onclick="submitExpiryUpdate()">Update Date</button>
+        </div>
+    </div>
+</div>
+
+<!-- Dispense Modal (The Digital Prescription View) -->
+<div class="modal-overlay" id="dispenseModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div class="p-card" style="width:500px; background:var(--card); border:1px solid var(--border); border-radius:24px; padding:30px; box-shadow:0 20px 50px rgba(0,0,0,0.2);">
+        <h2 style="margin-bottom:10px; font-weight:800;"><i class="fas fa-prescription" style="color:var(--brand);"></i> Digital Prescription</h2>
+        <p style="font-size:12px; color:var(--t-muted); margin-bottom:20px;">AI-Suggested medications based on Nurse Triage.</p>
+        
+        <div id="dispenseDetails" style="background:#F8FAFC; padding:20px; border-radius:16px; border:1px solid #E2E8F0; margin-bottom:20px;">
+            <!-- Content injected via JS -->
+        </div>
+
+        <div style="display:flex; gap:10px;">
+            <button class="btn" style="flex:1; background:#F1F5F9; color:#475569;" onclick="closeDispenseModal()">Close</button>
+            <button class="btn btn-primary" id="confirmDispenseBtn" style="flex:2;" onclick="confirmDispense()">Confirm Dispensing & Log</button>
+        </div>
+    </div>
+</div>
+
 <script>
+    let activeLogId = null;
+    let activeSuggestions = [];
+
+    function openDispenseModal(logId, name, symptoms, risk) {
+        activeLogId = logId;
+        const modal = document.getElementById('dispenseModal');
+        const details = document.getElementById('dispenseDetails');
+        
+        // AI MEDICINE MAPPING LOGIC (With Safety Guardrails)
+        let suggestions = [];
+        const symp = symptoms.toLowerCase();
+        
+        // Check for frontend Red Flags (Safety Guardrail)
+        let isBlocked = (risk === 'HIGH' || risk === 'CRITICAL');
+        if (symp.includes('baby') || symp.includes('infant') || symp.includes('new born') || symp.includes('child')) {
+            isBlocked = true;
+        }
+        if (symp.includes('breathe') || symp.includes('breath') || symp.includes('wheezing') || symp.includes('chest')) {
+            isBlocked = true;
+        }
+        if (!isBlocked) {
+            if(symp.includes('fever') || symp.includes('pain') || symp.includes('headache')) suggestions.push('Paracetamol');
+            if(symp.includes('cough') || symp.includes('cold') || symp.includes('throat')) suggestions.push('Cetirizine');
+            if(symp.includes('infection') || symp.includes('wound')) suggestions.push('Amoxicillin');
+            if(symp.includes('stomach') || symp.includes('pain')) suggestions.push('Dicyclomine');
+            
+            if(suggestions.length === 0) suggestions.push('Refer to MO for Prescription');
+        }
+        activeSuggestions = suggestions;
+
+        details.innerHTML = `
+            <div style="margin-bottom:15px; border-bottom:1px solid #CBD5E1; padding-bottom:10px;">
+                <div style="font-size:11px; color:#64748B; font-weight:700; text-transform:uppercase;">Patient Name</div>
+                <div style="font-size:18px; font-weight:800; color:#1E293B;">${name}</div>
+            </div>
+            <div style="margin-bottom:15px;">
+                <div style="font-size:11px; color:#64748B; font-weight:700; text-transform:uppercase;">Nurse Symptoms</div>
+                <div style="font-size:14px; color:#334155;">"${symptoms}"</div>
+            </div>
+            
+            ${isBlocked ? `
+                <div style="padding:15px; background:var(--clr-red-bg); border:2px solid var(--clr-red); border-radius:12px; color:var(--clr-red); text-align:center;">
+                    <i class="fas fa-exclamation-triangle fa-2x" style="margin-bottom:10px;"></i>
+                    <div style="font-weight:800; font-size:16px;">HIGH CLINICAL RISK / PEDIATRIC ALERT</div>
+                    <p style="font-size:11px; margin-top:5px;">AI Prescription Disabled for Safety. Patient MUST see Medical Officer before dispensing.</p>
+                </div>
+            ` : `
+                <div style="padding:15px; background:white; border:1px dashed var(--brand); border-radius:10px;">
+                    <div style="font-size:11px; color:var(--brand); font-weight:800; text-transform:uppercase; margin-bottom:8px;">AI Suggested Medicines</div>
+                    ${suggestions.map(s => `<div style="font-weight:700; color:#1E293B; margin-bottom:4px;"><i class="fas fa-check-circle" style="color:var(--brand);"></i> ${s}</div>`).join('')}
+                </div>
+                <div style="margin-top:20px; display:flex; gap:10px; align-items:flex-start; padding:10px; background:var(--brand-pale); border-radius:8px;">
+                    <input type="checkbox" id="staffVerify" style="margin-top:4px;">
+                    <label for="staffVerify" style="font-size:12px; color:var(--brand); font-weight:700;">
+                        I have verified these medicines against the patient's symptoms and am responsible for dispensing.
+                    </label>
+                </div>
+            `}
+        `;
+        
+        const confirmBtn = document.getElementById('confirmDispenseBtn');
+        if(isBlocked) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.innerText = "Acknowledge & Clear Queue (Referred)";
+        } else {
+            confirmBtn.disabled = false;
+            confirmBtn.style.opacity = '1';
+            confirmBtn.innerText = "Confirm Dispensing & Log";
+        }
+        
+        modal.style.display = 'flex';
+    }
+
+    function openExpiryUpdateModal(name, currentDate) {
+        document.getElementById('eItemName').value = name;
+        document.getElementById('eItemNameDisplay').innerText = name;
+        document.getElementById('expiryModal').style.display = 'flex';
+    }
+
+    function closeExpiryModal() {
+        document.getElementById('expiryModal').style.display = 'none';
+    }
+
+    async function submitExpiryUpdate() {
+        const item_name = document.getElementById('eItemName').value;
+        const expiry_date = document.getElementById('eNewDate').value;
+        
+        if(!expiry_date) return alert("Please select a date.");
+        
+        try {
+            const res = await fetch('/api/phc/update-expiry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_name, expiry_date })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            if(data.success) {
+                alert(data.message);
+                location.reload();
+            }
+        } catch (err) {
+            alert("Error updating expiry: " + err.message);
+        }
+    }
+
+    function closeDispenseModal() {
+        document.getElementById('dispenseModal').style.display = 'none';
+    }
+
+    async function confirmDispense() {
+        if(!activeLogId) return;
+        
+        const verifyCheckbox = document.getElementById('staffVerify');
+        // Only require checkbox if it's not a high risk patient (where checkbox doesn't exist)
+        if(verifyCheckbox && !verifyCheckbox.checked) {
+            alert("SAFETY ALERT: You must check the verification box before dispensing.");
+            return;
+        }
+        
+        try {
+            const btn = document.getElementById('confirmDispenseBtn');
+            const originalText = btn.innerText;
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+            
+            const res = await fetch('/api/phc/confirm-dispense', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ log_id: activeLogId, medicines: activeSuggestions })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            
+            if(data.success) {
+                alert("Dispensing Logged. Patient cleared from queue.");
+                closeDispenseModal();
+                location.reload();
+            } else {
+                alert("Error: " + data.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        } catch (err) {
+            alert("Connection error: " + err.message);
+            const btn = document.getElementById('confirmDispenseBtn');
+            if (btn) {
+                btn.innerText = "Confirm Dispensing & Log";
+                btn.disabled = false;
+            }
+        }
+    }
+
     function openWasteModal() {
         document.getElementById('wasteModal').style.display = 'flex';
     }
     function closeWasteModal() {
         document.getElementById('wasteModal').style.display = 'none';
     }
+    
+    function openStockModal() {
+        document.getElementById('stockModal').style.display = 'flex';
+    }
+    function closeStockModal() {
+        document.getElementById('stockModal').style.display = 'none';
+    }
+
+    async function submitStockUpdate() {
+        const item_name = document.getElementById('sItemName').value;
+        const qty = document.getElementById('sQty').value;
+        const action = document.getElementById('sAction').value;
+        
+        if(!item_name || !qty) return alert("Please fill all fields.");
+        
+        try {
+            const res = await fetch('/api/phc/update-stock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_name, qty, action })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            if(data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert("Error: " + data.message);
+            }
+        } catch (err) {
+            alert("Error updating stock: " + err.message);
+        }
+    }
+
     async function submitWaste() {
         const bag_color = document.getElementById('wBagColor').value;
         const weight = document.getElementById('wWeight').value;
         
         if(!weight) return alert("Please enter weight.");
         
-        const res = await fetch('/api/phc/log-waste', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bag_color, weight })
-        });
-        const data = await res.json();
-        if(data.success) {
-            alert(data.message);
-            location.reload();
+        try {
+            const res = await fetch('/api/phc/log-waste', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bag_color, weight })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            if(data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert("Error: " + data.message);
+            }
+        } catch (err) {
+            alert("Error logging waste: " + err.message);
+        }
+    }
+
+    async function approveTransfer(referralId, btn) {
+        if(!confirm("Approve transfer? This will immediately deduct 50 units of this item from your active inventory.")) return;
+        
+        const originalText = btn.innerText;
+        btn.innerText = "Processing...";
+        btn.disabled = true;
+        
+        try {
+            const res = await fetch('/api/phc/approve-transfer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ referral_id: referralId })
+            });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            
+            if(data.success) {
+                alert("TRANSFER APPROVED: " + data.message + ". Your inventory and logs have been automatically updated.");
+                location.reload();
+            } else {
+                alert("Error: " + data.message);
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        } catch (err) {
+            alert("Error approving transfer: " + err.message);
+            btn.innerText = originalText;
+            btn.disabled = false;
         }
     }
 </script>

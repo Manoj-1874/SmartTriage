@@ -117,11 +117,16 @@
 
 <script>
     async function verifyMPR() {
-        const res = await fetch('/api/phc/verify-mpr', { method: 'POST' });
-        const data = await res.json();
-        if(data.success) {
-            alert("MPR Verified! District Command Center notified.");
-            location.href = "/phc/pharmacist/dashboard";
+        try {
+            const res = await fetch('/api/phc/verify-mpr', { method: 'POST' });
+            if (!res.ok) throw new Error("Server error: " + res.statusText);
+            const data = await res.json();
+            if(data.success) {
+                alert("MPR Verified! District Command Center notified.");
+                location.href = "/phc/pharmacist/dashboard";
+            }
+        } catch (err) {
+            alert("Error verifying MPR: " + err.message);
         }
     }
 </script>

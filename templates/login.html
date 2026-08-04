@@ -1032,6 +1032,13 @@
                             </label>
                         </div>
                         <div class="role-opt">
+                            <input type="radio" name="role" id="rolePharmacist" value="pharmacist">
+                            <label for="rolePharmacist">
+                                <i class="fas fa-pills"></i>
+                                <span>Pharmacist</span>
+                            </label>
+                        </div>
+                        <div class="role-opt">
                             <input type="radio" name="role" id="roleAmbulanceDriver" value="ambulance_driver">
                             <label for="roleAmbulanceDriver">
                                 <i class="fas fa-ambulance"></i>
@@ -1191,6 +1198,7 @@ function updateRole(role) {
         doctor:     { icon: 'fas fa-user-md', title: 'Doctor Portal', sub: 'Sign in to access your doctor dashboard' },
         ddhs_admin: { icon: 'fas fa-user-shield', title: 'DDHS Command Portal', sub: 'Monitor PHC workforce and live escalations' },
         phc_nurse:  { icon: 'fas fa-user-nurse', title: 'PHC Nurse Portal', sub: 'Track PHC workflow and patient queue' },
+        pharmacist: { icon: 'fas fa-pills', title: 'Pharmacist Portal', sub: 'Manage inventory and prescriptions' },
         ambulance_driver: { icon: 'fas fa-ambulance', title: 'Driver Portal', sub: 'Access real-time navigation and dispatches' }
     };
 

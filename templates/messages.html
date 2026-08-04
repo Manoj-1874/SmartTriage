@@ -457,8 +457,17 @@
                     </div>
                     <div class="contact-info">
                         <div class="contact-name">{{ contact.fullname }}</div>
-                        <div class="contact-role">{{ contact.specialization if contact.role == 'doctor' else 'Patient'
-                            }}</div>
+                                <div class="contact-role">
+                                    {% if contact.role == 'doctor' %}
+                                        Dr. {{ contact.specialization or 'General' }}
+                                    {% elif contact.role == 'phc_nurse' %}
+                                        PHC Nurse
+                                    {% elif contact.role == 'ddhs_admin' %}
+                                        Administrator
+                                    {% else %}
+                                        Patient
+                                    {% endif %}
+                                </div>
                     </div>
                     {% if contact.unread_count > 0 %}
                     <div class="contact-badge">{{ contact.unread_count }}</div>

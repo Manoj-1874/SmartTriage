@@ -822,3 +822,24 @@ select:disabled {
         padding: 10px 8px;
     }
 }
+
+/* ──────────────────────────────────────────────────────────────
+   UNIFIED SIDEBAR CSS (Imported from phc_nurse_base)
+   ────────────────────────────────────────────────────────────── */
+.s-brand { padding: 30px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+.s-logo-box { width: 38px; height: 38px; background: var(--brand); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 18px; }
+.s-brand-name { font-weight: 800; font-size: 18px; color: var(--text-head); line-height: 1; }
+.s-brand-tag { font-size: 10px; font-weight: 700; color: var(--brand); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; }
+.s-user { padding: 20px 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--border); }
+.s-ava { width: 40px; height: 40px; border-radius: 12px; background: var(--brand-pale, rgba(11,155,122,0.1)); color: var(--brand); display: flex; align-items: center; justify-content: center; font-size: 18px; position: relative; }
+.s-ava-dot { position: absolute; bottom: -2px; right: -2px; width: 12px; height: 12px; background: #10B981; border: 2px solid #fff; border-radius: 50%; }
+.s-uname { font-weight: 700; font-size: 14px; color: var(--text-head); }
+.s-urole { font-size: 12px; color: var(--text-muted); margin-top: 2px; text-transform: capitalize; }
+.s-nav { padding: 20px 16px; flex: 1; overflow-y: auto; }
+.s-group { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin: 20px 0 10px 12px; }
+.s-link { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; color: var(--text-muted); text-decoration: none; margin-bottom: 4px; font-weight: 600; transition: all 0.2s; font-size: 14px; }
+.s-icon { width: 20px; display: flex; justify-content: center; }
+.s-link:hover { background: var(--brand-pale, rgba(11,155,122,0.05)); color: var(--brand); }
+.s-link.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(11, 155, 122, 0.25); }
+.s-link.active .s-icon { color: #fff; }
+.s-toggle { display: none; }

@@ -1207,64 +1207,7 @@
 <body>
   <div class="shell">
     <!-- ══ SIDEBAR ══ -->
-    <aside class="sidebar" id="sidebar">
-      <div class="s-brand">
-        <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-        <div class="s-brand-text">
-          <div class="s-brand-name">PriorityMed</div>
-          <div class="s-brand-tag">Nurse Portal</div>
-        </div>
-      </div>
-      <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
-      
-      <div class="s-user">
-        <div class="s-ava">
-          <i class="fas fa-user-nurse"></i>
-          <div class="s-ava-dot"></div>
-        </div>
-        <div class="s-user-text">
-          <div class="s-uname">{{ user.fullname if user else 'Nurse Console' }}</div>
-          <div class="s-urole">PHC Nurse</div>
-        </div>
-      </div>
-
-      <nav class="s-nav">
-        <div class="s-group">Navigation</div>
-        <a href="{{ url_for('phc_nurse_dashboard') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-th-large"></i></div>
-          <span class="s-label">Dashboard</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_patients') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-users"></i></div>
-          <span class="s-label">Patients</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_intake') }}" class="s-link active">
-          <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
-          <span class="s-label">Patient Intake</span>
-        </a>
-        <a href="{{ url_for('phc_nurse_reports') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-chart-bar"></i></div>
-          <span class="s-label">Reports</span>
-        </a>
-
-        <div class="s-group">Support</div>
-        <a href="/messages" class="s-link">
-          <div class="s-icon"><i class="fas fa-comments"></i></div>
-          <span class="s-label">Messages</span>
-        </a>
-        <a href="{{ url_for('logout') }}" class="s-link">
-          <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-          <span class="s-label">Sign Out</span>
-        </a>
-      </nav>
-
-      <div class="s-footer">
-        <div class="s-status">
-          <div class="s-dot"></div>
-          <span class="s-status-txt">All Systems Operational</span>
-        </div>
-      </div>
-    </aside>
+    {% include 'sidebar.html' %}
 
     <div class="main-shell" id="mainContent">
       <div class="page-wrap">

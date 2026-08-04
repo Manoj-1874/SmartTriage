@@ -2118,74 +2118,7 @@
   <div class="shell">
 
     <!-- ══ SIDEBAR ══ -->
-    <aside class="sidebar" id="sidebar">
-      <div class="s-brand">
-        <div class="s-logo-box"><i class="fas fa-heartbeat"></i></div>
-        <div class="s-brand-text">
-          <div class="s-brand-name">PriorityMed</div>
-          <div class="s-brand-tag">Patient Portal</div>
-        </div>
-      </div>
-      <button class="s-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
-      <div class="s-user">
-        <div class="s-ava">
-          <i class="fas fa-user"></i>
-          <div class="s-ava-dot"></div>
-        </div>
-        <div class="s-user-text">
-          <div class="s-uname">{{ user.fullname if user else 'Patient' }}</div>
-          <div class="s-urole">Patient Account</div>
-        </div>
-      </div>
-      <nav class="s-nav">
-        <div class="s-group">Overview</div>
-        {% set u = current_user if current_user and current_user.is_authenticated else (user if user else None) %}
-        <a href="{% if u and u.role == 'doctor' %}/doctor/dashboard{% else %}/patient/dashboard{% endif %}" class="s-link">
-          <div class="s-icon"><i class="fas fa-th-large"></i></div>
-          <span class="s-label">Dashboard</span>
-        </a>
-        {% if not u or u.role != 'doctor' %}
-        <a href="/health-report" class="s-link">
-          <div class="s-icon"><i class="fas fa-chart-line"></i></div>
-          <span class="s-label">Health Progress</span>
-        </a>
-        {% endif %}
-        {% if u and u.role == 'doctor' %}
-        <a href="/patients" class="s-link">
-          <div class="s-icon"><i class="fas fa-user-injured"></i></div>
-          <span class="s-label">Patients</span>
-        </a>
-        <a href="/doctor/reports" class="s-link">
-          <div class="s-icon"><i class="far fa-file-alt"></i></div>
-          <span class="s-label">Reports</span>
-        </a>
-        {% endif %}
-        <div class="s-group">My Care</div>
-        <a href="/appointments" class="s-link">
-          <div class="s-icon"><i class="far fa-calendar-alt"></i></div>
-          <span class="s-label">Appointments</span>
-        </a>
-        <a href="/doctors" class="s-link">
-          <div class="s-icon"><i class="fas fa-user-md"></i></div>
-          <span class="s-label">Find Doctors</span>
-        </a>
-        <div class="s-group">Support</div>
-        <a href="/messages" class="s-link">
-          <div class="s-icon"><i class="fas fa-comments"></i></div>
-          <span class="s-label">Messages</span>
-        </a>
-        <a href="/logout" class="s-link">
-          <div class="s-icon"><i class="fas fa-sign-out-alt"></i></div>
-          <span class="s-label">Sign Out</span>
-        </a>
-      </nav>
-      <div class="s-footer">
-        <div class="s-status">
-          <div class="s-dot"></div>
-          <span class="s-status-txt">All Systems Operational</span>
-        </div>
-      </div>
-    </aside>
+{% include 'sidebar.html' %}
 
     <!-- ══ MAIN ══ -->
     <div class="main" id="mainContent">
