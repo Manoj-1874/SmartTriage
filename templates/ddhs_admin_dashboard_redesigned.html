@@ -225,12 +225,33 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+    const districtCenters = {
+        'Trichy': [10.7905, 78.7047],
+        'Karur': [10.9601, 78.0766],
+        'Chennai': [13.0827, 80.2707],
+        'Coimbatore': [11.0168, 76.9558],
+        'Madurai': [9.9252, 78.1198],
+        'Salem': [11.6643, 78.1460],
+        'Tirunelveli': [8.7139, 77.7567],
+        'Erode': [11.3410, 77.7172],
+        'Vellore': [12.9165, 79.1325],
+        'Thoothukudi': [8.7642, 78.1348],
+        'Dindigul': [10.3673, 77.9803],
+        'Thanjavur': [10.7867, 79.1378],
+        'Ranipet': [12.9275, 79.3308],
+        'Kanchipuram': [12.8342, 79.7036],
+        'Chengalpattu': [12.6819, 79.9788],
+        'Tiruppur': [11.1085, 77.3411]
+    };
+    const currentDistrict = "{{ current_user.district }}";
+    const mapCenter = districtCenters[currentDistrict] || [10.79, 78.70];
+
     // Initialize Fleet Map with Force-Resize Logic
     let fleetMap;
     function initFleetMap() {
         const mapContainer = document.getElementById('fleetMap');
         if (mapContainer && !fleetMap) {
-            fleetMap = L.map('fleetMap', { zoomControl: false }).setView([10.79, 78.70], 11);
+            fleetMap = L.map('fleetMap', { zoomControl: false }).setView(mapCenter, 11);
             L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(fleetMap);
             
             // CRITICAL: Force Leaflet to recalculate container size
@@ -250,14 +271,22 @@
             {
                 id: "{{ amb.id }}",
                 num: "{{ amb.ambulance_number }}",
-                lat: {{ amb.location_lat if amb.location_lat else 10.79 }},
-                lon: {{ amb.location_lon if amb.location_lon else 78.70 }},
+                lat: {{ amb.location_lat if amb.location_lat is not none else 'null' }},
+                lon: {{ amb.location_lon if amb.location_lon is not none else 'null' }},
                 status: "{{ amb.status }}"
-            },
+            }{% if not loop.last %},{% endif %}
             {% endfor %}
         ];
 
-        activeAmbulances.forEach(amb => {
+        activeAmbulances.forEach((amb, index) => {
+            // Apply jitter if lat/lon is missing so they don't overlap completely
+            if (amb.lat === null || amb.lon === null) {
+                const radius = 0.05; // 5km spread
+                const angle = (index / activeAmbulances.length) * Math.PI * 2;
+                amb.lat = mapCenter[0] + radius * Math.cos(angle) + (Math.random() * 0.02 - 0.01);
+                amb.lon = mapCenter[1] + radius * Math.sin(angle) + (Math.random() * 0.02 - 0.01);
+            }
+            
             const color = amb.status === 'available' ? '#22c55e' : '#3b82f6';
             if (ambulanceMarkers[amb.id]) {
                 ambulanceMarkers[amb.id].setLatLng([amb.lat, amb.lon]);

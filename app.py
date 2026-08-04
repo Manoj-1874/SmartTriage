@@ -2863,8 +2863,8 @@ def ddhs_admin_dashboard():
         WHERE f.district = ? AND i.quantity < i.min_threshold
     ''', (current_user.district,)).fetchall()
 
-    # Fetch active ambulances for the fleet monitor
-    ambulances_active = conn.execute("SELECT * FROM ambulances WHERE status = 'available' AND district = ?", (current_user.district,)).fetchall()
+    # Fetch all ambulances for the fleet monitor
+    ambulances_active = conn.execute("SELECT * FROM ambulances WHERE district = ?", (current_user.district,)).fetchall()
 
     current_time = datetime.utcnow().strftime('%H:%M:%S')
     conn.close()
@@ -3874,9 +3874,9 @@ def ddhs_admin_staff_assignment():
     unassigned_staff = conn.execute("""
         SELECT id, fullname, email, phone, role, specialization, license, experience, created_at
         FROM users
-        WHERE role IN ('phc_nurse', 'doctor') AND phc_id IS NULL
+        WHERE role IN ('phc_nurse', 'doctor') AND phc_id IS NULL AND district = ?
         ORDER BY created_at DESC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
     unassigned_staff = [dict(row) for row in unassigned_staff]
 
     # Get assigned staff with their centers
@@ -3884,17 +3884,18 @@ def ddhs_admin_staff_assignment():
         SELECT u.id, u.fullname, u.email, u.phone, u.role, u.phc_id, pf.name as center_name, u.created_at
         FROM users u
         LEFT JOIN phc_facilities pf ON u.phc_id = pf.id
-        WHERE u.role IN ('phc_nurse', 'doctor') AND u.phc_id IS NOT NULL
+        WHERE u.role IN ('phc_nurse', 'doctor') AND u.phc_id IS NOT NULL AND u.district = ?
         ORDER BY u.created_at DESC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
     assigned_staff = [dict(row) for row in assigned_staff]
 
     # Get all available PHC centers
     centers = conn.execute("""
         SELECT id, name, location, contact
         FROM phc_facilities
+        WHERE district = ? AND status = 'ACTIVE'
         ORDER BY name ASC
-    """).fetchall()
+    """, (current_user.district,)).fetchall()
     centers = [dict(row) for row in centers]
 
     conn.close()
@@ -4500,17 +4501,16 @@ def ddhs_admin_audit_log():
 def ddhs_admin_attendance():
     """DDHS Admin - Staff attendance tracking and management"""
     if current_user.role != 'ddhs_admin':
-        flash('Access denied - this page is for DDHS admins only')
-        return redirect(url_for('index'))
+        return f"Access denied - this page is for DDHS admins only (Role: {current_user.role})", 403
+
+    conn = get_db_connection()
+    c = conn.cursor()
+
+    # Get all PHC centers for filtering
+    centers_rows = c.execute('SELECT id, name FROM phc_facilities ORDER BY name').fetchall()
+    centers = [dict(row) for row in centers_rows]
 
     try:
-        conn = get_db_connection()
-        c = conn.cursor()
-
-        # Get all PHC centers for filtering
-        centers_rows = c.execute('SELECT id, name FROM phc_facilities ORDER BY name').fetchall()
-        centers = [dict(row) for row in centers_rows]
-
         # Get staff list with attendance and leave status
         today = datetime.now().strftime('%Y-%m-%d')
         center_id = request.args.get('center', '')
@@ -4602,8 +4602,8 @@ def ddhs_admin_attendance():
                              user=current_user)
     except Exception as e:
         app.logger.error(f"Error in ddhs_admin_attendance: {str(e)}", exc_info=True)
-        flash('Error loading attendance data')
-        return redirect(url_for('ddhs_admin_dashboard'))
+        import traceback
+        return f"<h1>Error loading attendance data</h1><pre>{traceback.format_exc()}</pre>", 500
 
 
 # Ambulance Management

@@ -16,6 +16,7 @@ models/
 # IDE and OS
 .vscode/
 .idea/
+.specstory/
 .DS_Store
 *.swp
 *.swo

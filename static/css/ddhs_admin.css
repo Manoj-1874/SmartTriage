@@ -118,33 +118,35 @@ a:hover {
     background-color: var(--canvas);
 }
 
-.ddhs-sidebar {
+.sidebar {
     width: var(--sidebar-width);
     background-color: var(--base);
     border-right: 1px solid var(--border);
-    padding: 24px 20px;
+    padding: 0;
     position: fixed;
     left: 0;
     top: 0;
     height: 100vh;
     overflow-y: auto;
     box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
 }
 
-.ddhs-sidebar::-webkit-scrollbar {
+.sidebar::-webkit-scrollbar {
     width: 6px;
 }
 
-.ddhs-sidebar::-webkit-scrollbar-track {
+.sidebar::-webkit-scrollbar-track {
     background: transparent;
 }
 
-.ddhs-sidebar::-webkit-scrollbar-thumb {
+.sidebar::-webkit-scrollbar-thumb {
     background: var(--border);
     border-radius: 3px;
 }
 
-.ddhs-sidebar::-webkit-scrollbar-thumb:hover {
+.sidebar::-webkit-scrollbar-thumb:hover {
     background: var(--border-med);
 }
 

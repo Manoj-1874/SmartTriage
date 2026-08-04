@@ -8,6 +8,7 @@
         {% elif user.role == 'phc_nurse' %}Nurse Portal
         {% elif user.role == 'pharmacist' %}Pharmacist Command
         {% elif user.role == 'patient' %}Patient Portal
+        {% elif user.role == 'ddhs_admin' %}DDHS Command
         {% else %}Staff Portal{% endif %}
       </div>
     </div>
@@ -90,6 +91,44 @@
     </a>
     {% endif %}
 
+    {% if user.role == 'ddhs_admin' %}
+    <div class="s-group">District Command</div>
+    <a href="/ddhs-admin/dashboard" class="s-link {% if request.path == '/ddhs-admin/dashboard' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-satellite-dish"></i></div>
+      <span class="s-label">District Overview</span>
+    </a>
+    <a href="/ddhs-admin/health-centers" class="s-link {% if request.path == '/ddhs-admin/health-centers' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-hospital"></i></div>
+      <span class="s-label">Health Centers</span>
+    </a>
+    <a href="/ddhs-admin/staff" class="s-link {% if request.path == '/ddhs-admin/staff' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-user-md"></i></div>
+      <span class="s-label">Medical Staff</span>
+    </a>
+    <a href="/ddhs-admin/staff-assignment" class="s-link {% if request.path == '/ddhs-admin/staff-assignment' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-people-arrows"></i></div>
+      <span class="s-label">Staff Assignments</span>
+    </a>
+    <a href="/ddhs-admin/resources" class="s-link {% if request.path == '/ddhs-admin/resources' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-boxes"></i></div>
+      <span class="s-label">Resources & Assets</span>
+    </a>
+    
+    <div class="s-group">Operations & Reports</div>
+    <a href="/ddhs-admin/disease-surveillance" class="s-link {% if request.path == '/ddhs-admin/disease-surveillance' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-virus"></i></div>
+      <span class="s-label">Disease Surveillance</span>
+    </a>
+    <a href="/ddhs-admin/reports" class="s-link {% if request.path == '/ddhs-admin/reports' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-chart-line"></i></div>
+      <span class="s-label">MPR / Reports</span>
+    </a>
+    <a href="/ddhs-admin/attendance" class="s-link {% if request.path == '/ddhs-admin/attendance' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-clock"></i></div>
+      <span class="s-label">District Attendance</span>
+    </a>
+    {% endif %}
+
     {% if user.role == 'patient' %}
     <div class="s-group">My Care</div>
     <a href="/patient/dashboard" class="s-link {% if request.path == '/patient/dashboard' %}active{% endif %}">
@@ -110,7 +149,7 @@
     </a>
     {% endif %}
 
-    {% if user.role != 'patient' %}
+    {% if user.role not in ['patient', 'ddhs_admin'] %}
     <div class="s-group">HR & Ops</div>
     <a href="/phc/attendance" class="s-link {% if request.path == '/phc/attendance' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-user-check"></i></div>
