@@ -100,43 +100,98 @@
 
 {% block content %}
 
-<!-- Fleet Stats -->
-</div>
-
 <!-- Search & Filter -->
-<div class="section-card">
-    <div class="section-card-header">
+<div class="section-card" style="margin-bottom: 24px;">
+    <div class="section-header">
         <h3>🔍 Search & Filter</h3>
     </div>
-    <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px; padding: 20px;">
-        <div>
-            <input type="text" id="ambulanceSearchInput" placeholder="Search by ambulance number or driver..."
-                   style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
+    <div class="section-body">
+        <div style="display: grid; grid-template-columns: 2fr 1fr auto; gap: 15px;">
+            <div>
+                <input type="text" id="ambulanceSearchInput" placeholder="Search by ambulance number or driver..."
+                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
+            </div>
+            <div>
+                <select id="ambulanceStatusFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
+                    <option value="">All Statuses</option>
+                    <option value="available">Available</option>
+                    <option value="in_transit">In Transit</option>
+                    <option value="maintenance">Maintenance</option>
+                </select>
+            </div>
+            <button onclick="performAmbulanceSearch()" class="btn btn-primary">
+                Search
+            </button>
         </div>
-        <div>
-            <select id="ambulanceStatusFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: var(--base); color: var(--text-head);">
-                <option value="">All Statuses</option>
-                <option value="available">Available</option>
-                <option value="in_transit">In Transit</option>
-                <option value="maintenance">Maintenance</option>
-            </select>
-        </div>
-        <button onclick="performAmbulanceSearch()" style="padding: 10px 20px; background: var(--brand); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-            Search
-        </button>
     </div>
 </div>
 
-<!-- Map View -->
-<div class="section-card">
-    <div class="section-header">
-        <h3><i class="fas fa-map"></i> Live Tracking Map</h3>
+<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-bottom: 24px;">
+    <!-- Map View -->
+    <div class="section-card" style="margin: 0;">
+        <div class="section-header">
+            <h3><i class="fas fa-map"></i> Live Tracking Map</h3>
+        </div>
+        <div class="section-body">
+            <div id="ambulance-map"></div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
+                <i class="fas fa-info-circle"></i> Red pins: Available | Blue pins: In Transit | Gray pins: Maintenance
+            </p>
+        </div>
     </div>
-    <div class="section-body">
-        <div id="ambulance-map"></div>
-        <p style="font-size: 12px; color: var(--text-muted); margin-top: 12px;">
-            <i class="fas fa-info-circle"></i> Red pins: Available | Blue pins: In Transit | Gray pins: Maintenance
-        </p>
+
+    <!-- Ambulance Fleet -->
+    <div class="section-card" style="margin: 0; max-height: 500px; overflow-y: auto;">
+        <div class="section-header" style="position: sticky; top: 0; background: var(--base); z-index: 10;">
+            <h3><i class="fas fa-ambulance"></i> Ambulance Fleet</h3>
+            <div class="section-header-actions">
+                <button class="btn btn-primary btn-sm" onclick="openAddAmbulanceModal()">
+                    <i class="fas fa-plus"></i> Add Ambulance
+                </button>
+            </div>
+        </div>
+        <div class="section-body">
+            {% if ambulances %}
+                {% for ambulance in ambulances %}
+                <div class="ambulance-card" data-status="{{ ambulance.status }}" data-number="{{ ambulance.ambulance_number }}" data-driver="{{ ambulance.driver_name or '' }}">
+                    <div class="ambulance-icon">
+                        <i class="fas fa-ambulance"></i>
+                    </div>
+                    <div class="ambulance-info">
+                        <div class="ambulance-number">{{ ambulance.ambulance_number }}</div>
+                        <div class="ambulance-driver">
+                            <i class="fas fa-user"></i> {{ ambulance.driver_name or 'No Driver' }} 
+                        </div>
+                    </div>
+                    <div class="ambulance-status">
+                        {% if ambulance.status == 'available' %}
+                            <span class="status-badge active"><i class="fas fa-check-circle"></i> Available</span>
+                        {% elif ambulance.status == 'in_transit' %}
+                            <span class="status-badge warning"><i class="fas fa-route"></i> In Transit</span>
+                        {% elif ambulance.status == 'maintenance' %}
+                            <span class="status-badge inactive"><i class="fas fa-wrench"></i> Maintenance</span>
+                        {% else %}
+                            <span class="status-badge">{{ ambulance.status|title }}</span>
+                        {% endif %}
+                        
+                        <div style="margin-top: 8px; display: flex; gap: 4px;">
+                            <button class="btn btn-secondary btn-sm" onclick="viewAmbulanceById({{ ambulance.id }})">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="editAmbulanceById({{ ambulance.id }})">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <div style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+                    <i class="fas fa-ambulance" style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;"></i>
+                    <p>No ambulances found in your district.</p>
+                </div>
+            {% endif %}
+        </div>
     </div>
 </div>
 
@@ -185,69 +240,6 @@
 </div>
 {% endif %}
 
-<!-- Ambulance Fleet -->
-<div class="section-card">
-    <div class="section-header">
-        <h3><i class="fas fa-ambulance"></i> Ambulance Fleet</h3>
-        <div class="section-header-actions">
-            <button class="btn btn-primary btn-sm" onclick="openAddAmbulanceModal()">
-                <i class="fas fa-plus"></i> Add Ambulance
-            </button>
-        </div>
-    </div>
-    <div class="section-body">
-        {% if ambulances %}
-            {% for ambulance in ambulances %}
-            <div class="ambulance-card" data-number="{{ ambulance.ambulance_number|lower }}" data-driver="{{ (ambulance.driver_name or 'unassigned')|lower }}" data-status="{{ ambulance.status }}">
-                <div class="ambulance-icon">
-                    <i class="fas fa-ambulance"></i>
-                </div>
-                <div class="ambulance-info">
-                    <div class="ambulance-number">{{ ambulance.ambulance_number }}</div>
-                    <div class="ambulance-driver">
-                        <i class="fas fa-user"></i> {{ ambulance.driver_name or 'Unassigned' }}
-                    </div>
-                </div>
-                <div class="ambulance-status">
-                    <div style="margin-bottom: 8px;">
-                        {% if ambulance.status == 'available' %}
-                            <span class="status-badge active">
-                                <i class="fas fa-check-circle"></i> Available
-                            </span>
-                        {% elif ambulance.status == 'in_transit' %}
-                            <span class="status-badge" style="background: var(--info-bg); color: var(--info);">
-                                <i class="fas fa-spinner"></i> In Transit
-                            </span>
-                        {% else %}
-                            <span class="status-badge absent">
-                                <i class="fas fa-tools"></i> Maintenance
-                            </span>
-                        {% endif %}
-                    </div>
-                    <div style="display: flex; gap: 8px;">
-                        <button class="btn btn-secondary btn-sm" onclick="viewAmbulanceById({{ ambulance.id }})">
-                            <i class="fas fa-eye"></i> View
-                        </button>
-                        <button class="btn btn-primary btn-sm" onclick="editAmbulanceById({{ ambulance.id }})">
-                            <i class="fas fa-edit"></i> Edit
-                        </button>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="text-center" style="padding: 40px;">
-                <p style="color: var(--text-muted);">No ambulances in fleet</p>
-                <button class="btn btn-primary mt-3" onclick="openAddAmbulanceModal()">
-                    <i class="fas fa-plus"></i> Add First Ambulance
-                </button>
-            </div>
-        {% endif %}
-    </div>
-</div>
-
-</div>
-
 <!-- View Ambulance Modal -->
 <div id="viewAmbulanceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
     <div style="background: var(--base); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
@@ -292,6 +284,27 @@
     </div>
 </div>
 
+<!-- Add Ambulance Modal -->
+<div id="addAmbulanceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center;">
+    <div style="background: var(--base); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; color: var(--brand);">Add New Ambulance</h3>
+            <span onclick="closeModals()" style="cursor: pointer; font-size: 24px;">&times;</span>
+        </div>
+        <form id="addAmbulanceForm">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Ambulance Number</label>
+                <input type="text" id="addAmbNumber" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-head);" required>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 600;">Vehicle Type</label>
+                <input type="text" id="addAmbType" style="width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text-head);">
+            </div>
+            <button type="submit" style="width: 100%; padding: 12px; background: var(--brand); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Add Ambulance</button>
+        </form>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -322,6 +335,33 @@ document.getElementById('ambulanceStatusFilter').addEventListener('change', perf
 function closeModals() {
     document.getElementById('viewAmbulanceModal').style.display = 'none';
     document.getElementById('editAmbulanceModal').style.display = 'none';
+    document.getElementById('addAmbulanceModal').style.display = 'none';
+}
+
+function openAddAmbulanceModal() {
+    document.getElementById('addAmbulanceForm').reset();
+    document.getElementById('addAmbulanceModal').style.display = 'flex';
+}
+
+async function completeAllocation(allocationId) {
+    if (!confirm('Mark this allocation as complete and set ambulance to available?')) return;
+    
+    try {
+        const res = await fetch('/api/driver/complete_trip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ allocation_id: allocationId })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('Allocation completed successfully.');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
 }
 
 function viewAmbulanceById(id) {
@@ -376,15 +416,47 @@ document.getElementById('editAmbulanceForm').addEventListener('submit', async (e
     }
 });
 
+document.getElementById('addAmbulanceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+        ambulance_number: document.getElementById('addAmbNumber').value,
+        vehicle_type: document.getElementById('addAmbType').value,
+        district: '{{ user.district }}'
+    };
+
+    try {
+        const res = await fetch('/api/ambulances/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success || res.ok) {
+            alert('Ambulance added successfully');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    } catch (err) {
+        alert('Network error: ' + err.message);
+    }
+});
+
 // Initialize map... (Existing code follows)
 const mapFocus = {{ map_focus|tojson }};
-const map = L.map('ambulance-map').setView([mapFocus.lat, mapFocus.lon], mapFocus.zoom);
+const mapCenter = [mapFocus.lat, mapFocus.lon];
+const map = L.map('ambulance-map').setView(mapCenter, mapFocus.zoom);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors',
     maxZoom: 19
 }).addTo(map);
 
-const districtBoundary = L.circle([mapFocus.lat, mapFocus.lon], {
+// CRITICAL: Force Leaflet to recalculate container size inside dynamic grid
+setTimeout(() => {
+    map.invalidateSize();
+}, 500);
+
+const districtBoundary = L.circle(mapCenter, {
     color: 'var(--brand)',
     fillColor: 'var(--brand)',
     fillOpacity: 0.05,
@@ -394,19 +466,28 @@ const districtBoundary = L.circle([mapFocus.lat, mapFocus.lon], {
 
 districtBoundary.bindTooltip("Your Command: {{ user.district }}", {permanent: true, direction: 'top'});
 
-ambulancesData.forEach(ambulance => {
-    if (ambulance.location_lat && ambulance.location_lon) {
-        const color = ambulance.status === 'available' ? 'red' :
-                     ambulance.status === 'in_transit' ? 'blue' : 'gray';
-        L.circleMarker([ambulance.location_lat, ambulance.location_lon], {
-            radius: 10,
-            fillColor: color,
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).bindPopup(`<strong>${ambulance.ambulance_number}</strong><br>Status: ${ambulance.status}`).addTo(map);
+ambulancesData.forEach((ambulance, index) => {
+    let lat = ambulance.location_lat;
+    let lon = ambulance.location_lon;
+    
+    // Apply jitter if lat/lon is missing so they show up on the map
+    if (!lat || !lon) {
+        const radius = 0.05; // spread
+        const angle = (index / ambulancesData.length) * Math.PI * 2;
+        lat = mapCenter[0] + radius * Math.cos(angle) + (Math.random() * 0.02 - 0.01);
+        lon = mapCenter[1] + radius * Math.sin(angle) + (Math.random() * 0.02 - 0.01);
     }
+
+    const color = ambulance.status === 'available' ? 'red' :
+                 ambulance.status === 'in_transit' ? 'blue' : 'gray';
+    L.circleMarker([lat, lon], {
+        radius: 10,
+        fillColor: color,
+        color: '#fff',
+        weight: 2,
+        opacity: 1,
+        fillOpacity: 0.8
+    }).bindPopup(`<strong>${ambulance.ambulance_number}</strong><br>Status: ${ambulance.status}`).addTo(map);
 });
 </script>
 {% endblock %}

@@ -55,14 +55,14 @@
             <div class="filter-group">
                 <label for="report-center">Health Center</label>
                 <select id="report-center">
-                    <option selected>All Centers</option>
+                    <option value="" {% if not request.args.get('center') %}selected{% endif %}>All Centers</option>
                     {% for center in centers %}
-                        <option value="{{ center.id }}">{{ center.name }}</option>
+                        <option value="{{ center.id }}" {% if request.args.get('center') == center.id|string %}selected{% endif %}>{{ center.name }}</option>
                     {% endfor %}
                 </select>
             </div>
             <div style="display: flex; align-items: flex-end; gap: 8px;">
-                <button class="btn btn-primary">
+                <button class="btn btn-primary" onclick="applyFilters()">
                     <i class="fas fa-sync"></i> Generate
                 </button>
                 <button class="btn btn-secondary">
@@ -72,6 +72,18 @@
         </div>
     </div>
 </div>
+
+<script>
+function applyFilters() {
+    const center = document.getElementById('report-center').value;
+    // Redirect with query params
+    let url = window.location.pathname + '?';
+    if (center) {
+        url += 'center=' + center;
+    }
+    window.location.href = url;
+}
+</script>
 
 <!-- Key Metrics -->
 <div class="stats-grid">

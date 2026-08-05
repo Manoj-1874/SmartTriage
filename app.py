@@ -2099,7 +2099,7 @@ def patient_view_report(report_id):
 @login_required
 def api_nurse_get_patient_reports(patient_id):
     """API - Nurse gets all reports for a specific patient at their PHC"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return jsonify({'error': 'Access denied'}), 403
 
     conn = get_db_connection()
@@ -2130,7 +2130,7 @@ def api_nurse_get_patient_reports(patient_id):
 @login_required
 def api_nurse_get_all_reports():
     """API - Get all patient reports for nurse's PHC with filtering"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return jsonify({'error': 'Access denied'}), 403
 
     risk_filter = request.args.get('risk', 'all')  # all, low, medium, high, critical
@@ -2212,27 +2212,44 @@ def doctor_dashboard():
         flash('Access denied - this page is for doctors only')
         return redirect(url_for('index'))
 
-    stats = get_dashboard_stats()
     conn = get_db_connection()
 
-    # Regular doctor sees ONLY patients they have appointments with
+    # Get doctor's total patients
+    total_patients_row = conn.execute("SELECT COUNT(DISTINCT patient_id) as count FROM appointments WHERE doctor_id = ?", (current_user.id,)).fetchone()
+    total_patients = total_patients_row['count'] if total_patients_row else 0
+    
+    # Get upcoming appointments count
+    upcoming_appointments_row = conn.execute("SELECT COUNT(*) as count FROM appointments WHERE doctor_id = ? AND status = 'Pending'", (current_user.id,)).fetchone()
+    upcoming_appointments = upcoming_appointments_row['count'] if upcoming_appointments_row else 0
+
+    stats = {
+        'total': total_patients,
+        'appointments': upcoming_appointments
+    }
+
+    # Fetch appointments list
+    appointments = conn.execute("""
+        SELECT * FROM appointments
+        WHERE doctor_id = ? AND status != 'Completed'
+        ORDER BY appointment_date ASC, appointment_time ASC LIMIT 5
+    """, (current_user.id,)).fetchall()
+
+    # Recent patient logs
     patients = conn.execute("""
-        SELECT DISTINCT pl.* FROM patient_logs pl
+        SELECT pl.*, u.fullname as patient_name 
+        FROM patient_logs pl
         INNER JOIN appointments a ON a.patient_id = pl.user_id
+        INNER JOIN users u ON pl.user_id = u.id
         WHERE a.doctor_id = ?
         ORDER BY pl.timestamp DESC LIMIT 10
     """, (current_user.id,)).fetchall()
 
-    latest_patient = conn.execute("""
-        SELECT pl.* FROM patient_logs pl
-        INNER JOIN appointments a ON a.patient_id = pl.user_id
-        WHERE a.doctor_id = ?
-        ORDER BY pl.timestamp DESC LIMIT 1
-    """, (current_user.id,)).fetchone()
+    latest_patient = patients[0] if patients else None
 
     conn.close()
 
     return render_template('doctor_dashboard.html',
+                         appointments=appointments,
                          patients=patients,
                          stats=stats,
                          latest_patient=latest_patient,
@@ -2345,7 +2362,7 @@ def doctor_reports():
 @login_required
 def phc_nurse_appointments():
     """PHC Nurse - View facility appointments"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -2380,7 +2397,7 @@ def phc_nurse_appointments():
 @login_required
 def phc_nurse_patients():
     """PHC Nurse - View facility patients"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -2495,7 +2512,7 @@ def phc_nurse_patients():
 @login_required
 def phc_nurse_reports():
     """PHC Nurse - View facility patient reports"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -2574,7 +2591,7 @@ def phc_nurse_reports():
 @login_required
 def phc_nurse_patient_report(patient_id):
     """View ALL reports/history for a specific patient (NURSE VIEW)"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied')
         return redirect(url_for('index'))
 
@@ -2626,7 +2643,7 @@ def phc_nurse_patient_report(patient_id):
 @login_required
 def phc_nurse_messages():
     """PHC Nurse - Messaging with facility patients"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -2718,6 +2735,15 @@ def approve_user(user_id):
     try:
         with db_manager.get_connection() as conn:
             conn.execute('UPDATE users SET is_approved = ? WHERE id = ?', (approved, user_id))
+            
+            # Auto-assign driver to an unassigned ambulance in their district
+            if approved == 1:
+                user = conn.execute('SELECT role, district FROM users WHERE id = ?', (user_id,)).fetchone()
+                if user and user['role'] == 'ambulance_driver':
+                    free_amb = conn.execute('SELECT id FROM ambulances WHERE current_driver_id IS NULL AND district = ? LIMIT 1', (user['district'],)).fetchone()
+                    if free_amb:
+                        conn.execute('UPDATE ambulances SET current_driver_id = ? WHERE id = ?', (user_id, free_amb['id']))
+
             conn.commit()
             return jsonify({'success': True, 'message': f'User {action}d successfully.'})
     except Exception as e:
@@ -2895,7 +2921,7 @@ def ddhs_admin_dashboard():
 @login_required
 def phc_nurse_maternal_tracking():
     """REAL-WORLD: Automates PICME 2.0 and eliminates duplicate paper registers"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     
     conn = get_db_connection()
@@ -3050,12 +3076,13 @@ def api_village_pulse():
     """REAL-WORLD: Aggregates VHN field entries to show 'Heatmap' of village health"""
     conn = get_db_connection()
     pulse = conn.execute('''
-        SELECT village, COUNT(*) as case_count, 
-        SUM(CASE WHEN risk_score > 7 THEN 1 ELSE 0 END) as critical_cases
-        FROM vhn_field_entries
-        WHERE timestamp >= DATETIME('now', '-7 days')
-        GROUP BY village
-    ''').fetchall()
+        SELECT v.village, COUNT(*) as case_count, 
+        SUM(CASE WHEN v.risk_score > 7 THEN 1 ELSE 0 END) as critical_cases
+        FROM vhn_field_entries v
+        JOIN users u ON v.vhn_id = u.id
+        WHERE v.timestamp >= DATETIME('now', '-7 days') AND u.district = ?
+        GROUP BY v.village
+    ''', (current_user.district,)).fetchall()
     conn.close()
     return jsonify([dict(row) for row in pulse])
  # ═══════════════════════════════════════════════════
@@ -3164,20 +3191,6 @@ def api_attendance_mark_od():
     conn.close()
     
     return jsonify({'success': True, 'message': message})
-    
-    conn = get_db_connection()
-    # Mocking village data based on patient address patterns
-    village_stats = conn.execute('''
-        SELECT address as village, COUNT(*) as case_count, 
-        SUM(CASE WHEN dual_brain_risk = 'CRITICAL' THEN 1 ELSE 0 END) as critical_cases
-        FROM patient_logs
-        WHERE district = ? AND DATE(timestamp) >= DATE('now', '-7 days')
-        GROUP BY village
-        ORDER BY critical_cases DESC
-    ''', (current_user.district,)).fetchall()
-    conn.close()
-    
-    return jsonify([dict(row) for row in village_stats])
 
 # ═══════════════════════════════════════════════════
 # RAMKY WASTE RECEIPT (Logistics Automation)
@@ -3191,7 +3204,7 @@ def api_attendance_mark_od():
 @login_required
 def phc_nurse_vhn_feed():
     """REAL-WORLD: Live sync feed from MTM Tablets / External VHC Apps"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     
     conn = get_db_connection()
@@ -3209,7 +3222,7 @@ def phc_nurse_vhn_feed():
 @login_required
 def phc_nurse_vhn_outreach():
     """REAL-WORLD: Visibility into MTM VHN field work in interior hamlets"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     
     conn = get_db_connection()
@@ -3759,11 +3772,11 @@ def api_ddhs_outbreak_clusters():
                 MAX(pl.timestamp) as last_seen
             FROM patient_logs pl
             JOIN phc_facilities p ON pl.phc_id = p.id
-            WHERE pl.timestamp >= datetime('now', '-48 hours')
+            WHERE pl.timestamp >= datetime('now', '-48 hours') AND p.district = ?
             GROUP BY p.id, pl.symptoms
             HAVING cluster_size >= 3
             ORDER BY cluster_size DESC
-        """).fetchall()
+        """, (current_user.district,)).fetchall()
         
         # 2. Format for Map/UI
         result = []
@@ -4012,13 +4025,22 @@ def api_assign_staff():
     if current_user.role != 'ddhs_admin':
         return jsonify({'success': False, 'error': 'Access denied'}), 403
 
-    data = request.get_json()
-    staff_id = data.get('staff_id')
-    phc_id = data.get('phc_id')
-    action = data.get('action')  # 'assign' or 'reassign'
+    if request.is_json:
+        data = request.get_json()
+        staff_id = data.get('staff_id')
+        phc_id = data.get('phc_id')
+        action = data.get('action')
+    else:
+        staff_id = request.form.get('user_id') or request.form.get('staff_id')
+        phc_id = request.form.get('phc_id')
+        action = request.form.get('action')
 
     if not staff_id or not phc_id:
-        return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        else:
+            flash('Missing required fields (staff or center)')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
 
     conn = get_db_connection()
     try:
@@ -4026,12 +4048,20 @@ def api_assign_staff():
         staff = conn.execute('SELECT * FROM users WHERE id = ? AND role IN (?, ?)',
                             (staff_id, 'phc_nurse', 'doctor')).fetchone()
         if not staff:
-            return jsonify({'success': False, 'error': 'Staff member not found'}), 404
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Staff member not found'}), 404
+            else:
+                flash('Staff member not found')
+                return redirect(url_for('ddhs_admin_staff_assignment'))
 
         # Get center details
         center = conn.execute('SELECT * FROM phc_facilities WHERE id = ?', (phc_id,)).fetchone()
         if not center:
-            return jsonify({'success': False, 'error': 'PHC Center not found'}), 404
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'PHC Center not found'}), 404
+            else:
+                flash('PHC Center not found')
+                return redirect(url_for('ddhs_admin_staff_assignment'))
 
         # Update staff assignment
         conn.execute('''
@@ -4042,24 +4072,32 @@ def api_assign_staff():
         # Log audit event
         if audit_logger := app.extensions.get('audit_logger'):
             audit_logger.log_event(
-                action=f'STAFF_ASSIGNED',
+                action='STAFF_ASSIGNED',
                 details=f"{staff['fullname']} ({staff['role']}) assigned to {center['name']}",
                 user=current_user.email
             )
 
         app.logger.info(f"Staff {staff_id} assigned to PHC {phc_id} by {current_user.email}")
 
-        return jsonify({
-            'success': True,
-            'message': f"{staff['fullname']} has been assigned to {center['name']}",
-            'staff_id': staff_id,
-            'center_name': center['name']
-        }), 200
+        if request.is_json:
+            return jsonify({
+                'success': True,
+                'message': f"{staff['fullname']} has been assigned to {center['name']}",
+                'staff_id': staff_id,
+                'center_name': center['name']
+            }), 200
+        else:
+            flash(f"{staff['fullname']} has been successfully assigned to {center['name']}.", 'success')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
 
     except Exception as e:
         conn.rollback()
         app.logger.error(f"Error assigning staff: {str(e)}")
-        return jsonify({'success': False, 'error': f'Assignment failed: {str(e)}'}), 500
+        if request.is_json:
+            return jsonify({'success': False, 'error': f'Assignment failed: {str(e)}'}), 500
+        else:
+            flash(f"Error assigning staff: {str(e)}", 'error')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
     finally:
         conn.close()
 
@@ -4070,17 +4108,28 @@ def api_unassign_staff():
     if current_user.role != 'ddhs_admin':
         return jsonify({'success': False, 'error': 'Access denied'}), 403
 
-    data = request.get_json()
-    staff_id = data.get('staff_id')
+    if request.is_json:
+        data = request.get_json()
+        staff_id = data.get('staff_id')
+    else:
+        staff_id = request.form.get('user_id')
 
     if not staff_id:
-        return jsonify({'success': False, 'error': 'Missing staff_id'}), 400
+        if request.is_json:
+            return jsonify({'success': False, 'error': 'Missing staff_id'}), 400
+        else:
+            flash('Missing staff_id')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
 
     conn = get_db_connection()
     try:
         staff = conn.execute('SELECT * FROM users WHERE id = ?', (staff_id,)).fetchone()
         if not staff:
-            return jsonify({'success': False, 'error': 'Staff not found'}), 404
+            if request.is_json:
+                return jsonify({'success': False, 'error': 'Staff not found'}), 404
+            else:
+                flash('Staff not found')
+                return redirect(url_for('ddhs_admin_staff_assignment'))
 
         conn.execute('UPDATE users SET phc_id = NULL WHERE id = ?', (staff_id,))
         conn.commit()
@@ -4092,11 +4141,19 @@ def api_unassign_staff():
                 user=current_user.email
             )
 
-        return jsonify({'success': True, 'message': f"{staff['fullname']} has been unassigned"}), 200
+        if request.is_json:
+            return jsonify({'success': True, 'message': f"{staff['fullname']} has been unassigned"}), 200
+        else:
+            flash(f"{staff['fullname']} has been unassigned from the center.", 'success')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
 
     except Exception as e:
         conn.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)}), 500
+        else:
+            flash(f"Error unassigning staff: {str(e)}", 'error')
+            return redirect(url_for('ddhs_admin_staff_assignment'))
     finally:
         conn.close()
 
@@ -4219,51 +4276,100 @@ def ddhs_admin_reports():
 
     conn = get_db_connection()
 
+    center_id = request.args.get('center')
+    filter_phc = "AND phc_id IN (SELECT id FROM phc_facilities WHERE district = ?)"
+    params = [current_user.district]
+    
+    if center_id and center_id.isdigit():
+        valid_center = conn.execute("SELECT id FROM phc_facilities WHERE id = ? AND district = ?", (int(center_id), current_user.district)).fetchone()
+        if valid_center:
+            filter_phc = "AND phc_id = ?"
+            params = [int(center_id)]
+        else:
+            flash('Invalid center selected')
+            return redirect(url_for('ddhs_admin_reports'))
+
     # Get monthly patient statistics
-    monthly_stats = conn.execute("""
+    monthly_stats = conn.execute(f"""
         SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count
         FROM users
-        WHERE role = 'patient'
+        WHERE role = 'patient' {filter_phc}
         GROUP BY strftime('%Y-%m', created_at)
         ORDER BY month DESC
         LIMIT 12
-    """).fetchall()
+    """, params).fetchall()
 
     # Get disease statistics - using recommended_specialist instead of disease
-    disease_stats = conn.execute("""
+    disease_stats = conn.execute(f"""
         SELECT recommended_specialist, COUNT(*) as count
         FROM patient_logs
         WHERE recommended_specialist IS NOT NULL AND recommended_specialist != ''
+        {filter_phc}
         GROUP BY recommended_specialist
         ORDER BY count DESC
         LIMIT 10
-    """).fetchall()
+    """, params).fetchall()
+
+    # Get centers for dropdown (restricted to admin's district)
+    centers = conn.execute("SELECT id, name FROM phc_facilities WHERE district = ? ORDER BY name", (current_user.district,)).fetchall()
+    centers = [dict(row) for row in centers]
+
+    # Dynamically calculate total patients this month
+    total_patients_month = conn.execute(f"""
+        SELECT COUNT(*) FROM patient_logs 
+        WHERE strftime('%Y-%m', timestamp) = strftime('%Y-%m', 'now') 
+        {filter_phc}
+    """, params).fetchone()[0] or 0
+
+    # Total appointments and completed appointments
+    appointments_stats = conn.execute(f"""
+        SELECT COUNT(*) as total, SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+        FROM appointments 
+        WHERE 1=1 {filter_phc.replace("AND ", "AND ")} 
+    """, params).fetchone()
+    
+    total_appointments = appointments_stats['total'] or 0
+    total_completed = appointments_stats['completed'] or 0
+    completed_rate = int((total_completed / total_appointments) * 100) if total_appointments > 0 else 0
+
+    # Format data for new template dynamically per center
+    center_reports = []
+    for center in centers[:5]:  # Show top 5 centers
+        stats = conn.execute("""
+            SELECT 
+                (SELECT COUNT(*) FROM patient_logs WHERE phc_id = ?) as patients,
+                (SELECT COUNT(*) FROM appointments WHERE phc_id = ?) as appts,
+                (SELECT COUNT(*) FROM appointments WHERE phc_id = ? AND status = 'completed') as completed
+        """, (center['id'], center['id'], center['id'])).fetchone()
+        
+        c_patients = stats['patients'] or 0
+        c_appts = stats['appts'] or 0
+        c_completed = stats['completed'] or 0
+        c_rate = int((c_completed / c_appts) * 100) if c_appts > 0 else 0
+        
+        center_reports.append({
+            'center': center['name'],
+            'patients': c_patients,
+            'appointments': c_appts,
+            'completed': c_completed,
+            'completion_rate': c_rate,
+            'rating': 4.5  # placeholder for rating as it's complex to aggregate
+        })
 
     conn.close()
 
-    # Get centers for dropdown
-    centers = get_db_connection().execute("SELECT id, name FROM phc_facilities ORDER BY name").fetchall()
-    centers = [dict(row) for row in centers]
-
-    # Format data for new template
-    center_reports = []
-    for center in centers[:5]:  # Show top 5 centers
-        center_reports.append({
-            'center': center['name'],
-            'patients': 150,
-            'appointments': 120,
-            'completed': 98,
-            'completion_rate': 81,
-            'rating': 4.5
-        })
-
+    monthly_stats = [dict(row) for row in monthly_stats]
+    disease_stats = [dict(row) for row in disease_stats]
+    
     return render_template('ddhs_admin_reports_redesigned.html',
                          centers=centers,
-                         total_patients_month=monthly_stats[0]['count'] if monthly_stats else 0,
-                         total_appointments=250,
-                         completed_rate=82,
+                         total_patients_month=total_patients_month,
+                         total_appointments=total_appointments,
+                         completed_rate=completed_rate,
                          avg_wait_time='15 mins',
                          center_reports=center_reports,
+                         monthly_stats=monthly_stats,
+                         disease_stats=disease_stats,
                          monthly_data=[120, 140, 160, 150, 180, 200, 220, 240, 230, 250, 270, 290],
                          user=current_user)
 
@@ -4506,8 +4612,8 @@ def ddhs_admin_attendance():
     conn = get_db_connection()
     c = conn.cursor()
 
-    # Get all PHC centers for filtering
-    centers_rows = c.execute('SELECT id, name FROM phc_facilities ORDER BY name').fetchall()
+    # Get all PHC centers for filtering (restricted to admin's district)
+    centers_rows = c.execute('SELECT id, name FROM phc_facilities WHERE district = ? ORDER BY name', (current_user.district,)).fetchall()
     centers = [dict(row) for row in centers_rows]
 
     try:
@@ -4552,6 +4658,7 @@ def ddhs_admin_attendance():
         # Calculate statistics
         staff_list = []
         present_count = 0
+        late_count = 0
         on_leave_count = 0
         
         for row in staff_rows:
@@ -4565,6 +4672,7 @@ def ddhs_admin_attendance():
             elif s['attendance_status'] == 'Late':
                 s['display_status'] = 'late'
                 present_count += 1
+                late_count += 1
             else:
                 s['display_status'] = 'absent'
             staff_list.append(s)
@@ -4595,6 +4703,7 @@ def ddhs_admin_attendance():
                              pending_leaves=pending_leaves,
                              total_staff=total_staff,
                              present_count=present_count,
+                             late_count=late_count,
                              absent_count=total_staff - present_count - on_leave_count,
                              on_leave_count=on_leave_count,
                              attendance_percentage=attendance_percentage,
@@ -5045,7 +5154,7 @@ def api_get_phc_centers():
 @login_required
 def api_phc_register_walkin():
     """Allows nurse to instantly register a walk-in patient at the desk"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
 
     try:
@@ -5090,7 +5199,7 @@ def api_phc_register_walkin():
 @login_required
 def phc_nurse_dashboard():
     """PHC Nurse - Center-specific dashboard with patient management"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -5382,7 +5491,7 @@ def phc_nurse_dashboard():
 @login_required
 def phc_nurse_daily_diary():
     """REAL-WORLD: The Digital Daily Diary view for high-speed logging tracking"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     
     today = datetime.now().strftime('%Y-%m-%d')
@@ -5444,7 +5553,7 @@ def api_phc_log_usage():
 @login_required
 def phc_nurse_resources():
     """PHC Nurse - Operational Inventory Management"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied')
         return redirect(url_for('index'))
 
@@ -5545,7 +5654,7 @@ def api_phc_approve_item(item_id):
 @login_required
 def phc_nurse_intake():
     """PHC Nurse Patient Intake & AI Triage with comprehensive checkup form"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this page is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -5593,7 +5702,7 @@ def api_patient_assessment():
     # BUG FIX 4: Allow simulator to bypass role check with demo token for dashboard population
     sim_token = request.headers.get('X-Simulation-Token')
     if sim_token != 'DEMO_TOKEN_SMARTTRIAGE_123':
-        if current_user.role != 'phc_nurse':
+        if current_user.role not in ['phc_nurse', 'doctor']:
             return jsonify({'error': 'Access denied'}), 403
 
     try:
@@ -7026,7 +7135,9 @@ def doctors_directory():
                          avg_experience=avg_experience,
                          current_user=current_user)
 
-
+@app.route('/patients')
+@login_required
+def patients_directory():
     if current_user.role not in ('doctor', 'phc_nurse', 'ddhs_admin'):
         flash('Access denied. Only medical staff can view patient directory.')
         return redirect(url_for('patient_dashboard'))
@@ -7149,7 +7260,7 @@ def doctors_directory():
                          active_cases=active_cases,
                          high_risk_count=high_risk_count,
                          total_records=total_records,
-                         current_user=current_user)
+                         user=current_user)
 
 @app.route('/appointments/notifications', methods=['GET'])
 @login_required
@@ -7399,7 +7510,7 @@ def delete_appointment(id):
 @login_required
 def phc_nurse_create_appointment():
     """PHC Nurse creates appointment for patient based on triage assessment"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied - this is for PHC nurses only')
         return redirect(url_for('index'))
 
@@ -7671,154 +7782,6 @@ def health_report():
     return resp
 
 
-@app.route('/patients')
-@login_required
-def patients():
-    """Patients list - doctors/nurses/admins can view patients"""
-    if current_user.role not in ['doctor', 'phc_nurse', 'ddhs_admin']:
-        flash('This page is only accessible to medical staff')
-        return redirect(url_for('index'))
-
-    conn = get_db_connection()
-
-    # Get patients based on user role
-    if current_user.role == 'doctor':
-        # Regular doctor sees ONLY their own patients (via appointments)
-        patients = conn.execute('''
-            SELECT DISTINCT
-                u.id,
-                u.email,
-                u.fullname,
-                u.phone,
-                COUNT(DISTINCT a.id) as appointments_count
-            FROM users u
-            INNER JOIN appointments a ON u.id = a.patient_id AND a.doctor_id = ?
-            WHERE u.role = 'patient'
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.id,)).fetchall()
-    elif current_user.role == 'phc_nurse':
-        # PHC Nurse sees ALL patients from their facility
-        patients = conn.execute('''
-            SELECT DISTINCT
-                u.id,
-                u.email,
-                u.fullname,
-                u.phone,
-                COUNT(DISTINCT pl.id) as appointments_count
-            FROM users u
-            LEFT JOIN patient_logs pl ON u.id = pl.user_id AND pl.phc_id = ?
-            WHERE u.role = 'patient' AND u.phc_id = ?
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''', (current_user.phc_id, current_user.phc_id)).fetchall()
-
-    else:  # DDHS Admin sees ALL patients
-        patients = conn.execute('''
-            SELECT
-                u.id,
-                u.email,
-                u.fullname,
-                u.phone,
-                COUNT(DISTINCT a.id) as appointments_count
-            FROM users u
-            LEFT JOIN appointments a ON u.id = a.patient_id
-            WHERE u.role = 'patient'
-            GROUP BY u.id
-            ORDER BY u.fullname ASC
-        ''').fetchall()
-
-    patient_reports = []
-    patient_details = {}
-
-    for patient in patients:
-        patient_dict = dict(patient)
-
-        # Get health records for this patient
-        records = conn.execute('''
-            SELECT * FROM patient_logs
-            WHERE user_id = ?
-            ORDER BY timestamp DESC
-        ''', (patient['id'],)).fetchall()
-
-        records_list = [dict(r) for r in records]
-        patient_dict['total_records'] = len(records_list)
-
-        # Determine risk level
-        if records_list:
-            high_risk_count = sum(1 for r in records_list if 'HIGH' in r.get('dual_brain_risk', ''))
-            if high_risk_count > len(records_list) * 0.5:
-                patient_dict['risk_level'] = 'high'
-            elif high_risk_count > 0:
-                patient_dict['risk_level'] = 'medium'
-            else:
-                patient_dict['risk_level'] = 'low'
-
-            # Calculate health score
-            health_score = 100
-            if high_risk_count > 0:
-                health_score -= (high_risk_count / len(records_list)) * 30
-
-            # Check vitals
-            recent_records = records_list[:5]
-            for record in recent_records:
-                if record['sys_bp'] > 140 or record['dia_bp'] > 90:
-                    health_score -= 5
-                if record['hr'] < 60 or record['hr'] > 100:
-                    health_score -= 5
-
-            patient_dict['health_score'] = max(0, int(health_score))
-            patient_dict['last_checkup'] = records_list[0]['timestamp']
-        else:
-            patient_dict['risk_level'] = 'low'
-            patient_dict['health_score'] = 100
-            patient_dict['last_checkup'] = 'N/A'
-
-        patient_reports.append(patient_dict)
-
-        # Store detailed records for modal view
-        patient_details[patient['id']] = {
-            'name': patient['fullname'],
-            'email': patient['email'],
-            'phone': patient['phone'],
-            'records': records_list
-        }
-
-    # Calculate overall statistics
-    total_patients = len(patient_reports)
-    total_records = sum(p['total_records'] for p in patient_reports)
-    high_risk_patients = sum(1 for p in patient_reports if p['risk_level'] == 'high')
-
-    # Recent checkups (last 7 days)
-    week_ago = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
-    recent_checkups = conn.execute('''
-        SELECT COUNT(*) as count FROM patient_logs
-        WHERE timestamp >= ?
-    ''', (week_ago,)).fetchone()
-
-    # Average health score
-    avg_health_score = int(sum(p['health_score'] for p in patient_reports) / total_patients) if total_patients > 0 else 0
-
-    stats = {
-        'total_patients': total_patients,
-        'total_records': total_records,
-        'high_risk_patients': high_risk_patients,
-        'recent_checkups': recent_checkups['count'],
-        'avg_health_score': avg_health_score
-    }
-
-    conn.close()
-
-    # DEBUG: Verify patient_details has records
-    for pid, details in patient_details.items():
-        print(f"[DEBUG] Patient {pid}: {len(details.get('records', []))} records")
-
-    return render_template('reports.html',
-                         patient_reports=patient_reports,
-                         patient_details=patient_details,
-                         stats=stats,
-                         user=current_user)
-
 # --- AI CHECKUP ROUTES ---
 @app.route('/checkup')
 @login_required
@@ -7850,7 +7813,7 @@ def checkup():
 @login_required
 def phc_nurse_checkup_result():
     """Show AI checkup results for a specific patient (for nurses)"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         flash('Access denied')
         return redirect(url_for('index'))
 
@@ -9229,27 +9192,29 @@ def api_mark_attendance():
                 return c * r
             distance = haversine(lon, lat, phc['lon'], phc['lat'])
 
-        # 2. Insert or update attendance record for today
+        # 2. Insert or update attendance record for target date
         status_val = status.title() if status in ['present', 'absent', 'late'] else 'Present'
+        target_date = date_str if date_str else datetime.now().strftime('%Y-%m-%d')
+        target_datetime = target_date + ' 09:00:00'
         
-        # Check if record for today exists
+        # Check if record for target date exists
         existing = c.execute('''
             SELECT id FROM staff_attendance 
-            WHERE user_id = ? AND date(check_in_time) = date('now', 'localtime')
-        ''', (staff_id,)).fetchone()
+            WHERE user_id = ? AND date(check_in_time) = ?
+        ''', (staff_id, target_date)).fetchone()
         
         if existing:
             c.execute('''
                 UPDATE staff_attendance 
-                SET status = ?, check_in_time = datetime('now', 'localtime'), check_out_time = NULL,
-                    lat = ?, lon = ?, ai_confidence = ?
+                SET status = ?, check_in_time = ?, check_out_time = NULL,
+                    lat = ?, lon = ?
                 WHERE id = ?
-            ''', (status_val, lat, lon, ai_conf, existing['id']))
+            ''', (status_val, target_datetime, lat, lon, existing['id']))
         else:
             c.execute('''
-                INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time, lat, lon, ai_confidence)
-                VALUES (?, ?, ?, datetime('now', 'localtime'), ?, ?, ?)
-            ''', (staff_id, staff['phc_id'], status_val, lat, lon, ai_conf))
+                INSERT INTO staff_attendance (user_id, phc_id, status, check_in_time, lat, lon)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (staff_id, staff['phc_id'], status_val, target_datetime, lat, lon))
 
         # REAL-WORLD SCENARIO FIX: If Doctor is Absent, Auto-reschedule today's appointments
         is_doctor = c.execute("SELECT role FROM users WHERE id = ?", (staff_id,)).fetchone()
@@ -9258,11 +9223,11 @@ def api_mark_attendance():
             affected_appointments = c.execute('''
                 UPDATE appointments 
                 SET status = 'Rescheduled', 
-                    notes = notes || ' [Auto-rescheduled: Doctor marked ABSENT today]' 
+                    notes = notes || ' [Auto-rescheduled: Doctor marked ABSENT]' 
                 WHERE doctor_id = ? 
-                AND appointment_date = date('now', 'localtime') 
+                AND appointment_date = ? 
                 AND status IN ('Pending', 'Approved')
-            ''', (staff_id,)).rowcount
+            ''', (staff_id, target_date)).rowcount
 
         conn.commit()
         conn.close()
@@ -9471,7 +9436,7 @@ def api_ambulance_tracking(ambulance_id):
 @login_required
 def phc_nurse_incoming_referrals():
     """Frontend view for the Referral Handshake board"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     return render_template('phc_incoming_referrals.html', user=current_user)
 
@@ -9579,7 +9544,7 @@ def get_district_resources():
 @login_required
 def phc_nurse_social_vault():
     """Secure 'Secret Diary' access for authorized nurses only"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return redirect(url_for('login'))
     
     conn = get_db_connection()
@@ -9633,7 +9598,7 @@ def api_phc_abha_workaround():
 @login_required
 def api_lightning_entry():
     """HIGH-SPEED DAILY DIARY ENTRY (HMIS 3.0 Sync)"""
-    if current_user.role != 'phc_nurse':
+    if current_user.role not in ['phc_nurse', 'doctor']:
         return jsonify({'success': False, 'error': 'Unauthorized'}), 403
     
     data = request.get_json()

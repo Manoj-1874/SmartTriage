@@ -4,32 +4,32 @@
     <div class="s-brand-text">
       <div class="s-brand-name">PriorityMed</div>
       <div class="s-brand-tag" style="text-transform: uppercase;">
-        {% if user.role == 'doctor' %}Doctor Portal
-        {% elif user.role == 'phc_nurse' %}Nurse Portal
-        {% elif user.role == 'pharmacist' %}Pharmacist Command
-        {% elif user.role == 'patient' %}Patient Portal
-        {% elif user.role == 'ddhs_admin' %}DDHS Command
+        {% if current_user.role == 'doctor' %}Doctor Portal
+        {% elif current_user.role == 'phc_nurse' %}Nurse Portal
+        {% elif current_user.role == 'pharmacist' %}Pharmacist Command
+        {% elif current_user.role == 'patient' %}Patient Portal
+        {% elif current_user.role == 'ddhs_admin' %}DDHS Command
         {% else %}Staff Portal{% endif %}
       </div>
     </div>
   </div>
   <button type="button" class="s-toggle" id="sidebarToggle" aria-label="Toggle sidebar"><i class="fas fa-chevron-left"></i></button>
   
-  {% if user %}
+  {% if current_user.is_authenticated %}
   <div class="s-user">
     <div class="s-ava">
-      <i class="fas fa-user{% if user.role == 'phc_nurse' %}-nurse{% elif user.role == 'doctor' %}-md{% endif %}"></i>
+      <i class="fas fa-user{% if current_user.role == 'phc_nurse' %}-nurse{% elif current_user.role == 'doctor' %}-md{% endif %}"></i>
       <div class="s-ava-dot"></div>
     </div>
     <div class="s-user-text">
-      <div class="s-uname">{{ user.fullname }}</div>
-      <div class="s-urole">{{ user.role|replace('_', ' ')|title }}</div>
+      <div class="s-uname">{{ current_user.fullname }}</div>
+      <div class="s-urole">{{ current_user.role|replace('_', ' ')|title }}</div>
     </div>
   </div>
   {% endif %}
 
   <nav class="s-nav" style="flex:1; overflow-y:auto;">
-    {% if user.role == 'doctor' %}
+    {% if current_user.role == 'doctor' %}
     <div class="s-group">Overview</div>
     <a href="/doctor/dashboard" class="s-link {% if request.path == '/doctor/dashboard' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-th-large"></i></div>
@@ -57,7 +57,7 @@
     </a>
     {% endif %}
 
-    {% if user.role == 'phc_nurse' or user.role == 'doctor' %}
+    {% if current_user.role == 'phc_nurse' or current_user.role == 'doctor' %}
     <div class="s-group">Nurse Station</div>
     <a href="/phc/nurse/dashboard" class="s-link {% if request.path == '/phc/nurse/dashboard' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-grid-2"></i></div>
@@ -67,7 +67,7 @@
       <div class="s-icon"><i class="fas fa-users"></i></div>
       <span class="s-label">Patient Monitor</span>
     </a>
-    {% if user.role == 'phc_nurse' %}
+    {% if current_user.role == 'phc_nurse' %}
     <a href="/phc/nurse/daily-diary" class="s-link {% if request.path == '/phc/nurse/daily-diary' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-book-medical"></i></div>
       <span class="s-label">Daily Diary</span>
@@ -79,7 +79,7 @@
     {% endif %}
     {% endif %}
 
-    {% if user.role == 'pharmacist' or user.role == 'doctor' %}
+    {% if current_user.role == 'pharmacist' or current_user.role == 'doctor' %}
     <div class="s-group">Pharmacy Operations</div>
     <a href="/phc/pharmacist/dashboard" class="s-link {% if request.path == '/phc/pharmacist/dashboard' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-pills"></i></div>
@@ -91,7 +91,7 @@
     </a>
     {% endif %}
 
-    {% if user.role == 'ddhs_admin' %}
+    {% if current_user.role == 'ddhs_admin' %}
     <div class="s-group">District Command</div>
     <a href="/ddhs-admin/dashboard" class="s-link {% if request.path == '/ddhs-admin/dashboard' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-satellite-dish"></i></div>
@@ -127,9 +127,21 @@
       <div class="s-icon"><i class="fas fa-clock"></i></div>
       <span class="s-label">District Attendance</span>
     </a>
+    <a href="/ddhs-admin/budget" class="s-link {% if request.path == '/ddhs-admin/budget' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-money-bill-wave"></i></div>
+      <span class="s-label">Budget Management</span>
+    </a>
+    <a href="/ddhs-admin/campaigns" class="s-link {% if request.path == '/ddhs-admin/campaigns' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-bullhorn"></i></div>
+      <span class="s-label">Health Campaigns</span>
+    </a>
+    <a href="/ddhs-admin/audit-log" class="s-link {% if request.path == '/ddhs-admin/audit-log' %}active{% endif %}">
+      <div class="s-icon"><i class="fas fa-clipboard-list"></i></div>
+      <span class="s-label">Audit Logs</span>
+    </a>
     {% endif %}
 
-    {% if user.role == 'patient' %}
+    {% if current_user.role == 'patient' %}
     <div class="s-group">My Care</div>
     <a href="/patient/dashboard" class="s-link {% if request.path == '/patient/dashboard' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-th-large"></i></div>
@@ -149,7 +161,7 @@
     </a>
     {% endif %}
 
-    {% if user.role not in ['patient', 'ddhs_admin'] %}
+    {% if current_user.role not in ['patient', 'ddhs_admin'] %}
     <div class="s-group">HR & Ops</div>
     <a href="/phc/attendance" class="s-link {% if request.path == '/phc/attendance' %}active{% endif %}">
       <div class="s-icon"><i class="fas fa-user-check"></i></div>

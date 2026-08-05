@@ -134,8 +134,11 @@
                 <tbody>
                     {% if staff_list %}
                         {% for staff in staff_list %}
-                        <tr class="staff-row" data-center="{{ staff.center_id }}" data-status="{{ staff.status }}">
-                            <td><strong>{{ staff.name }}</strong></td>
+                        <tr class="staff-row" data-center="{{ staff.center_id }}" data-status="{{ staff.status }}" data-name="{{ staff.name }}" data-phone="{{ staff.phone }}">
+                            <td>
+                                <strong>{{ staff.name }}</strong>
+                                <div style="font-size: 11px; color: var(--text-muted);"><i class="fas fa-phone-alt" style="font-size: 9px; margin-right: 3px;"></i>{{ staff.phone }}</div>
+                            </td>
                             <td>
                                 <span style="font-size: 11px; font-weight:700; color: var(--text-muted); text-transform:uppercase;">
                                     {{ staff.role|replace('phc_', '') }}
@@ -190,7 +193,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-secondary btn-sm" title="Edit Attendance" onclick="editAttendance({{ staff.id }}, '{{ staff.name }}')">
+                                <button class="btn btn-secondary btn-sm" title="Edit Attendance" onclick="editAttendance({{ staff.id }}, '{{ staff.fullname }}')">
                                     <i class="fas fa-edit"></i>
                                 </button>
                             </td>
@@ -281,7 +284,7 @@
                 <label class="form-label">Date</label>
                 <input type="date" id="attendanceDateField" class="form-ctrl" value="{{ today }}">
             </div>
-            <button class="btn-submit-modal" onclick="submitAttendance()">
+            <button class="btn btn-primary" style="width: 100%; margin-top: 10px;" onclick="submitAttendance()">
                 <i class="fas fa-check"></i> Save Attendance
             </button>
         </div>
@@ -289,6 +292,9 @@
 </div>
 
 <!-- Script -->
+{% endblock %}
+
+{% block extra_js %}
 <script>
 function filterAttendance() {
     const centerFilter = document.getElementById('center-filter').value;
@@ -310,8 +316,8 @@ function filterAttendance() {
 
         // Search filter
         if (searchFilter) {
-            const name = row.cells[0].textContent.toLowerCase();
-            const phone = row.cells[3].textContent.toLowerCase();
+            const name = (row.dataset.name || '').toLowerCase();
+            const phone = (row.dataset.phone || '').toLowerCase();
             if (!name.includes(searchFilter) && !phone.includes(searchFilter)) {
                 show = false;
             }
@@ -389,5 +395,4 @@ function exportAttendance() {
     alert('Exporting attendance data...');
 }
 </script>
-
 {% endblock %}

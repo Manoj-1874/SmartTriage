@@ -114,7 +114,7 @@ button{font-family:'Outfit',sans-serif;cursor:pointer}
   width:var(--sidebar-w);background:var(--sidebar-bg);
   border-right:1px solid var(--sidebar-ln);
   position:fixed;top:0;left:0;bottom:0;z-index:99999;
-  display:flex;flex-direction:column;overflow:hidden;
+  display:flex;flex-direction:column;overflow:visible;
   transition:width var(--t-base) var(--ease),background var(--t-base),border-color var(--t-base);
 }
 .sidebar.collapsed{width:var(--sidebar-col)}
@@ -1605,11 +1605,9 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
                             <i class="fas fa-ellipsis-v"></i>
                         </div>
                     </div>
-                    <div class="stat-value">{{ stats.total or 2420 }}</div>
+                    <div class="stat-value">{{ stats.total }}</div>
                     <div class="stat-change positive">
-                        <i class="fas fa-arrow-up"></i>
-                        <span>47%</span>
-                        <span class="period">From last month</span>
+                        <span>Total patients assigned to you</span>
                     </div>
                     <div class="mini-chart-wrapper"><canvas id="miniChart1" class="mini-chart"></canvas></div>
                 </div>
@@ -1627,53 +1625,83 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
                             <i class="fas fa-ellipsis-v"></i>
                         </div>
                     </div>
-                    <div class="stat-value">{{ stats.appointments if stats.appointments is defined else 0 }}</div>
+                    <div class="stat-value">{{ stats.appointments }}</div>
                     <div class="stat-change {% if stats.appointments > 0 %}positive{% else %}negative{% endif %}">
-                        <i class="fas fa-arrow-{% if stats.appointments > 0 %}up{% else %}down{% endif %}"></i>
-                        <span>{{ stats.appointments if stats.appointments is defined else 0 }}</span>
-                        <span class="period">Upcoming</span>
+                        <span>{{ stats.appointments }} Upcoming</span>
                     </div>
                     <div class="mini-chart-wrapper"><canvas id="miniChart2" class="mini-chart"></canvas></div>
                 </div>
             </div>
 
-            <!-- Visitors Statistics -->
-            <div class="visitors-section">
-                <div class="section-header">
-                    <div class="section-title">
-                        <div class="section-icon">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <h2>Visitors Statistics</h2>
+            <!-- Appointments and Recent Patients -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; margin: 0 40px; margin-bottom: 40px;">
+                <!-- Upcoming Appointments -->
+                <div class="appt-card">
+                    <div class="appt-head">
+                        <div class="cal-title">Upcoming Appointments</div>
                     </div>
-                    <div class="period-selector">
-                        Last 30 days
+                    <div class="appt-list">
+                        {% if appointments %}
+                            {% for appt in appointments %}
+                            <div class="appt-row">
+                                <div class="appt-bar" style="background: var(--brand);"></div>
+                                <div class="appt-ava" style="background: linear-gradient(135deg, var(--brand), var(--brand-dark));">
+                                    {{ appt.patient_name[:1] if appt.patient_name else '?' }}
+                                </div>
+                                <div class="appt-info">
+                                    <div class="appt-doc">{{ appt.patient_name }}</div>
+                                    <div class="appt-meta">
+                                        <span class="appt-meta-i"><i class="fas fa-clock"></i> {{ appt.appointment_time }}</span>
+                                        <span class="appt-meta-i"><i class="fas fa-calendar"></i> {{ appt.appointment_date }}</span>
+                                    </div>
+                                </div>
+                                <div class="appt-actions">
+                                    <span class="badge b-pending">{{ appt.status }}</span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <div class="empty-ico"><i class="fas fa-calendar-times"></i></div>
+                                <div class="empty-title">No upcoming appointments</div>
+                            </div>
+                        {% endif %}
                     </div>
                 </div>
 
-                <div class="stats-overview">
-                    <div class="overview-item">
-                        <h3>Total Visitors</h3>
-                        <div class="overview-value">187</div>
-                        <div class="stat-change positive">
-                            <i class="fas fa-arrow-up"></i>
-                            <span>47%</span>
-                            <span class="period">From last month</span>
-                        </div>
+                <!-- Recent Patient Logs -->
+                <div class="appt-card">
+                    <div class="appt-head">
+                        <div class="cal-title">Recent Patients</div>
                     </div>
-                    <div class="overview-item">
-                        <h3>Total Patients</h3>
-                        <div class="overview-value">165</div>
-                        <div class="stat-change negative">
-                            <i class="fas fa-arrow-down"></i>
-                            <span>10%</span>
-                            <span class="period">From last month</span>
-                        </div>
+                    <div class="appt-list">
+                        {% if patients %}
+                            {% for p in patients %}
+                            <div class="appt-row">
+                                {% set risk_color = '#DC2626' if p.dual_brain_risk == 'CRITICAL' else ('#D97706' if p.dual_brain_risk == 'HIGH' else ('#2563EB' if p.dual_brain_risk == 'MEDIUM' else '#16A34A')) %}
+                                <div class="appt-bar" style="background: {{ risk_color }};"></div>
+                                <div class="appt-ava" style="background: {{ risk_color }};">
+                                    {{ p.patient_name[:1] if p.patient_name else '?' }}
+                                </div>
+                                <div class="appt-info">
+                                    <div class="appt-doc">{{ p.patient_name }}</div>
+                                    <div class="appt-meta">
+                                        <span class="appt-meta-i" style="color: {{ risk_color }}"><i class="fas fa-heartbeat"></i> {{ p.dual_brain_risk }} Risk</span>
+                                        <span class="appt-meta-i"><i class="fas fa-clock"></i> {{ p.timestamp.split()[0] if p.timestamp else '' }}</span>
+                                    </div>
+                                </div>
+                                <div class="appt-actions">
+                                    <a href="{{ url_for('doctor_view_patient_reports', patient_id=p.user_id) }}" class="act-btn act-complete">View Report</a>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="empty-state">
+                                <div class="empty-ico"><i class="fas fa-user-injured"></i></div>
+                                <div class="empty-title">No recent patients</div>
+                            </div>
+                        {% endif %}
                     </div>
-                </div>
-
-                <div class="chart-container">
-                    <canvas id="visitorsChart"></canvas>
                 </div>
             </div>
         </div>
@@ -1730,112 +1758,6 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
             }
         });
 
-        // Main Visitors Chart
-        const visitorsCtx = document.getElementById('visitorsChart').getContext('2d');
-
-        // Create gradient for Total Visitors area
-        const gradient1 = visitorsCtx.createLinearGradient(0, 0, 0, 300);
-        gradient1.addColorStop(0, 'rgba(149, 165, 247, 0.4)');
-        gradient1.addColorStop(1, 'rgba(149, 165, 247, 0.0)');
-
-        new Chart(visitorsCtx, {
-            type: 'line',
-            data: {
-                labels: ['Jan 1', 'Jan 5', 'Jan 10', 'Jan 15', 'Jan 20', 'Jan 25', 'Jan 30'],
-                datasets: [
-                    {
-                        label: 'Total Visitors',
-                        data: [15000, 22000, 18000, 25000, 32000, 38000, 42345],
-                        borderColor: '#95a5f7',
-                        backgroundColor: gradient1,
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#95a5f7',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
-                    },
-                    {
-                        label: 'Total Patients',
-                        data: [800, 950, 1100, 1300, 1650, 2000, 2345],
-                        borderColor: '#667eea',
-                        backgroundColor: 'transparent',
-                        borderWidth: 3,
-                        fill: false,
-                        tension: 0.4,
-                        pointRadius: 4,
-                        pointHoverRadius: 6,
-                        pointBackgroundColor: '#667eea',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        display: true,
-                        position: 'top',
-                        align: 'end',
-                        labels: {
-                            usePointStyle: true,
-                            padding: 20,
-                            font: {
-                                size: 12,
-                                weight: '600'
-                            }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: 12,
-                        cornerRadius: 8,
-                        titleFont: { size: 13, weight: '600' },
-                        bodyFont: { size: 12 },
-                        displayColors: true,
-                        callbacks: {
-                            label: function(context) {
-                                return context.dataset.label + ': ' + context.parsed.y.toLocaleString();
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            font: { size: 11 },
-                            color: '#a0a3bd'
-                        }
-                    },
-                    y: {
-                        position: 'right',
-                        grid: {
-                            color: 'rgba(0, 0, 0, 0.05)',
-                            drawBorder: false
-                        },
-                        ticks: {
-                            font: { size: 11 },
-                            color: '#a0a3bd',
-                            callback: function(value) {
-                                return value >= 1000 ? (value/1000) + 'K' : value;
-                            },
-                            stepSize: 10000
-                        }
-                    }
-                }
-            }
-        });
 
         // NOTIFICATIONS LOGIC
         function toggleNotifDropdown() {
@@ -1938,5 +1860,123 @@ select.form-ctrl option{background:var(--base);color:var(--t-head);}
             });
         }
     </script>
+
+<!-- GLOBAL TRANSLATION WIDGET -->
+<div id="google_translate_element" style="display:none;"></div>
+<style>
+.skiptranslate iframe, .goog-te-banner-frame { display: none !important; }
+body { top: 0px !important; }
+.global-lang-selector {
+    position: fixed;
+    bottom: 20px;
+    right: 80px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 50px;
+    padding: 8px 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.3s ease;
+}
+.global-lang-selector:hover {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+.global-lang-selector select {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 20px;
+}
+</style>
+<div class="global-lang-selector">
+    <span style="font-size:16px;">🌐</span>
+    <select id="globalLanguageSelect" onchange="changeGlobalLanguage(this.value)">
+      <option value="en">English</option>
+      <option value="ta">தமிழ் (Tamil)</option>
+      <option value="hi">हिन्दी (Hindi)</option>
+      <option value="ml">മലയാളം (Malayalam)</option>
+      <option value="te">తెలుగు (Telugu)</option>
+      <option value="kn">ಕನ್ನಡ (Kannada)</option>
+    </select>
+    <span style="font-size:10px; position:absolute; right:16px; pointer-events:none;">▼</span>
+</div>
+
+<script type="text/javascript">
+  function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+      pageLanguage: 'en',
+      includedLanguages: 'ta,hi,ml,te,kn',
+      layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+      autoDisplay: false
+    }, 'google_translate_element');
+    
+    // After initialization, check if we need to sync the combo box based on cookie
+    setTimeout(function() {
+        var match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+        if (match && match[1]) {
+            var gtSelect = document.querySelector('.goog-te-combo');
+            if (gtSelect && gtSelect.value !== match[1]) {
+                gtSelect.value = match[1];
+                gtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }, 1000);
+  }
+
+  function changeGlobalLanguage(langCode) {
+    // Clear all possible old googtrans cookies to avoid conflicts
+    var domain = location.hostname;
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=" + domain + "; path=/;";
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=." + domain + "; path=/;";
+    
+    if (langCode === 'en') {
+        // To restore original English, trigger the restore button in the hidden banner if possible
+        var iframe = document.querySelector('.goog-te-banner-frame');
+        if (iframe) {
+            var innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var restoreBtn = innerDoc.getElementById(':1.restore') || innerDoc.querySelector('button');
+            if(restoreBtn) restoreBtn.click();
+        }
+        location.reload();
+        return;
+    }
+    
+    // Set new cookie precisely
+    var expiry = new Date();
+    expiry.setTime(expiry.getTime() + (30 * 24 * 60 * 60 * 1000));
+    document.cookie = "googtrans=/en/" + langCode + ";expires=" + expiry.toUTCString() + ";path=/;domain=" + (domain === 'localhost' ? '' : '.' + domain);
+
+    // Force trigger translation directly without reloading
+    var gtSelect = document.querySelector('.goog-te-combo');
+    if (gtSelect) {
+        gtSelect.value = langCode;
+        gtSelect.dispatchEvent(new Event('change'));
+    } else {
+        location.reload();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+    if (match && match[1]) {
+      const select = document.getElementById('globalLanguageSelect');
+      if(select) select.value = match[1];
+    }
+  });
+</script>
+<script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<!-- /GLOBAL TRANSLATION WIDGET -->
+
 </body>
 </html>

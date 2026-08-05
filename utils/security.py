@@ -39,11 +39,12 @@ class SecurityHeaders:
         # Content Security Policy - Prevent XSS attacks
         response.headers['Content-Security-Policy'] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://chatling.ai https://unpkg.com; "
-            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://chatling.ai https://unpkg.com https://translate.google.com https://translate.googleapis.com https://translate.pa.googleapis.com https://translate-pa.googleapis.com https://www.gstatic.com; "
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://cdn.jsdelivr.net https://unpkg.com https://translate.googleapis.com https://translate.google.com https://www.gstatic.com; "
             "font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
-            "img-src 'self' data: https:; "
-            "connect-src 'self' https://chatling.ai; "
+            "img-src 'self' data: https: http://translate.google.com https://translate.google.com; "
+            "connect-src 'self' https://chatling.ai https://translate.googleapis.com https://translate.pa.googleapis.com https://translate-pa.googleapis.com https://www.gstatic.com; "
+            "frame-src 'self' https://embed.chatling.ai https://chatling.ai https://translate.google.com; "
             "frame-ancestors 'none';"
         )
 

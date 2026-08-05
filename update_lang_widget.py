@@ -1,73 +1,7 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}DDHS Admin - PriorityMed{% endblock %}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/ddhs_admin.css') }}?v=2">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    {% block extra_css %}{% endblock %}
-</head>
-<body>
-    <div class="ddhs-container">
-        <!-- ═══════════════════════════════════════════════════════════
-             SIDEBAR NAVIGATION
-             ═══════════════════════════════════════════════════════════ -->
-        {% set user = current_user %}
-        {% include 'sidebar.html' %}
+import glob
+import re
 
-        <!-- ═══════════════════════════════════════════════════════════
-             MAIN CONTENT
-             ═══════════════════════════════════════════════════════════ -->
-        <div class="ddhs-main">
-            <!-- Header -->
-            <header class="ddhs-header">
-                <div class="header-left">
-                    <h2>{% block page_title %}Dashboard{% endblock %}</h2>
-                </div>
-                <div class="header-right">
-                    <div class="user-info">
-                        <p>Logged in as</p>
-                        <strong>{{ current_user.fullname }}</strong>
-                    </div>
-                    <div class="user-avatar">
-                        {{ current_user.fullname[0] }}
-                    </div>
-                </div>
-            </header>
-
-            <!-- Content -->
-            <main class="ddhs-content">
-                <!-- Flash Messages -->
-                {% with messages = get_flashed_messages(with_categories=true) %}
-                    {% if messages %}
-                        {% for category, message in messages %}
-                            <div class="alert alert-{{ category }} mb-3">
-                                <i class="fas fa-{% if category == 'error' %}exclamation-circle{% elif category == 'success' %}check-circle{% else %}info-circle{% endif %}"></i>
-                                <span>{{ message }}</span>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                {% endwith %}
-
-                <!-- Page Content -->
-                {% block content %}{% endblock %}
-            </main>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script>
-        // Dark mode toggle (optional feature)
-        function toggleDarkMode() {
-            document.documentElement.style.setProperty('--canvas', '#0B1812');
-        }
-    </script>
-    {% block extra_js %}{% endblock %}
-
-<!-- GLOBAL TRANSLATION WIDGET -->
+new_widget_code = """<!-- GLOBAL TRANSLATION WIDGET -->
 <div id="google_translate_element" style="display:none;"></div>
 <style>
 .skiptranslate iframe, .goog-te-banner-frame { display: none !important; }
@@ -128,7 +62,7 @@ body { top: 0px !important; }
     
     // After initialization, check if we need to sync the combo box based on cookie
     setTimeout(function() {
-        var match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+        var match = document.cookie.match(/googtrans=\\/en\\/([a-z]{2})/);
         if (match && match[1]) {
             var gtSelect = document.querySelector('.goog-te-combo');
             if (gtSelect && gtSelect.value !== match[1]) {
@@ -174,7 +108,7 @@ body { top: 0px !important; }
   }
 
   document.addEventListener("DOMContentLoaded", function() {
-    const match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+    const match = document.cookie.match(/googtrans=\\/en\\/([a-z]{2})/);
     if (match && match[1]) {
       const select = document.getElementById('globalLanguageSelect');
       if(select) select.value = match[1];
@@ -182,7 +116,24 @@ body { top: 0px !important; }
   });
 </script>
 <script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
-<!-- /GLOBAL TRANSLATION WIDGET -->
+<!-- /GLOBAL TRANSLATION WIDGET -->"""
 
-</body>
-</html>
+files = glob.glob('templates/*.html')
+count = 0
+for fpath in files:
+    with open(fpath, 'r', encoding='utf-8') as f:
+        content = f.read()
+    
+    if '<!-- GLOBAL TRANSLATION WIDGET -->' in content:
+        # Regex replace the whole block
+        new_content = re.sub(
+            r'<!-- GLOBAL TRANSLATION WIDGET -->.*?<!-- /GLOBAL TRANSLATION WIDGET -->', 
+            new_widget_code, 
+            content, 
+            flags=re.DOTALL
+        )
+        with open(fpath, 'w', encoding='utf-8') as f:
+            f.write(new_content)
+        count += 1
+
+print(f"Updated translation widget in {count} files.")

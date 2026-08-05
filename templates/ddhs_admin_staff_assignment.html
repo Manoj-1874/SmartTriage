@@ -1,0 +1,132 @@
+{% extends "ddhs_admin_base.html" %}
+
+{% block title %}Staff Assignment - DDHS Admin - PriorityMed{% endblock %}
+
+{% block page_title %}Staff Assignments{% endblock %}
+
+{% block content %}
+
+<!-- Header Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--warning);">{{ unassigned_staff|length }}</div>
+        <div class="stat-label">Unassigned Personnel</div>
+        <div class="stat-change">Requires Assignment</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value" style="color: var(--success);">{{ assigned_staff|length }}</div>
+        <div class="stat-label">Assigned Personnel</div>
+        <div class="stat-change">Currently deployed</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ centers|length }}</div>
+        <div class="stat-label">Health Centers</div>
+        <div class="stat-change">Available for deployment</div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="stats-row" style="display: grid; grid-template-columns: 1fr; gap: 20px; margin-bottom: 24px;">
+
+    <!-- Unassigned Staff Section -->
+    <div class="section-card" style="border: 2px solid var(--warning); box-shadow: 0 0 20px rgba(217, 119, 6, 0.1);">
+        <div class="section-header" style="background: var(--warning-bg);">
+            <h3 style="color: var(--warning);"><i class="fas fa-exclamation-triangle"></i> Pending Assignments ({{ unassigned_staff|length }})</h3>
+        </div>
+        <div class="section-body">
+            {% if unassigned_staff %}
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Staff Name</th>
+                            <th>Role</th>
+                            <th>Specialization</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for staff in unassigned_staff %}
+                        <tr>
+                            <td>
+                                <strong>{{ staff.fullname }}</strong>
+                                <div style="font-size: 11px; color: var(--text-muted);">{{ staff.email }}</div>
+                            </td>
+                            <td><span class="status-badge amber">{{ staff.role|upper }}</span></td>
+                            <td>{{ staff.specialization or 'General' }}</td>
+                            <td>
+                                <form action="/api/ddhs-admin/assign-staff" method="POST" style="display: flex; gap: 8px;">
+                                    <input type="hidden" name="user_id" value="{{ staff.id }}">
+                                    <select name="phc_id" required style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 12px; font-family: inherit;">
+                                        <option value="">Select Center...</option>
+                                        {% for center in centers %}
+                                        <option value="{{ center.id }}">{{ center.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;">Assign</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+                <i class="fas fa-check-circle" style="font-size: 24px; color: var(--success); margin-bottom: 10px;"></i>
+                <p>All staff members have been assigned to health centers.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Assigned Staff Section -->
+    <div class="section-card">
+        <div class="section-header">
+            <h3><i class="fas fa-hospital-user"></i> Currently Deployed Personnel ({{ assigned_staff|length }})</h3>
+        </div>
+        <div class="section-body">
+            {% if assigned_staff %}
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Staff Name</th>
+                            <th>Role</th>
+                            <th>Current Assignment</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for staff in assigned_staff %}
+                        <tr>
+                            <td>
+                                <strong>{{ staff.fullname }}</strong>
+                                <div style="font-size: 11px; color: var(--text-muted);">{{ staff.email }}</div>
+                            </td>
+                            <td><span class="status-badge active">{{ staff.role|upper }}</span></td>
+                            <td><strong>{{ staff.center_name }}</strong></td>
+                            <td>
+                                <form action="/api/ddhs-admin/unassign-staff" method="POST">
+                                    <input type="hidden" name="user_id" value="{{ staff.id }}">
+                                    <button type="submit" class="btn" style="padding: 6px 12px; font-size: 12px; background: white; border: 1px solid var(--danger); color: var(--danger); border-radius: 6px; cursor: pointer;">
+                                        Revoke Assignment
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div style="padding: 30px; text-align: center; color: var(--text-muted);">
+                <p>No staff members are currently assigned.</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}

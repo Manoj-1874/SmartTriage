@@ -42,7 +42,7 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-bottom: 30px;">
         <div class="section-card">
             <div class="section-card-header">
-                <h3>📊 Stock Level Distribution</h3>
+                <h3>💸 Spending by Center</h3>
             </div>
             <div style="position: relative; height: 250px;">
                 <canvas id="spendingChart"></canvas>
@@ -57,7 +57,7 @@
                 <div style="margin-bottom: 15px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                         <strong>In Stock</strong>
-                        <span>{{ in_stock or 0 }} items</span>
+                        <span>{{ good_stock or 0 }} items</span>
                     </div>
                     <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
                         <div style="background: #28a745; height: 100%; width: 75%;"></div>
@@ -66,7 +66,7 @@
                 <div style="margin-bottom: 15px;">
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                         <strong>Low Stock</strong>
-                        <span>{{ low_items or 0 }} items</span>
+                        <span>{{ low_stock or 0 }} items</span>
                     </div>
                     <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
                         <div style="background: #ff9800; height: 100%; width: 20%;"></div>
@@ -75,7 +75,7 @@
                 <div>
                     <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                         <strong>Out of Stock</strong>
-                        <span>{{ out_of_stock or 0 }} items</span>
+                        <span>{{ critical_stock or 0 }} items</span>
                     </div>
                     <div style="background: #f0f0f0; height: 8px; border-radius: 4px; overflow: hidden;">
                         <div style="background: #dc3545; height: 100%; width: 5%;"></div>
@@ -135,13 +135,13 @@
             <tbody>
                 {% for item in inventory or [] %}
                 <tr>
-                    <td><strong>{{ item.name }}</strong></td>
+                    <td><strong>{{ item.item_name }}</strong></td>
                     <td>{{ item.category }}</td>
                     <td>{{ item.quantity }}</td>
                     <td>{{ item.min_required }}</td>
                     <td>
                         <div style="background: #f0f0f0; height: 6px; border-radius: 3px; width: 100px; overflow: hidden;">
-                            {% set raw_percentage = (item.quantity / item.min_required * 100) %}
+                            {% set raw_percentage = (item.quantity / item.min_required * 100) if item.min_required > 0 else 100 %}
                             {% if raw_percentage > 100 %}
                                 {% set percentage = 100 %}
                             {% else %}
@@ -218,7 +218,7 @@
             <tbody>
                 {% for alert in low_stock_alerts or [] %}
                 <tr>
-                    <td><strong>{{ alert.name }}</strong></td>
+                    <td><strong>{{ alert.item_name }}</strong></td>
                     <td>{{ alert.quantity }}</td>
                     <td>{{ alert.min_required }}</td>
                     <td>

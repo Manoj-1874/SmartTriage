@@ -47,6 +47,66 @@
         .s-link:hover { background: var(--brand-pale, rgba(11,155,122,0.05)); color: var(--brand); }
         .s-link.active { background: var(--brand); color: #fff; box-shadow: 0 4px 12px rgba(11, 155, 122, 0.25); }
         .s-link.active .s-icon { color: #fff; }
+        .card { background: var(--base); border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); margin-bottom: 24px; }
+        
+        .stock-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        .stock-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stock-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.06);
+        }
+        .stock-name {
+            font-weight: 700;
+            font-size: 15px;
+            color: var(--t-head);
+            line-height: 1.3;
+        }
+        .stock-metrics {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: auto;
+            border-top: 1px dashed var(--border);
+            padding-top: 12px;
+        }
+        .stock-metric-val {
+            font-weight: 700;
+            font-size: 20px;
+            color: var(--t-body);
+        }
+        .stock-status {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+        }
+        .status-optimal {
+            background: rgba(11, 155, 122, 0.1);
+            color: var(--brand);
+        }
+        .status-low {
+            background: rgba(220, 38, 38, 0.1);
+            color: #dc2626;
+        }
+        
+        table { width: 100%; border-collapse: collapse; }
         .s-toggle { display: none; }
         .s-footer { display:none; }
     </style>
@@ -92,7 +152,8 @@
     {% if pending_items %}
     <div class="card" style="border-left: 4px solid #d97706;">
         <h3 style="margin-top:0;"><i class="fas fa-clock"></i> Pending Staff Requests</h3>
-        <table>
+        <div class="table-responsive mt-3">
+            <table class="table table-hover table-bordered align-middle">
             <thead>
                 <tr>
                     <th>Item Name</th>
@@ -114,39 +175,37 @@
                 </tr>
                 {% endfor %}
             </tbody>
-        </table>
+            </table>
+        </div>
     </div>
     {% endif %}
 
     <!-- Inventory -->
     <div class="card">
         <h3 style="margin-top:0;">Global Stock Oversight</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Resource</th>
-                    <th>Status</th>
-                    <th>Current</th>
-                    <th>Min Level</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in inventory if item.status != 'PENDING' %}
-                <tr>
-                    <td style="font-weight:600;">{{ item.item_name }}</td>
-                    <td>
-                        {% if item.quantity <= item.min_threshold %}
-                            <span style="color:#dc2626; font-weight:700;">LOW</span>
-                        {% else %}
-                            <span style="color:var(--brand); font-weight:700;">OPTIMAL</span>
-                        {% endif %}
-                    </td>
-                    <td>{{ item.quantity }}</td>
-                    <td>{{ item.min_threshold }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <p style="font-size:13px; color:var(--t-muted); margin-bottom: 20px;">Real-time inventory levels across the facility</p>
+        <div class="stock-grid">
+            {% for item in inventory if item.status != 'PENDING' %}
+            <div class="stock-card" style="border-left: 4px solid {% if item.quantity <= item.min_threshold %}#dc2626{% else %}var(--brand){% endif %};">
+                <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                    <div class="stock-name">{{ item.item_name }}</div>
+                    <div class="stock-status {% if item.quantity <= item.min_threshold %}status-low{% else %}status-optimal{% endif %}">
+                        {% if item.quantity <= item.min_threshold %}LOW{% else %}OPTIMAL{% endif %}
+                    </div>
+                </div>
+                <div class="stock-metrics">
+                    <div>
+                        <div style="font-size:11px; text-transform:uppercase; color:var(--t-muted); margin-bottom:4px;">Current</div>
+                        <div class="stock-metric-val">{{ item.quantity }}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:11px; text-transform:uppercase; color:var(--t-muted); margin-bottom:4px;">Min Level</div>
+                        <div class="stock-metric-val" style="color:#9ca3af;">{{ item.min_threshold }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
 </div>
 
@@ -164,6 +223,124 @@ function approveItem(id, action) {
     });
 }
 </script>
+
+
+<!-- GLOBAL TRANSLATION WIDGET -->
+<div id="google_translate_element" style="display:none;"></div>
+<style>
+.skiptranslate iframe, .goog-te-banner-frame { display: none !important; }
+body { top: 0px !important; }
+.global-lang-selector {
+    position: fixed;
+    bottom: 20px;
+    right: 80px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 50px;
+    padding: 8px 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 999999;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.3s ease;
+}
+.global-lang-selector:hover {
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+}
+.global-lang-selector select {
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    font-weight: 600;
+    color: #1f2937;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    padding-right: 20px;
+}
+</style>
+<div class="global-lang-selector">
+    <span style="font-size:16px;">🌐</span>
+    <select id="globalLanguageSelect" onchange="changeGlobalLanguage(this.value)">
+      <option value="en">English</option>
+      <option value="ta">தமிழ் (Tamil)</option>
+      <option value="hi">हिन्दी (Hindi)</option>
+      <option value="ml">മലയാളം (Malayalam)</option>
+      <option value="te">తెలుగు (Telugu)</option>
+      <option value="kn">ಕನ್ನಡ (Kannada)</option>
+    </select>
+    <span style="font-size:10px; position:absolute; right:16px; pointer-events:none;">▼</span>
+</div>
+
+<script type="text/javascript">
+  function googleTranslateElementInit() {
+    new google.translate.TranslateElement({
+      pageLanguage: 'en',
+      includedLanguages: 'ta,hi,ml,te,kn',
+      layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+      autoDisplay: false
+    }, 'google_translate_element');
+    
+    // After initialization, check if we need to sync the combo box based on cookie
+    setTimeout(function() {
+        var match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+        if (match && match[1]) {
+            var gtSelect = document.querySelector('.goog-te-combo');
+            if (gtSelect && gtSelect.value !== match[1]) {
+                gtSelect.value = match[1];
+                gtSelect.dispatchEvent(new Event('change'));
+            }
+        }
+    }, 1000);
+  }
+
+  function changeGlobalLanguage(langCode) {
+    // Clear all possible old googtrans cookies to avoid conflicts
+    var domain = location.hostname;
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=" + domain + "; path=/;";
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=." + domain + "; path=/;";
+    
+    if (langCode === 'en') {
+        // To restore original English, trigger the restore button in the hidden banner if possible
+        var iframe = document.querySelector('.goog-te-banner-frame');
+        if (iframe) {
+            var innerDoc = iframe.contentDocument || iframe.contentWindow.document;
+            var restoreBtn = innerDoc.getElementById(':1.restore') || innerDoc.querySelector('button');
+            if(restoreBtn) restoreBtn.click();
+        }
+        location.reload();
+        return;
+    }
+    
+    // Set new cookie precisely
+    var expiry = new Date();
+    expiry.setTime(expiry.getTime() + (30 * 24 * 60 * 60 * 1000));
+    document.cookie = "googtrans=/en/" + langCode + ";expires=" + expiry.toUTCString() + ";path=/;domain=" + (domain === 'localhost' ? '' : '.' + domain);
+
+    // Force trigger translation directly without reloading
+    var gtSelect = document.querySelector('.goog-te-combo');
+    if (gtSelect) {
+        gtSelect.value = langCode;
+        gtSelect.dispatchEvent(new Event('change'));
+    } else {
+        location.reload();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    const match = document.cookie.match(/googtrans=\/en\/([a-z]{2})/);
+    if (match && match[1]) {
+      const select = document.getElementById('globalLanguageSelect');
+      if(select) select.value = match[1];
+    }
+  });
+</script>
+<script type="text/javascript" src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+<!-- /GLOBAL TRANSLATION WIDGET -->
 
 </body>
 </html>
