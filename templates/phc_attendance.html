@@ -4,29 +4,7 @@
 
 {% block content %}
 <style>
-    .ai-scanner-line {
-        position: absolute;
-        width: 100%;
-        height: 2px;
-        background: var(--brand);
-        box-shadow: 0 0 15px var(--brand);
-        top: 0;
-        animation: scan 2s linear infinite;
-        z-index: 5;
-    }
-    @keyframes scan {
-        0% { top: 0; }
-        100% { top: 100%; }
-    }
-    .ai-stat {
-        background: rgba(0,0,0,0.6);
-        color: #fff;
-        font-size: 9px;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-family: monospace;
-        backdrop-filter: blur(4px);
-    }
+
     .header {
         display: flex;
         justify-content: space-between;
@@ -244,24 +222,11 @@
 <div id="markModal" class="modal-overlay">
     <div class="modal-box">
         <div id="cameraPreview" style="width:100%; height:220px; background:#000; border-radius:16px; margin-bottom:15px; overflow:hidden; position:relative; display:flex; align-items:center; justify-content:center; border:2px solid var(--border);">
-            <div class="ai-scanner-line" id="scanner" style="display:none;"></div>
             <video id="video" autoplay playsinline style="width:100%; height:100%; object-fit:cover;"></video>
             
-            <!-- Real-time AI Stats -->
-            <div style="position:absolute; top:10px; left:10px; display:flex; flex-direction:column; gap:5px; z-index:10;">
-                <div class="ai-stat" id="aiConf">CONFIDENCE: --%</div>
-                <div class="ai-stat" id="aiScene">SCENE: ANALYZING...</div>
-            </div>
-
-            <div id="aiOverlay" style="display:none; position:absolute; inset:0; background:rgba(11,155,122,0.85); color:#fff; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; z-index:20; backdrop-filter:blur(5px);">
-                <i class="fas fa-microchip fa-2x fa-spin" style="margin-bottom:10px;"></i>
-                <div style="font-weight:800; font-size:16px; letter-spacing:1px;">NEURAL SCENE AUDIT</div>
-                <div style="font-size:10px; opacity:0.9; margin-top:5px;">Comparing Background Textures with PHC Repository...</div>
-            </div>
-
             <div id="cameraPrompt" style="position:absolute; color:#fff; font-size:12px; text-align:center; z-index:15;">
-                <i class="fas fa-camera-rotate fa-2x" style="margin-bottom:10px; opacity:0.5;"></i><br>
-                <span style="opacity:0.8;">Requesting Neural Link...</span>
+                <i class="fas fa-camera fa-2x" style="margin-bottom:10px; opacity:0.5;"></i><br>
+                <span style="opacity:0.8;">Requesting Camera Access...</span>
             </div>
         </div>
         <div id="locationStatus" style="font-size:11px; font-weight:600; color:var(--t-muted); margin-bottom:15px; display:flex; align-items:center; gap:8px; padding:10px; background:var(--surface); border-radius:8px;">
@@ -304,7 +269,6 @@
 <script>
 let userCoords = null;
 let stream = null;
-let aiTimer = null;
 
 async function markOwnAttendance() {
     document.getElementById('markModal').style.display = 'flex';
@@ -330,11 +294,6 @@ async function markOwnAttendance() {
         stream = await navigator.mediaDevices.getUserMedia({ video: true });
         document.getElementById('video').srcObject = stream;
         document.getElementById('cameraPrompt').style.display = 'none';
-        
-        aiTimer = setInterval(() => {
-            const conf = 85 + Math.floor(Math.random() * 10);
-            if(document.getElementById('aiConf')) document.getElementById('aiConf').innerText = `CONFIDENCE: ${conf}%`;
-        }, 1000);
 
     } catch (err) {
         document.getElementById('cameraPrompt').innerHTML = `<i class="fas fa-shield-halved fa-2x"></i><br>Security Blocked Camera<br><button onclick="proceedManual()" style="background:var(--brand); color:#fff; border:none; padding:5px 10px; border-radius:4px; font-size:10px; margin-top:5px; cursor:pointer;">Use Manual Check-in</button>`;
@@ -360,7 +319,6 @@ function proceedManual() {
 
 function closeModal() {
     if(stream) stream.getTracks().forEach(t => t.stop());
-    if(aiTimer) clearInterval(aiTimer);
     document.getElementById('markModal').style.display = 'none';
 }
 
@@ -371,21 +329,13 @@ async function submitAttendance(event) {
     }
 
     const btn = document.getElementById('confirmBtn');
-    const aiOverlay = document.getElementById('aiOverlay');
     
-    // 1. Start AI Background Analysis Simulation
-    aiOverlay.style.display = 'flex';
     btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Verifying...';
-
-    // Simulate AI processing
-    await new Promise(r => setTimeout(r, 2500));
+    btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Submitting...';
 
     const status = document.getElementById('statusSelect').value;
-    const ai_conf_text = document.getElementById('aiConf').innerText;
-    const ai_confidence = parseInt(ai_conf_text.split(': ')[1]) || 0;
     
-    // 2. Submit with Geofence & AI Data
+    // 2. Submit with Geofence Data
     fetch('/api/attendance/mark', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -394,7 +344,7 @@ async function submitAttendance(event) {
             status: status,
             lat: userCoords.lat,
             lon: userCoords.lon,
-            ai_confidence: ai_confidence
+            ai_confidence: 100 // Default to 100 since AI is removed
         })
     })
     .then(r => r.json())
@@ -403,7 +353,6 @@ async function submitAttendance(event) {
             location.reload();
         } else {
             alert('Verification Failed: ' + data.message);
-            aiOverlay.style.display = 'none';
             btn.innerHTML = 'Confirm & Verify';
             btn.disabled = false;
         }

@@ -60,30 +60,31 @@
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: 15px; padding: 20px;">
             <div>
-                <input type="text" placeholder="Search user..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                <input type="text" id="searchInput" placeholder="Search user or details..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
             </div>
             <div>
-                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
-                    <option>All Actions</option>
-                    <option>Login</option>
-                    <option>Data Access</option>
-                    <option>Data Modify</option>
-                    <option>Admin Changes</option>
+                <select id="actionFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="">All Actions</option>
+                    <option value="login">Login</option>
+                    <option value="view">View</option>
+                    <option value="modify">Modify</option>
+                    <option value="delete">Delete</option>
+                    <option value="create">Create</option>
                 </select>
             </div>
             <div>
-                <select style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
-                    <option>All Severity</option>
-                    <option>Critical</option>
-                    <option>High</option>
-                    <option>Medium</option>
-                    <option>Low</option>
+                <select id="severityFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                    <option value="">All Severity</option>
+                    <option value="Critical">Critical</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
                 </select>
             </div>
             <div>
-                <input type="date" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
+                <input type="date" id="dateFilter" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px;">
             </div>
-            <button style="background: #0B9B7A; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">Search</button>
+            <button id="searchBtn" style="background: #0B9B7A; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;">Search</button>
         </div>
     </div>
 
@@ -92,7 +93,7 @@
         <div class="section-card-header">
             <h3>📋 Recent Activities</h3>
         </div>
-        <table class="data-table">
+        <table class="data-table" id="auditTable">
             <thead>
                 <tr>
                     <th>Timestamp</th>
@@ -108,7 +109,7 @@
                 {% for log in audit_logs or [] %}
                 <tr>
                     <td>{{ log.timestamp }}</td>
-                    <td><strong>{{ log.user }}</strong></td>
+                    <td><strong>{{ log.user }}</strong><br><small>{{ log.role }}</small></td>
                     <td>{{ log.action }}</td>
                     <td>{{ log.resource }}</td>
                     <td>{{ log.details }}</td>
@@ -200,6 +201,50 @@
 <!-- Chart.js -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 <script>
+    // Filtering Logic
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchInput');
+        const actionFilter = document.getElementById('actionFilter');
+        const severityFilter = document.getElementById('severityFilter');
+        const dateFilter = document.getElementById('dateFilter');
+        const searchBtn = document.getElementById('searchBtn');
+        const tableBody = document.querySelector('#auditTable tbody');
+
+        function filterTable() {
+            const searchText = searchInput.value.toLowerCase();
+            const actionText = actionFilter.value.toLowerCase();
+            const severityText = severityFilter.value.toLowerCase();
+            const dateText = dateFilter.value;
+
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const textContent = row.textContent.toLowerCase();
+                const timestamp = row.cells[0].textContent;
+                const actionCell = row.cells[2].textContent.toLowerCase();
+                const severityCell = row.cells[5].textContent.toLowerCase();
+
+                let matchesSearch = textContent.includes(searchText);
+                let matchesAction = !actionText || actionCell.includes(actionText);
+                let matchesSeverity = !severityText || severityCell.includes(severityText);
+                let matchesDate = !dateText || timestamp.includes(dateText);
+
+                if (matchesSearch && matchesAction && matchesSeverity && matchesDate) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        }
+
+        searchBtn.addEventListener('click', filterTable);
+        searchInput.addEventListener('keyup', function(e) {
+            if (e.key === 'Enter') filterTable();
+        });
+        actionFilter.addEventListener('change', filterTable);
+        severityFilter.addEventListener('change', filterTable);
+        dateFilter.addEventListener('change', filterTable);
+    });
+
     function initializeCharts() {
         if (typeof Chart === 'undefined') {
             console.error('Chart.js not loaded');
@@ -221,10 +266,10 @@
                 window.eventChartInstance = new Chart(eventCtx.getContext('2d'), {
                     type: 'bar',
                     data: {
-                        labels: ['Login', 'Data Access', 'Data Modify', 'Admin Changes', 'Reports', 'Settings'],
+                        labels: {{ chart_labels | default(['Login', 'Data Access', 'Data Modify', 'Admin Changes', 'Reports', 'Settings']) | tojson | safe }},
                         datasets: [{
                             label: 'Events',
-                            data: [45, 38, 22, 15, 18, 12],
+                            data: {{ chart_data | default([45, 38, 22, 15, 18, 12]) | tojson | safe }},
                             backgroundColor: [
                                 '#0B9B7A',
                                 '#34C9A5',

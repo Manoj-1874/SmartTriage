@@ -123,6 +123,7 @@
         </div>
 
         <div class="glass-card">
+            {% if report %}
             <div class="header">
                 <div>
                     <h1 style="margin:0; font-size:32px;">Clinical Assessment</h1>
@@ -165,9 +166,13 @@
             <div class="clinical-section">
                 <div class="section-label">Reported Symptoms</div>
                 <div class="symptoms-chip-container">
+                    {% if report.symptoms %}
                     {% for s in report.symptoms.split(',') %}
                     <span class="chip">{{ s.strip() }}</span>
                     {% endfor %}
+                    {% else %}
+                    <span class="chip" style="background:var(--bg-card); color:var(--t-muted); border:1px solid var(--border);">No symptoms reported</span>
+                    {% endif %}
                 </div>
             </div>
 
@@ -194,9 +199,24 @@
                 </form>
             </div>
             {% endif %}
+            {% else %}
+            <div class="header" style="border-bottom:none; margin-bottom:0; padding-bottom: 0;">
+                <div>
+                    <h1 style="margin:0; font-size:32px;">Clinical Assessment</h1>
+                    <p style="color:var(--t-muted); margin-top:5px;">Patient: <strong>{{ patient.fullname }}</strong></p>
+                </div>
+            </div>
+            <div style="text-align:center; padding: 60px 20px;">
+                <i class="fas fa-file-medical-alt" style="font-size:48px; color:var(--border); margin-bottom:20px;"></i>
+                <h2 style="color:var(--t-muted); margin:0;">No Clinical Assessment Found</h2>
+                <p style="color:var(--t-muted); margin-top:10px;">This patient has not yet been triaged at the PHC.</p>
+                <a href="/phc/nurse/intake?patient_id={{ patient.id }}" style="display:inline-block; margin-top:20px; padding:12px 24px; background:var(--brand); color:#fff; text-decoration:none; border-radius:8px; font-weight:600;"><i class="fas fa-stethoscope"></i> Start Triage Now</a>
+            </div>
+            {% endif %}
         </div>
     </div>
 
+    {% if report %}
     <script>
         document.getElementById('outcomeForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -215,6 +235,7 @@
             }
         });
     </script>
+    {% endif %}
 
 <!-- GLOBAL TRANSLATION WIDGET -->
 <div id="google_translate_element" style="display:none;"></div>

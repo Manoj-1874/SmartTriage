@@ -3302,7 +3302,7 @@ def api_vhn_submit_field_entry():
             patient_name,
             data.get('village'),
             assessment['news2_score'], # Simplified risk score for the VHN table
-            f"BP: {bp} | Temp: {data.get('temp')} | AI: {assessment['final_risk']['risk_category']}",
+            f"{data.get('symptoms')} | BP: {bp} | Temp: {data.get('temp')} | AI: {assessment['final_risk']['risk_category']}",
             data.get('lat'),
             data.get('lon')
         ))
@@ -4544,18 +4544,24 @@ def ddhs_admin_audit_log():
 
     conn = get_db_connection()
     
-    # 1. Fetch Real Audit Logs from Database
+    # 1. Fetch Real Audit Logs from Database (Join with users to get roles)
     audit_rows = conn.execute("""
         SELECT 
-            timestamp, 
-            user_email as user, 
-            action, 
-            resource, 
-            details, 
-            severity, 
-            ip_address 
-        FROM system_audit 
-        ORDER BY timestamp DESC 
+            s.timestamp, 
+            s.user_email as user, 
+            s.action, 
+            s.resource, 
+            s.details, 
+            s.severity, 
+            s.ip_address,
+            COALESCE(u.role, 'unknown') as role
+        FROM system_audit s
+        LEFT JOIN users u ON s.user_email = u.email
+        -- Hide routine patient/doctor actions unless they are High/Critical severity
+        WHERE (u.role NOT IN ('patient', 'doctor')) 
+           OR (s.severity IN ('High', 'Critical'))
+           OR (u.role IS NULL)
+        ORDER BY s.timestamp DESC 
         LIMIT 100
     """).fetchall()
     audit_logs = [dict(row) for row in audit_rows]
@@ -4563,39 +4569,59 @@ def ddhs_admin_audit_log():
     # 2. Fetch User Activity Summary (Live from logs)
     user_summary_rows = conn.execute("""
         SELECT 
-            user_email as name, 
-            COUNT(*) as total_actions, 
-            MAX(timestamp) as last_login
-        FROM system_audit 
-        GROUP BY user_email 
+            s.user_email as name, 
+            COUNT(s.id) as total_actions, 
+            MAX(s.timestamp) as last_login,
+            COALESCE(u.role, 'unknown') as role
+        FROM system_audit s
+        LEFT JOIN users u ON s.user_email = u.email
+        WHERE u.role NOT IN ('patient')
+        GROUP BY s.user_email, u.role
         ORDER BY total_actions DESC
+        LIMIT 10
     """).fetchall()
     
     user_activities = []
     for row in user_summary_rows:
         row_dict = dict(row)
-        # Add cosmetic role/status for UI
-        row_dict['role'] = 'Staff'
         row_dict['status'] = 'Active'
-        row_dict['risk_level'] = 'Low'
+        row_dict['risk_level'] = 'High' if row_dict['total_actions'] > 50 else ('Medium' if row_dict['total_actions'] > 20 else 'Low')
         user_activities.append(row_dict)
 
+    # 3. Chart Data: Event Distribution
+    event_counts = conn.execute("""
+        SELECT action, COUNT(*) as count 
+        FROM system_audit 
+        GROUP BY action 
+        ORDER BY count DESC 
+        LIMIT 6
+    """).fetchall()
+    
+    chart_labels = [row['action'] for row in event_counts]
+    chart_data = [row['count'] for row in event_counts]
+
+    # 4. Stats
+    total_events = conn.execute("SELECT COUNT(*) FROM system_audit").fetchone()[0]
+    critical_events = conn.execute("SELECT COUNT(*) FROM system_audit WHERE severity IN ('High', 'Critical')").fetchone()[0]
+
     conn.close()
+    
     # Critical alerts (Static for UI structure, can be database-linked later)
     critical_alerts = [
         {'title': 'Failed Login Attempts', 'description': '3 failed login attempts from unknown IP 203.0.113.45', 'timestamp': '2026-04-18 14:10', 'status': 'Alert'},
-        {'title': 'Permission Changes', 'description': 'Admin Rajesh modified 5 user role permissions', 'timestamp': '2026-04-18 14:15', 'status': 'Pending Review'},
-        {'title': 'Data Export Request', 'description': 'Large patient database export initiated by Admin', 'timestamp': '2026-04-18 13:50', 'status': 'Approved'},
+        {'title': 'Permission Changes', 'description': 'Admin Rajesh modified 5 user role permissions', 'timestamp': '2026-04-18 14:15', 'status': 'Pending Review'}
     ]
 
     return render_template('ddhs_admin_audit_log.html',
                          audit_logs=audit_logs,
                          user_activities=user_activities,
                          critical_alerts=critical_alerts,
-                         total_events=245,
-                         active_users=3,
-                         critical_events=7,
-                         security_events=12,
+                         total_events=total_events,
+                         active_users=len(user_activities),
+                         critical_events=critical_events,
+                         security_events=critical_events,
+                         chart_labels=chart_labels,
+                         chart_data=chart_data,
                          user=current_user)
 
 
@@ -5407,8 +5433,6 @@ def phc_nurse_dashboard():
         ''', (phc_id,)).fetchone()
         center_name = center_info['name'] if center_info else f'PHC {phc_id}'
 
-        conn.close()
-
         # REAL-WORLD: Fetch local MPR (Monthly Progress Report) stats for the 13 departments
         mpr_rows = conn.execute("""
             SELECT phc_department, COUNT(*) as patient_total
@@ -5471,15 +5495,30 @@ def phc_nurse_dashboard():
             ORDER BY pl.timestamp DESC LIMIT 10
         ''', (phc_id,)).fetchall()
 
-        conn.close()
+        # FIX: Pull Live VHN Referrals instead of MOCK
+        vhn_entries = conn.execute('''
+            SELECT 
+                v.id, 
+                v.patient_name, 
+                u.fullname as vhn_name, 
+                CASE WHEN v.risk_score >= 7 THEN 'HIGH RISK' 
+                     WHEN v.risk_score >= 4 THEN 'MEDIUM RISK' 
+                     ELSE 'ROUTINE' END as field_risk,
+                v.vitals_summary as notes
+            FROM vhn_field_entries v
+            JOIN users u ON v.vhn_id = u.id
+            ORDER BY v.timestamp DESC
+            LIMIT 15
+        ''').fetchall()
+        
+        live_vhn_referrals = [dict(row) for row in vhn_entries]
 
-        # REAL-WORLD: Fetch VHN Referrals (Simulated for this demo cluster)
-        global MOCK_VHN_REFERRALS
+        conn.close()
 
         return render_template('phc_nurse_dashboard.html',
                              dashboard_data=dashboard_data,
                              recent_logs=recent_logs,
-                             vhn_referrals=MOCK_VHN_REFERRALS,
+                             vhn_referrals=live_vhn_referrals,
                              user=current_user)
 
     except Exception as e:
@@ -9616,7 +9655,7 @@ def api_lightning_entry():
             MOCK_VHN_REFERRALS = [r for r in MOCK_VHN_REFERRALS if str(r['id']) != str(ref_id)]
         
         # 0. RESOLVE IDENTITY (RHIMS / ABHA / NAME)
-        existing = c.execute('SELECT id, fullname FROM users WHERE id = ? OR fullname = ? OR email LIKE ?', 
+        existing = c.execute("SELECT id, fullname FROM users WHERE (id = ? OR fullname = ? OR email LIKE ?) AND role = 'patient'", 
                             (patient_id_input, patient_id_input, f"%{patient_id_input}%")).fetchone()
         
         if not existing:
